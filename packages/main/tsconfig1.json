@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "declaration": false,
+    "module": "ESNext",
+    "types": ["node", "electron"],
+    "baseUrl": "../..",
+    "paths": {
+      "@voide/shared/*": ["packages/shared/src/*"],
+      "@voide/schemas/*": ["packages/schemas/src/*"],
+      "@voide/adapters/*": ["packages/adapters/src/*"],
+      "@voide/workers/*": ["packages/workers/src/*"]
+    }
+  },
+  "include": ["src"]
+}

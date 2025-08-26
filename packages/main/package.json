@@ -1,0 +1,21 @@
+{
+  "name": "@voide/main",
+  "version": "0.1.0",
+  "type": "commonjs",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json"
+  },
+  "dependencies": {
+    "@voide/shared": "workspace:*",
+    "@voide/schemas": "workspace:*",
+    "ajv": "8.17.1",
+    "better-sqlite3": "9.6.0",
+    "electron-store": "^10.1.0",
+    "keytar": "^7.9.0",
+    "piscina": "4.6.1",
+    "uuid": "9.0.1"
+  }
+}
+

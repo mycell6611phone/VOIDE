@@ -1,0 +1,32 @@
+syntax = "proto3";
+package faissd;
+
+service Faissd {
+  rpc Upsert (UpsertRequest) returns (UpsertReply);
+  rpc Query (QueryRequest) returns (QueryReply);
+}
+
+message Vector {
+  repeated float values = 1;
+  string id = 2;
+}
+
+message UpsertRequest {
+  string collection = 1;
+  repeated Vector vectors = 2;
+}
+
+message UpsertReply {
+  uint32 upserted = 1;
+}
+
+message QueryRequest {
+  string collection = 1;
+  repeated float query = 2;
+  uint32 top_k = 3;
+}
+
+message QueryReply {
+  repeated string ids = 1;
+  repeated float scores = 2;
+}

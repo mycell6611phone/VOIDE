@@ -1,0 +1,15 @@
+{
+  "name": "@voide/adapters",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": { "build": "tsc -p tsconfig.json" },
+  "dependencies": {
+    "execa": "9.3.0",
+    "gpt4all": "2.8.1"
+  },
+  "optionalDependencies": {
+    "gpt4all": "2.8.1"
+  }
+}

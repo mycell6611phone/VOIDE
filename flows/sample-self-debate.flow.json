@@ -1,0 +1,78 @@
+{
+  "$schema": "./schema/flow.schema.json",
+  "id": "flow:self-debate",
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "id": "system",
+      "type": "system.prompt",
+      "name": "System Prompt",
+      "params": { "text": "You are concise." },
+      "in": [],
+      "out": [{ "port": "out", "types": ["text"] }]
+    },
+    {
+      "id": "userq",
+      "type": "system.prompt",
+      "name": "User Question",
+      "params": { "text": "Debate: Is dropout useful in transformers?" },
+      "in": [],
+      "out": [{ "port": "out", "types": ["text"] }]
+    },
+    {
+      "id": "planner",
+      "type": "llm.generic",
+      "name": "Planner",
+      "params": {
+        "adapter": "mock",
+        "modelId": "model:llama3-8b.Q4_K_M",
+        "temperature": 0.2,
+        "maxTokens": 256,
+        "runtime": "CPU"
+      },
+      "in": [{ "port": "prompt", "types": ["text"] }],
+      "out": [{ "port": "completion", "types": ["text"] }]
+    },
+    {
+      "id": "critic",
+      "type": "critic",
+      "name": "Critic",
+      "params": {
+        "adapter": "mock",
+        "modelId": "model:llama3-8b.Q4_K_M",
+        "temperature": 0.2,
+        "maxTokens": 256,
+        "runtime": "CPU"
+      },
+      "in": [{ "port": "text", "types": ["text"] }],
+      "out": [{ "port": "notes", "types": ["text"] }]
+    },
+    {
+      "id": "loop",
+      "type": "loop",
+      "name": "Loop",
+      "params": { "maxIters": 3, "stopOn": "DONE" },
+      "in": [{ "port": "in", "types": ["text"] }],
+      "out": [{ "port": "body", "types": ["text"] }, { "port": "out", "types": ["text"] }]
+    },
+    {
+      "id": "output",
+      "type": "output",
+      "name": "Output",
+      "params": {},
+      "in": [{ "port": "in", "types": ["text"] }],
+      "out": []
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from": ["system", "out"], "to": ["planner", "prompt"], "label": "sys" },
+    { "id": "e2", "from": ["userq", "out"], "to": ["planner", "prompt"], "label": "q" },
+    { "id": "e3", "from": ["planner", "completion"], "to": ["critic", "text"], "label": "review" },
+    { "id": "e4", "from": ["critic", "notes"], "to": ["loop", "in"], "label": "iterate" },
+    { "id": "e5", "from": ["loop", "body"], "to": ["planner", "prompt"], "label": "feedback" },
+    { "id": "e6", "from": ["loop", "out"], "to": ["output", "in"], "label": "final" }
+  ],
+  "prompts": { "packs": [] },
+  "models": { "registryRef": "../models/models.json" },
+  "profiles": { "default": { "concurrency": 2 } }
+}

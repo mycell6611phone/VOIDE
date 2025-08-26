@@ -1,0 +1,13 @@
+appId: com.voide.app
+productName: VOIDE
+files:
+  - "packages/**/dist/**"
+  - "models/**"
+  - "flows/**"
+asar: true
+directories:
+  output: "dist/build"
+linux:
+  target:
+    - deb
+  category: Development

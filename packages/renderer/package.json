@@ -1,0 +1,26 @@
+{
+  "name": "@voide/renderer",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "ajv": "8.17.1",
+    "elkjs": "0.9.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-flow-renderer": "^10.3.17",
+    "react-hook-form": "7.51.5",
+    "yup": "1.4.0",
+    "zustand": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "18.2.73",
+    "@types/react-dom": "18.2.24",
+    "typescript": "5.5.4",
+    "vite": "5.4.3",
+    "@vitejs/plugin-react": "4.3.1"
+  }
+}

@@ -1,24 +1,16 @@
 # Node.js & pnpm dependencies
-# These directories contain all the packages your project depends on.
-# They can be very large and should always be reinstalled from package.json.
 /node_modules
 
 # TypeScript compiled output
-# This is the generated JavaScript code that your TypeScript compiler creates.
-# It should be generated during a build step, not stored in version control.
 /dist
 /build
 *.tsbuildinfo
 
 # Database file
-# Your db.ts script creates a 'voide.db' file. You don't want to commit
-# the actual database, as it will change constantly and contain user-specific data.
 *.db
 *.db-journal
 
-# Environment variables
-# This file contains sensitive information like API keys, database credentials, etc.
-# Never commit this file. Instead, create a .env.example file with placeholder values.
+# Environment variables & Keys
 .env
 .env.*
 !.env.example
@@ -28,21 +20,20 @@
 .py~
 *~
 
-
 # Logs
-# Log files are generated during runtime and are not part of the source code.
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+*.log
+hs_err_pid*
+replay_pid*
 
 # Operating System files
-# These are system-specific files that have no place in a shared repository.
 .DS_Store
 Thumbs.db
 
 # Editor directories and files
-# These are specific to a user's code editor (e.g., VS Code, JetBrains).
 .vscode/
 .idea/
 *.suo
@@ -50,5 +41,14 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Unwanted package files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
 
 

@@ -4,11 +4,12 @@
   "version": "0.1.0",
   "main": "packages/main/dist/main.js",
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev --parallel",
+    "build": "turbo run build --filter=@voide/renderer...",
+    "dev": "pnpm --filter @voide/renderer dev",
     "lint": "turbo run lint",
     "start": "electron packages/main/dist/main.js",
-    "pack:linux": "electron-builder --linux deb"
+    "pack:linux": "electron-builder --linux deb",
+    "tsc": "tsc"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

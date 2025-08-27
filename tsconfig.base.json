@@ -11,9 +11,7 @@
     "baseUrl": ".",
     "paths": {
       "@voide/shared": ["packages/shared/src"],
-      "@voide/schemas": ["packages/schemas/src"],
-      "@voide/adapters": ["packages/adapters/src"],
-      "@voide/workers": ["packages/workers/src"]
+      "@voide/schemas": ["packages/schemas/src"]
     }
   }
 }

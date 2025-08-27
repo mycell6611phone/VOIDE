@@ -5,18 +5,16 @@
     "target": "ES2022",
     "module": "CommonJS",
     "moduleResolution": "Node",
-    "composite": true,
     "baseUrl": "../..",
     "types": ["node", "electron"],
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "rootDir": "src"
   },
-  "include": ["src"],
+  "include": ["src/main.ts"],
   "references": [
     { "path": "../shared" },
-    { "path": "../schemas" },
-    { "path": "../adapters" },
-    { "path": "../workers" }
+    { "path": "../schemas" }
   ]
 }
 

@@ -51,4 +51,9 @@ Thumbs.db
 *.tar.gz
 *.rar
 
+node_modules/
+dist/
+.vite/
+.turbo/
+*.log
 

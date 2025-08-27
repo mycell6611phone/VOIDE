@@ -87,11 +87,20 @@ async function executeNode(st, node) {
         const inputs = incomingText(st, node.id);
         const prompt = inputs.join("\n");
         const reg = await (0, models_1.getModelRegistry)();
-        const model = reg.models.find((m) => m.id === params.modelId);
+        let modelFile = "";
+        if (params.adapter !== "mock") {
+            const model = reg.models.find((m) => m.id === params.modelId);
+            if (!model) {
+                const dt = Date.now() - t0;
+                await (0, db_1.recordRunLog)({ runId: st.runId, nodeId: node.id, tokens: 0, latencyMs: dt, status: 'error', error: 'model not found' });
+                return [[node.type === "critic" ? "notes" : "completion", { kind: "text", text: "" }]];
+            }
+            modelFile = model.file ?? "";
+        }
         const result = await poolLLM.run({
             params,
             prompt,
-            modelFile: model?.file ?? ""
+            modelFile
         });
         await (0, db_1.recordRunLog)({ runId: st.runId, nodeId: node.id, tokens: result.tokens, latencyMs: result.latencyMs, status: 'ok' });
         return [[node.type === "critic" ? "notes" : "completion", { kind: "text", text: result.text }]];

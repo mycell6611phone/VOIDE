@@ -24,7 +24,7 @@ You are explicitly prohibited from using, copying, modifying, distributing, or s
 
 3. Commercial Licensing
 
-To obtain a commercial license for the Software, please contact the Licensor at [Your Email Address or Contact Page URL].
+To obtain a commercial license for the Software, please contact the Licensor at [mycell6611phine@gmail.com].
 4. Disclaimer of Warranty
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

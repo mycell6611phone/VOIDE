@@ -1,4 +1,7 @@
-export default async function retr(job) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = retr;
+async function retr(job) {
     const ids = [];
     const scores = [];
     for (let i = 0; i < job.topK; i++) {

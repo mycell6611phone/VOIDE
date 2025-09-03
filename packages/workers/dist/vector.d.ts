@@ -11,3 +11,4 @@ export default function vector(job: {
     scores: number[];
     upserted?: undefined;
 } | undefined>;
+//# sourceMappingURL=vector.d.ts.map

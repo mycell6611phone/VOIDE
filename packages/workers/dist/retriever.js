@@ -10,4 +10,3 @@ async function retr(job) {
     }
     return { ids, scores };
 }
-module.exports = retr;

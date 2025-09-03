@@ -6,4 +6,3 @@ export default async function embed(job: { text: string }): Promise<{ values: nu
   });
   return { values, dim };
 }
-module.exports = embed;

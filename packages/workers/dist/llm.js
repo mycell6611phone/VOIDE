@@ -20,4 +20,3 @@ async function run(job) {
     const dt = Date.now() - t0;
     return { text, tokens: tokensOf(text), latencyMs: dt };
 }
-module.exports = run;

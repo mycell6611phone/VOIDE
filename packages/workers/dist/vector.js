@@ -7,4 +7,3 @@ async function vector(job) {
     if (job.op === 'query')
         return { ids: ['doc-0'], scores: [0.99] };
 }
-module.exports = vector;

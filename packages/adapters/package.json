@@ -6,8 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": { "build": "tsc -p tsconfig.json" },
   "dependencies": {
-    "execa": "9.3.0",
-    "gpt4all": "2.8.1"
+    "execa": "9.3.0"
   },
   "optionalDependencies": {
     "gpt4all": "2.8.1"

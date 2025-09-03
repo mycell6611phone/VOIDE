@@ -4,4 +4,3 @@ export default async function retr(job: { query: number[]; topK: number }): Prom
   for (let i = 0; i < job.topK; i++) { ids.push(`doc-${i}`); scores.push(1 - i / job.topK); }
   return { ids, scores };
 }
-module.exports = retr;

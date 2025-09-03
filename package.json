@@ -8,10 +8,7 @@
     "dev": "pnpm --filter @voide/renderer dev",
     "lint": "turbo run lint",
     "start": "electron packages/main/dist/main.js",
-    "pack:linux": "electron-builder --linux deb",
-
-    "tsc": "tsc"
-
+    "pack:linux": "electron-builder --linux deb"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

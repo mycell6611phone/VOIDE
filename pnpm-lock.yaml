@@ -108,7 +108,11 @@ importers:
         specifier: 5.4.3
         version: 5.4.3(@types/node@24.3.0)
 
-  packages/schemas: {}
+  packages/schemas:
+    dependencies:
+      '@voide/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/shared: {}
 

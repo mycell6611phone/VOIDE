@@ -25,4 +25,3 @@ export default async function run(job: LLMJob) {
   const dt = Date.now() - t0;
   return { text, tokens: tokensOf(text), latencyMs: dt };
 }
-module.exports = run;

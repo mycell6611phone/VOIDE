@@ -9,4 +9,3 @@ async function embed(job) {
     });
     return { values, dim };
 }
-module.exports = embed;

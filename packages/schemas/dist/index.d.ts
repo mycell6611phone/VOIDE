@@ -1,1 +1,1 @@
-export { default as flowSchema } from "../../../flows/schema/flow.schema.json";
+export * from "./src/index.d.ts";

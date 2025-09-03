@@ -10,18 +10,72 @@ export type PayloadT =
   | { kind: 'metrics'; data: Record<string, number> };
 
 export interface PortDef { port: string; types: string[] }
+
+export type NodeKind =
+  | 'UI'
+  | 'LLM'
+  | 'Prompt'
+  | 'Memory'
+  | 'ToolCall'
+  | 'Log'
+  | 'Cache'
+  | 'Router'
+  | 'Validator';
+
+export interface LLMConfig {
+  backend: string;
+  model: string;
+  params: Record<string, unknown>;
+  strictSchema: 'hard' | 'soft' | 'off';
+  tokenLimits: { input: number; output: number };
+}
+
+export interface MemoryConfig {
+  store: 'sqlite' | 'faiss' | 'chroma';
+  k: number;
+  modes: ('save' | 'recall')[];
+}
+
 export interface NodeDef {
   id: string;
+  kind: NodeKind;
   type: string;
   name: string;
   params: Record<string, unknown>;
   in: PortDef[];
   out: PortDef[];
+  llm?: LLMConfig;
+  memory?: MemoryConfig;
 }
-export interface EdgeDef { id: string; from: [string, string]; to: [string, string]; label?: string }
+
+export type EdgeType = 'data' | 'sensor' | 'telemetry';
+
+export interface EdgeDef {
+  id: string;
+  from: [string, string];
+  to: [string, string];
+  label?: string;
+  direction?: string;
+  edgeType: EdgeType;
+}
+
+export interface GraphMeta {
+  name?: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+export interface RunSettings {
+  concurrency?: number;
+  [key: string]: unknown;
+}
+
 export interface FlowDef {
   id: string;
   version: string;
+  engine?: string;
+  meta?: GraphMeta;
+  run?: RunSettings;
   nodes: NodeDef[];
   edges: EdgeDef[];
   prompts?: unknown;

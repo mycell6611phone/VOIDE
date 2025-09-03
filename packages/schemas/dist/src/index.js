@@ -1,11 +1,7 @@
-"use strict";
-// packages/schemas/src/index.ts
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.flowSchema = void 0;
-// Import the JSON schema without `assert { type: "json" }`
-// This requires `"resolveJsonModule": true` in tsconfig.json
-const flow_schema_json_1 = __importDefault(require("../../../flows/schema/flow.schema.json"));
-exports.flowSchema = flow_schema_json_1.default;
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const flowSchema = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../../flows/schema/flow.schema.json"), "utf-8"));
+export { flowSchema };

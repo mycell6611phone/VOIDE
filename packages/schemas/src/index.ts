@@ -1,9 +1,30 @@
-// packages/schemas/src/index.ts
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-// Import the JSON schema without `assert { type: "json" }`
-// This requires `"resolveJsonModule": true` in tsconfig.json
-import flowSchema from "../../../flows/schema/flow.schema.json";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Re-export so other packages can consume it
+
+const flowSchema = JSON.parse(
+  fs.readFileSync(
+    path.resolve(__dirname, "../../../flows/schema/flow.schema.json"),
+    "utf-8"
+  )
+);
+
+// Re-export the JSON schema and related TypeScript types
 export { flowSchema };
+export type {
+  FlowDef,
+  NodeDef,
+  EdgeDef,
+  PortDef,
+  NodeKind,
+  LLMConfig,
+  MemoryConfig,
+  EdgeType,
+  GraphMeta,
+  RunSettings
+} from "@voide/shared";
 

@@ -1,7 +1,6 @@
 {
   "name": "@voide/main",
   "version": "0.1.0",
-  "type": "commonjs",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -18,4 +17,3 @@
     "uuid": "9.0.1"
   }
 }
-

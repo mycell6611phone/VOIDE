@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/flow.schema.json",
+  "type": "object",
+  "required": ["id", "version", "nodes", "edges"],
+  "properties": {
+    "id": { "type": "string" },
+    "version": { "type": "string" },
+    "engine": { "type": "string" },
+    "meta": { "type": "object", "additionalProperties": true },
+    "run": { "type": "object", "additionalProperties": true },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "type", "name", "params", "in", "out"],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["UI", "LLM", "Prompt", "Memory", "ToolCall", "Log", "Cache", "Router", "Validator"]
+          },
+          "type": { "type": "string" },
+          "name": { "type": "string" },
+          "params": { "type": "object" },
+          "llm": {
+            "type": "object",
+            "properties": {
+              "backend": { "type": "string" },
+              "model": { "type": "string" },
+              "params": { "type": "object" },
+              "strictSchema": { "type": "string", "enum": ["hard", "soft", "off"] },
+              "tokenLimits": {
+                "type": "object",
+                "required": ["input", "output"],
+                "properties": {
+                  "input": { "type": "number" },
+                  "output": { "type": "number" }
+                }
+              }
+            },
+            "required": ["backend", "model", "params", "strictSchema", "tokenLimits"]
+          },
+          "memory": {
+            "type": "object",
+            "properties": {
+              "store": { "type": "string", "enum": ["sqlite", "faiss", "chroma"] },
+              "k": { "type": "number" },
+              "modes": {
+                "type": "array",
+                "items": { "type": "string", "enum": ["save", "recall"] }
+              }
+            },
+            "required": ["store", "k", "modes"]
+          },
+          "in": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["port", "types"],
+              "properties": {
+                "port": { "type": "string" },
+                "types": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "out": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["port", "types"],
+              "properties": {
+                "port": { "type": "string" },
+                "types": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "kind": { "const": "LLM" } } },
+            "then": { "required": ["llm"] }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "Memory" } } },
+            "then": { "required": ["memory"] }
+          }
+        ]
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "from", "to", "direction", "edgeType"],
+        "properties": {
+          "id": { "type": "string" },
+          "from": {
+            "type": "array",
+            "items": [{ "type": "string" }, { "type": "string" }],
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "to": {
+            "type": "array",
+            "items": [{ "type": "string" }, { "type": "string" }],
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "label": { "type": "string" },
+          "direction": { "type": "string" },
+          "edgeType": { "type": "string", "enum": ["data", "sensor", "telemetry"] }
+        }
+      }
+    },
+    "prompts": { "type": "object" },
+    "models": { "type": "object" },
+    "profiles": { "type": "object" }
+  }
+}
+

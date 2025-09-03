@@ -30,7 +30,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "kind", "type", "name", "params", "in", "out"],
+        "required": ["id", "type", "name", "params", "in", "out"],
         "properties": {
           "id": { "type": "string" },
           "kind": {
@@ -40,21 +40,19 @@
           "type": { "type": "string" },
           "name": { "type": "string" },
           "params": { "type": "object" },
-          "$comment": "Voide principle: modules have fixed pinouts; adapters live inside modules; missing fields get defaults.",
           "llm": {
             "type": "object",
             "required": ["backend", "model"],
             "properties": {
               "backend": { "type": "string" },
               "model": { "type": "string" },
-              "params": { "type": "object", "default": {} },
-              "strictSchema": { "type": "string", "enum": ["hard", "soft", "off"], "default": "off" },
+              "params": { "type": "object" },
+              "strictSchema": { "type": "string", "enum": ["hard", "soft", "off"] },
               "tokens": {
                 "type": "object",
-                "default": { "input": 0, "output": 0 },
                 "properties": {
-                  "input": { "type": "integer", "default": 0 },
-                  "output": { "type": "integer", "default": 0 }
+                  "input": { "type": "integer" },
+                  "output": { "type": "integer" }
                 }
               }
             }
@@ -62,13 +60,9 @@
           "memory": {
             "type": "object",
             "properties": {
-              "store": { "type": "string", "enum": ["sqlite", "faiss", "chroma"], "default": "sqlite" },
-              "k": { "type": "integer", "default": 0 },
-              "modes": {
-                "type": "array",
-                "items": { "type": "string", "enum": ["save", "recall"] },
-                "default": []
-              }
+              "store": { "type": "string", "enum": ["sqlite", "faiss", "chroma"] },
+              "k": { "type": "integer" },
+              "modes": { "type": "array", "items": { "type": "string", "enum": ["save", "recall"] } }
             }
           },
           "in": { "type": "array", "items": { "$ref": "#/definitions/port" } },
@@ -80,7 +74,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "from", "to", "direction", "type"],
+        "required": ["id", "from", "to"],
         "properties": {
           "id": { "type": "string" },
           "from": {

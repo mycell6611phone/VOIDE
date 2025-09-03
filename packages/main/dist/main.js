@@ -10,8 +10,18 @@ function createWindow() {
     win = new electron_1.BrowserWindow({
         width: 1320,
         height: 900,
+        webPreferences: {
+            nodeIntegration: true,
+        },
     });
-    win.loadFile(path_1.default.join(__dirname, "../renderer/index.html"));
+    if (process.env.VITE_DEV_SERVER_URL) {
+        // Dev mode: load from Vite server
+        win.loadURL(process.env.VITE_DEV_SERVER_URL);
+    }
+    else {
+        // Production build: load packaged index.html
+        win.loadFile(path_1.default.join(__dirname, "../renderer/index.html"));
+    }
 }
 electron_1.app.whenReady().then(() => {
     createWindow();

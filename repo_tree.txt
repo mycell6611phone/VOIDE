@@ -1,0 +1,122 @@
+.
+├── Draft_layout.png
+├── electron-builder.yml
+├── file_ system_tree_program_directory.txt
+├── file_ system_tree_program_directory.txt~
+├── flows
+│   ├── sample-self-debate.flow.json
+│   └── schema
+│       ├── flow.schema.json
+│       └── schema.json
+├── gitignore~
+├── LICENSE
+├── License.md~
+├── models
+│   ├── models.json
+│   └── models.json~
+├── mvp
+│   ├── client
+│   │   ├── app.js
+│   │   ├── app.js~
+│   │   ├── client.html
+│   │   ├── index.html
+│   │   ├── styles.css
+│   │   └── styles.css~
+│   ├── README.md
+│   ├── README.md~
+│   └── server
+│       ├── node_modules
+│       ├── package.json
+│       ├── package-lock.json
+│       ├── server.js
+│       └── server.js~
+├── node_modules
+│   ├── electron -> .pnpm/electron@30.0.9/node_modules/electron
+│   ├── electron-builder -> .pnpm/electron-builder@24.13.3_electron-builder-squirrel-windows@24.13.3_dmg-builder@24.13.3_/node_modules/electron-builder
+│   ├── turbo -> .pnpm/turbo@2.0.4/node_modules/turbo
+│   ├── @types
+│   │   ├── better-sqlite3 -> ../.pnpm/@types+better-sqlite3@7.6.13/node_modules/@types/better-sqlite3
+│   │   ├── node -> ../.pnpm/@types+node@24.3.0/node_modules/@types/node
+│   │   └── uuid -> ../.pnpm/@types+uuid@10.0.0/node_modules/@types/uuid
+│   └── typescript -> .pnpm/typescript@5.5.4/node_modules/typescript
+├── package.json
+├── package.json~
+├── packages
+│   ├── adapters
+│   │   ├── dist
+│   │   ├── node_modules
+│   │   ├── package.json
+│   │   ├── src
+│   │   ├── tsconfig.json
+│   │   └── tsconfig.json~
+│   ├── main
+│   │   ├── dist
+│   │   ├── node_modules
+│   │   ├── package.json
+│   │   ├── package.json~
+│   │   ├── src
+│   │   ├── test
+│   │   ├── tsconfig1.json
+│   │   ├── tsconfig.json
+│   │   └── tsconfig.json~
+│   ├── preload
+│   │   ├── dist
+│   │   ├── package.json
+│   │   ├── src
+│   │   ├── tsconfig.json
+│   │   └── tsconfig.json~
+│   ├── renderer
+│   │   ├── dist
+│   │   ├── index.html
+│   │   ├── node_modules
+│   │   ├── package.json
+│   │   ├── package.json~
+│   │   ├── src
+│   │   ├── tsconfig.json
+│   │   ├── tsconfig.json~
+│   │   └── vite.config.ts
+│   ├── schemas
+│   │   ├── dist
+│   │   ├── package.json
+│   │   ├── src
+│   │   ├── tsconfig.json
+│   │   └── tsconfig.json~
+│   ├── shared
+│   │   ├── dist
+│   │   ├── package.json
+│   │   ├── package.json~
+│   │   ├── src
+│   │   ├── tsconfig.json
+│   │   └── tsconfig.json~
+│   └── workers
+│       ├── dist
+│       ├── package.json
+│       ├── src
+│       ├── tsconfig.json
+│       └── tsconfig.json~
+├── pnpm-lock.yaml
+├── pnpm-workspace.yaml
+├── README.md
+├── ReadMe.txt~
+├── repo_tree.txt
+├── scaffold.md
+├── scripts
+│   ├── build-linux.sh
+│   ├── dev.sh
+│   ├── dev.sh~
+│   └── install.sh
+├── tools
+│   └── faissd
+│       ├── Dockerfile
+│       ├── proto
+│       ├── server
+│       └── tsconfig.json
+├── top_level_user_interface.md
+├── top_level_user_interface.md~
+├── tsconfig.base.json
+├── tsconfig.json
+├── tsconfig.json~
+├── turbo.json
+└── turbo.json~
+
+47 directories, 72 files

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>VOIDE • MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">VOIDE • Slim MVP</div>
+    <div class="controls">
+      <button id="buildBtn" class="primary">Build</button>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <nav>
+      <button class="nav-item">menu</button>
+      <button class="nav-item">other</button>
+      <button class="nav-item">other</button>
+      <button class="nav-item">other</button>
+      <hr>
+      <button class="nav-item">LLMS</button>
+      <button class="nav-item">WIRE</button>
+      <button class="nav-item">PROMPT</button>
+      <button class="nav-item">Debate</button>
+      <button class="nav-item">persona</button>
+      <button class="nav-item">tools</button>
+      <button class="nav-item">loop</button>
+      <button class="nav-item">GPT4ALL</button>
+      <button class="nav-item">Ollama</button>
+      <button class="nav-item">memory</button>
+    </nav>
+  </aside>
+
+  <main class="workspace">
+    <section class="canvas">
+      <!-- Static nodes reflecting the PNG -->
+      <div class="node oval red" id="node-llama">LLAMA3.1 8B</div>
+      <div class="node rect" id="node-prompt">prompt</div>
+      <div class="node oval red" id="node-llama2">LLAMA3.1 8B</div>
+
+      <div class="node rect small" id="node-prompt2">Prompt</div>
+      <div class="node rect small" id="node-debate">debate</div>
+      <div class="node rect small" id="node-loop3">Loop<br>3</div>
+
+      <div class="node rect small" id="node-persona">Persona</div>
+      <div class="node rect small" id="node-prompt3">prompt</div>
+      <div class="node rect small" id="node-prompt4">prompt</div>
+
+      <div class="node rect small" id="node-tool">Tool</div>
+      <div class="node oval red" id="node-reasoner">ReasonerV1</div>
+      <div class="node rect small" id="node-validate">validate</div>
+      <div class="node oval red" id="node-gemini">Gemini</div>
+      <div class="node rect small" id="node-loop1">Loop<br>1</div>
+      <div class="node oval red" id="node-gpt4o">GPT-4o</div>
+      <div class="node rect" id="node-memory">Memory</div>
+      <div class="node rect" id="node-ui">User<br>Interface</div>
+
+      <!-- SVG arrows -->
+      <svg class="wires" viewBox="0 0 1200 700" preserveAspectRatio="none">
+        <defs>
+          <marker id="arrow" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0,0 L8,4 L0,8 z"></path>
+          </marker>
+        </defs>
+        <!-- simple representative wires -->
+        <line x1="260" y1="150" x2="360" y2="150" marker-end="url(#arrow)"/>
+        <line x1="420" y1="150" x2="540" y2="150" marker-end="url(#arrow)"/>
+        <line x1="820" y1="160" x2="820" y2="280" marker-end="url(#arrow)"/>
+        <line x1="820" y1="320" x2="820" y2="430" marker-end="url(#arrow)"/>
+        <line x1="820" y1="470" x2="760" y2="520" marker-end="url(#arrow)"/>
+        <line x1="650" y1="520" x2="500" y2="520" marker-end="url(#arrow)"/>
+        <line x1="420" y1="520" x2="300" y2="520" marker-end="url(#arrow)"/>
+        <line x1="250" y1="520" x2="200" y2="600" marker-end="url(#arrow)"/>
+      </svg>
+    </section>
+
+    <section class="panel">
+      <div class="group">
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" rows="6" placeholder="Describe the task..."></textarea>
+      </div>
+
+      <div class="group">
+        <label for="persona">Persona (optional)</label>
+        <input id="persona" type="text" placeholder="e.g., terse research mathematician">
+      </div>
+
+      <div class="row">
+        <div class="group">
+          <label for="debateLoops">Debate loops</label>
+          <input id="debateLoops" type="number" min="0" max="5" value="1">
+        </div>
+        <div class="group">
+          <label for="validateLoops">Validate loops</label>
+          <input id="validateLoops" type="number" min="0" max="5" value="1">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="group">
+          <label for="modelMain">Main model</label>
+          <select id="modelMain"></select>
+        </div>
+        <div class="group">
+          <label for="modelReasoner">Reasoner</label>
+          <select id="modelReasoner"></select>
+        </div>
+        <div class="group">
+          <label for="modelValidator">Validator</label>
+          <select id="modelValidator"></select>
+        </div>
+      </div>
+
+      <div class="group">
+        <label for="memory">Memory (persisted locally)</label>
+        <textarea id="memory" rows="3" placeholder="Scratchpad context stored in your browser..."></textarea>
+        <div class="row tight">
+          <button id="saveMemory">Save Memory</button>
+          <button id="clearMemory">Clear Memory</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <label>Run Log</label>
+        <div id="log" class="log"></div>
+      </div>
+
+      <div class="group">
+        <label>Final Output</label>
+        <pre id="final" class="final"></pre>
+      </div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
+

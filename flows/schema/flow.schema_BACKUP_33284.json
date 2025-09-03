@@ -17,6 +17,7 @@
     "id": { "type": "string" },
     "version": { "type": "string" },
     "engine": { "type": "string" },
+
     "meta": {
       "type": "object",
       "properties": {
@@ -26,6 +27,7 @@
       }
     },
     "run": { "type": "object" },
+
     "nodes": {
       "type": "array",
       "items": {
@@ -40,42 +42,43 @@
           "type": { "type": "string" },
           "name": { "type": "string" },
           "params": { "type": "object" },
-          "$comment": "Voide principle: modules have fixed pinouts; adapters live inside modules; missing fields get defaults.",
+
           "llm": {
             "type": "object",
             "required": ["backend", "model"],
             "properties": {
               "backend": { "type": "string" },
               "model": { "type": "string" },
-              "params": { "type": "object", "default": {} },
-              "strictSchema": { "type": "string", "enum": ["hard", "soft", "off"], "default": "off" },
+              "params": { "type": "object" },
+              "strictSchema": { "type": "string", "enum": ["hard", "soft", "off"] },
               "tokens": {
                 "type": "object",
-                "default": { "input": 0, "output": 0 },
                 "properties": {
-                  "input": { "type": "integer", "default": 0 },
-                  "output": { "type": "integer", "default": 0 }
+                  "input": { "type": "integer" },
+                  "output": { "type": "integer" }
                 }
               }
             }
           },
+
           "memory": {
             "type": "object",
             "properties": {
-              "store": { "type": "string", "enum": ["sqlite", "faiss", "chroma"], "default": "sqlite" },
-              "k": { "type": "integer", "default": 0 },
+              "store": { "type": "string", "enum": ["sqlite", "faiss", "chroma"] },
+              "k": { "type": "integer" },
               "modes": {
                 "type": "array",
-                "items": { "type": "string", "enum": ["save", "recall"] },
-                "default": []
+                "items": { "type": "string", "enum": ["save", "recall"] }
               }
             }
           },
+
           "in": { "type": "array", "items": { "$ref": "#/definitions/port" } },
           "out": { "type": "array", "items": { "$ref": "#/definitions/port" } }
         }
       }
     },
+
     "edges": {
       "type": "array",
       "items": {
@@ -101,6 +104,7 @@
         }
       }
     },
+
     "prompts": { "type": "object" },
     "models": { "type": "object" },
     "profiles": { "type": "object" }

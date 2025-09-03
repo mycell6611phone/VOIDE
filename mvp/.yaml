@@ -1,0 +1,11 @@
+
+---
+
+Run steps:
+
+```bash
+cd mvp/server
+cp .env.example .env   # add your key
+npm install
+npm start
+

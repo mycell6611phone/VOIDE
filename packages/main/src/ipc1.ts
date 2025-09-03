@@ -1,10 +1,8 @@
 import { ipcMain, dialog } from "electron";
-import fs from "fs";
-import path from "path";
 import Ajv from "ajv";
 import { flowSchema } from "@voide/schemas";
 import type { FlowDef } from "@voide/shared";
-import { getDB } from "./services/db";
+import { saveProject, loadProject } from "./services/db";
 import { getSecretsService } from "./services/secrets";
 import { runFlow, stopFlow, stepFlow, getNodeCatalog, getLastRunPayloads } from "./orchestrator/engine";
 import { getModelRegistry } from "./services/models";
@@ -16,18 +14,15 @@ export function setupIPC() {
   ipcMain.handle("voide:openFlow", async (_e, _args) => {
     const { canceled, filePaths } = await dialog.showOpenDialog({ filters: [{ name: "Flow", extensions: ["json"] }] });
     if (canceled || !filePaths[0]) return { canceled: true };
-    const json = JSON.parse(fs.readFileSync(filePaths[0], "utf-8"));
-    if (!validate(json)) return { error: ajv.errorsText(validate.errors) };
-    return { path: filePaths[0], flow: json };
+    const flow = loadProject(filePaths[0]);
+    if (!validate(flow)) return { error: ajv.errorsText(validate.errors) };
+    return { path: filePaths[0], flow };
   });
 
   ipcMain.handle("voide:saveFlow", async (_e, { flow, filePath }: { flow: FlowDef; filePath?: string }) => {
     if (!validate(flow)) return { error: ajv.errorsText(validate.errors) };
-    const db = getDB();
-    db.prepare("insert or replace into flows(id,name,json,version,updated_at) values(?,?,?,?,strftime('%s','now'))")
-      .run(flow.id, flow.id, JSON.stringify(flow), flow.version);
     const savePath = filePath ?? (await dialog.showSaveDialog({ defaultPath: `${flow.id}.json` })).filePath;
-    if (savePath) fs.writeFileSync(savePath, JSON.stringify(flow, null, 2));
+    if (savePath) saveProject(flow, savePath);
     return { path: savePath };
   });
 

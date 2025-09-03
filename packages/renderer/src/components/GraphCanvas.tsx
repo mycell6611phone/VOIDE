@@ -24,7 +24,7 @@ export default function GraphCanvas() {
     const id = `e:${c.source}-${from}:${c.target}-${to}`;
     const newEdge: Edge = { id, source: c.source!, target: c.target!, sourceHandle: c.sourceHandle, targetHandle: c.targetHandle, label: "" };
     setEdges(eds => addEdge(newEdge, eds));
-    const eDef: EdgeDef = { id, from: [c.source!, from], to: [c.target!, to] };
+    const eDef: EdgeDef = { id, from: [c.source!, from], to: [c.target!, to], direction: "forward", edgeType: "data" };
     setFlow({ ...flow, edges: [...flow.edges, eDef] });
   }, [flow, setFlow, setEdges]);
 

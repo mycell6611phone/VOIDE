@@ -1,1 +1,1 @@
-export { default as flowSchema } from "../../../flows/schema/flow.schema.json" assert { type: "json" };
+export * from "./src/index.js";

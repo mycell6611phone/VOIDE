@@ -4,7 +4,7 @@ import type { Database } from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import os from "os";
-import type { PayloadT, RunLog } from "@voide/shared";
+import type { PayloadT, RunLog, FlowDef } from "@voide/shared";
 
 let db: Database | undefined;
 
@@ -123,3 +123,11 @@ export async function getPayloadsForRun(runId: string) {
   }));
 }
 
+export function saveProject(flow: FlowDef, filePath: string) {
+  fs.writeFileSync(filePath, JSON.stringify(flow, null, 2), "utf-8");
+}
+
+export function loadProject(filePath: string): FlowDef {
+  const raw = fs.readFileSync(filePath, "utf-8");
+  return JSON.parse(raw) as FlowDef;
+}

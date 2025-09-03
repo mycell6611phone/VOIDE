@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupIPC = setupIPC;
 const electron_1 = require("electron");
-const fs_1 = __importDefault(require("fs"));
 const ajv_1 = __importDefault(require("ajv"));
 const schemas_1 = require("@voide/schemas");
 const db_1 = require("./services/db");
@@ -21,21 +20,18 @@ function setupIPC() {
         });
         if (canceled || !filePaths[0])
             return { canceled: true };
-        const json = JSON.parse(fs_1.default.readFileSync(filePaths[0], "utf-8"));
-        if (!validate(json))
+        const flow = (0, db_1.loadProject)(filePaths[0]);
+        if (!validate(flow))
             return { error: ajv.errorsText(validate.errors) };
-        return { path: filePaths[0], flow: json };
+        return { path: filePaths[0], flow };
     });
     electron_1.ipcMain.handle("voide:saveFlow", async (_e, args) => {
         const flow = args.flow;
         if (!validate(flow))
             return { error: ajv.errorsText(validate.errors) };
-        const db = (0, db_1.getDB)();
-        db.prepare("insert or replace into flows(id,name,json,version,updated_at) values(?,?,?,?,strftime('%s','now'))")
-            .run(flow.id, flow.id, JSON.stringify(flow), flow.version);
         const savePath = args.filePath ?? (await electron_1.dialog.showSaveDialog({ defaultPath: `${flow.id}.json` })).filePath;
         if (savePath)
-            fs_1.default.writeFileSync(savePath, JSON.stringify(flow, null, 2));
+            (0, db_1.saveProject)(flow, savePath);
         return { path: savePath };
     });
     electron_1.ipcMain.handle("voide:validateFlow", async (_e, raw) => {

@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import path from "path";
+import { setupIPC } from "./ipc";
 
 let win: BrowserWindow | null = null;
 
@@ -21,6 +22,7 @@ function createWindow() {
   }
 }
 app.whenReady().then(() => {
+  setupIPC();
   createWindow();
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });

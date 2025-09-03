@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path_1 = __importDefault(require("path"));
+const ipc_1 = require("./ipc");
 let win = null;
 function createWindow() {
     win = new electron_1.BrowserWindow({
@@ -24,6 +25,7 @@ function createWindow() {
     }
 }
 electron_1.app.whenReady().then(() => {
+    (0, ipc_1.setupIPC)();
     createWindow();
     electron_1.app.on("activate", () => { if (electron_1.BrowserWindow.getAllWindows().length === 0)
         createWindow(); });

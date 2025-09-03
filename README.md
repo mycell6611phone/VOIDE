@@ -1,7 +1,7 @@
 # VOIDE - Visual Orchestration IDE
 
 VOIDE is a visual IDE for building, orchestrating, and running large language model (LLM) architectures.  
-Think of it as **AutoCAD or Microsoft Paint for AI workflows** — highly technical under the hood, but simple enough for anyone to use.
+Think of it as **A cuircuit development bread board for AI workflows** — highly technical under the hood, but simple enough for anyone to use.
 
 ## Features
 - Visual Workflow Builder: Drag-and-drop interface for designing LLM flows.

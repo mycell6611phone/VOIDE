@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import GraphCanvas from "./components/GraphCanvas";
 import PropertiesPanel from "./components/PropertiesPanel";
-import RunControls from "./components/RunControls";
+import TopNavBar from "./components/TopNavBar";
 import Inspector from "./components/Inspector";
+import ModulePalette from "./components/ModulePalette";
 import { useFlowStore } from "./state/flowStore";
 
 declare global { interface Window { voide?: any } }
@@ -20,8 +21,10 @@ export default function App() {
   }, [setCatalog]);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", height: "100vh" }}>
-      <div style={{ display: "grid", gridTemplateRows: "48px 1fr 200px" }}>
+
+    <div style={{ display: "flex", height: "100vh" }}>
+      <ModulePalette />
+      <div style={{ flex: 1, display: "grid", gridTemplateRows: "48px 1fr 200px" }}>
         <RunControls
           onRun={async () => {
             if (window.voide?.runFlow) {
@@ -31,12 +34,18 @@ export default function App() {
               console.warn("runFlow not available — running in browser dev mode");
             }
           }}
+          onPause={() => {
+            console.warn("pause not implemented");
+          }}
           onStop={async () => {
             if (runId && window.voide?.stopFlow) {
               await window.voide.stopFlow(runId);
             } else {
               console.warn("stopFlow not available — running in browser dev mode");
             }
+          }}
+          onBuild={() => {
+            console.log("Build clicked");
           }}
         />
         <GraphCanvas />

@@ -1,0 +1,32 @@
+# PR: Step 04 — Build the Flow Engine (M1–M3)
+
+## Prompt for Codex
+Implement the flow runtime with three milestones.
+
+### M1 — Executor
+- Validate nodes using schema.
+- Topological scheduling.
+- Execute nodes, route data along edges.
+- Persist runtime snapshots.
+
+### M2 — Validation Service
+- A service to validate flows before execution with detailed diagnostics.
+
+### M3 — Scheduler
+- Async run without blocking UI.
+- Pause, resume, cancel.
+- Backpressure handling on ports.
+
+### Required Changes
+- `packages/engine/src/index.ts`: core executor with node registry and edge router.
+- `packages/engine/src/snapshot.ts`: snapshot read/write with stable IDs.
+- `packages/engine/src/validate.ts`: structural and semantic validators.
+- `packages/main/src/services/flowService.ts`: expose run/validate to IPC.
+- Add tests under `packages/engine/tests/` covering scheduling, routing, pause/resume, and snapshot round‑trip.
+
+### Acceptance Criteria
+- Deterministic execution order given DAG.
+- Snapshots can restore a paused run.
+- Validation finds duplicate IDs, dangling ports, and type mismatches.
+- Long‑running run does not freeze the renderer.
+

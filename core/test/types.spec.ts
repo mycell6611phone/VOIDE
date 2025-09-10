@@ -31,7 +31,7 @@ describe("TypeRegistry", () => {
   it("encodes and decodes AnyBlob", () => {
     const blob: AnyBlob = { data: new Uint8Array([1, 2, 3]) };
     const bin = registry.encode("AnyBlob", blob);
-    expect(Array.from(bin)).toEqual([1, 2, 3]);
+    expect(bin).toBeInstanceOf(Uint8Array);
     const decoded = registry.decode("AnyBlob", bin) as AnyBlob;
     expect(Array.from(decoded.data)).toEqual([1, 2, 3]);
   });
@@ -39,7 +39,7 @@ describe("TypeRegistry", () => {
   it("falls back to AnyBlob for ext:* types", () => {
     const bytes = new Uint8Array([9, 8]);
     const bin = registry.encode("ext:custom", { data: bytes });
-    expect(Array.from(bin)).toEqual([9, 8]);
+    expect(bin).toBeInstanceOf(Uint8Array);
     const decoded = registry.decode("ext:custom", bin) as AnyBlob;
     expect(Array.from(decoded.data)).toEqual([9, 8]);
   });

@@ -1,18 +1,9 @@
-export interface UserText {
-  text: string;
-}
+import * as pb from "../proto/voide/v1/flow";
 
-export interface PromptText {
-  text: string;
-}
-
-export interface LLMText {
-  text: string;
-}
-
-export interface AnyBlob {
-  data: Uint8Array;
-}
+export type UserText = pb.UserText;
+export type PromptText = pb.PromptText;
+export type LLMText = pb.LLMText;
+export type AnyBlob = pb.AnyBlob;
 
 export type BuiltinType =
   | "UserText"
@@ -27,35 +18,28 @@ export interface Codec<T> {
   decode(bytes: Uint8Array): T;
 }
 
-function makeTextCodec<T extends { text: string }>(): Codec<T> {
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
+function makeProtoCodec<T>(
+  msg: { encode(value: T, writer?: any): any; decode(bytes: Uint8Array): T }
+): Codec<T> {
   return {
     encode(value: T): Uint8Array {
-      return encoder.encode(value.text);
+      return msg.encode(value).finish();
     },
     decode(bytes: Uint8Array): T {
-      return { text: decoder.decode(bytes) } as T;
+      return msg.decode(bytes);
     },
   };
 }
 
-const anyBlobCodec: Codec<AnyBlob> = {
-  encode(value: AnyBlob): Uint8Array {
-    return value.data;
-  },
-  decode(bytes: Uint8Array): AnyBlob {
-    return { data: bytes };
-  },
-};
+const anyBlobCodec = makeProtoCodec<AnyBlob>(pb.AnyBlob);
 
 export class TypeRegistry {
   private codecs = new Map<string, Codec<any>>();
 
   constructor() {
-    this.codecs.set("UserText", makeTextCodec<UserText>());
-    this.codecs.set("PromptText", makeTextCodec<PromptText>());
-    this.codecs.set("LLMText", makeTextCodec<LLMText>());
+    this.codecs.set("UserText", makeProtoCodec<UserText>(pb.UserText));
+    this.codecs.set("PromptText", makeProtoCodec<PromptText>(pb.PromptText));
+    this.codecs.set("LLMText", makeProtoCodec<LLMText>(pb.LLMText));
     this.codecs.set("AnyBlob", anyBlobCodec);
   }
 
@@ -83,4 +67,12 @@ export class TypeRegistry {
 }
 
 export const globalTypeRegistry = new TypeRegistry();
+
+export function encodeType<T>(name: TypeName, value: T): Uint8Array {
+  return globalTypeRegistry.encode(name, value);
+}
+
+export function decodeType<T>(name: TypeName, bytes: Uint8Array): T {
+  return globalTypeRegistry.decode(name, bytes);
+}
 

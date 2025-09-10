@@ -9,7 +9,7 @@
     "lint": "turbo run lint",
     "start": "electron packages/main/dist/main.js",
     "pack:linux": "electron-builder --linux deb",
-    "test": "pnpm --filter @voide/core test",
+    "test": "pnpm --filter @voide/core test && pnpm --filter @voide/ui test",
     "proto:gen": "pnpm --filter @voide/core proto:gen"
   },
   "devDependencies": {

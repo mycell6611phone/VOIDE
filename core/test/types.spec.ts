@@ -1,23 +1,3 @@
-<<<<<<< ours
-import { describe, expect, test } from 'vitest';
-import { TypeRegistry } from '../src/runtime/types';
-
-describe('TypeRegistry', () => {
-  const registry = new TypeRegistry();
-
-  test('encodes and decodes built-in types', () => {
-    const value = { text: 'hello' };
-    const encoded = registry.encode('UserText', value);
-    const decoded = registry.decode('UserText', encoded);
-    expect(decoded).toEqual(value);
-  });
-
-  test('handles ext:* types with JSON encoding', () => {
-    const obj = { foo: 'bar' };
-    const encoded = registry.encode('ext:Custom', obj);
-    const decoded = registry.decode('ext:Custom', encoded);
-    expect(decoded).toEqual(obj);
-=======
 import { describe, expect, it } from "vitest";
 import {
   AnyBlob,
@@ -66,7 +46,6 @@ describe("TypeRegistry", () => {
 
   it("throws for unknown non-ext type", () => {
     expect(() => registry.encode("Unknown" as any, { text: "x" })).toThrow();
->>>>>>> theirs
   });
 });
 

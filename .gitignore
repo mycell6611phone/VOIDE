@@ -1,5 +1,7 @@
 # Node.js & pnpm dependencies
 /node_modules
+core/node_modules
+ui/node_modules
 
 # TypeScript compiled output
 /dist

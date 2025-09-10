@@ -9,8 +9,8 @@
     "lint": "turbo run lint",
     "start": "electron packages/main/dist/main.js",
     "pack:linux": "electron-builder --linux deb",
-    "test": "npm test --workspace core",
-    "proto:gen": "npm run proto:gen --workspace core"
+    "test": "pnpm --filter @voide/core test",
+    "proto:gen": "pnpm --filter @voide/core proto:gen"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

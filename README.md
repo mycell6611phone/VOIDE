@@ -34,3 +34,12 @@ Edit `models/models.json`. For llama.cpp set `LLAMA_BIN` env to your compiled `l
 
 ## Sample flow
 Open `flows/sample-self-debate.flow.json` in the app. Choose adapter `mock` to run offline, or `llama.cpp` / `gpt4all` if installed.
+
+## CLI
+Build and run flows from the command line.
+
+```bash
+pnpm --filter @voide/core build
+pnpm --filter @voide/core exec voide build examples/bulletizer.canvas.json -o bulletizer.flow
+pnpm --filter @voide/core exec voide run bulletizer.flow --input 'text=Hello world' --provider stub
+```

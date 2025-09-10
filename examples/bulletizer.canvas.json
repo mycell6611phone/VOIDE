@@ -1,0 +1,14 @@
+{
+  "nodes": [
+    { "id": "text", "type": "InputNode", "in": [], "out": [ { "port": "text", "types": ["UserText"] } ] },
+    { "id": "prompt", "type": "PromptNode", "in": [ { "port": "text", "types": ["UserText"] } ], "out": [ { "port": "prompt", "types": ["PromptText"] } ] },
+    { "id": "llm", "type": "LLMNode", "in": [ { "port": "prompt", "types": ["PromptText"] } ], "out": [ { "port": "text", "types": ["LLMText"] } ] },
+    { "id": "out", "type": "OutputNode", "in": [ { "port": "text", "types": ["LLMText"] } ], "out": [] }
+  ],
+  "edges": [
+    { "from": ["text", "text"], "to": ["prompt", "text"] },
+    { "from": ["prompt", "prompt"], "to": ["llm", "prompt"] },
+    { "from": ["llm", "text"], "to": ["out", "text"] }
+  ]
+}
+

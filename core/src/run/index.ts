@@ -1,8 +1,8 @@
-import { NodeRegistry } from "../sdk/node";
-import { registerBuiltins, Providers } from "../nodes/builtins";
-import { orchestrate, TelemetryEvent, RunResult } from "./orchestrator";
+import { NodeRegistry } from "../sdk/node.js";
+import { registerBuiltins, Providers } from "../nodes/builtins.js";
+import { orchestrate, TelemetryEvent, RunResult } from "./orchestrator.js";
 
-export { TelemetryEvent, RunResult } from "./orchestrator";
+export { TelemetryEvent, RunResult } from "./orchestrator.js";
 
 export function runFlow(
   flowBin: Uint8Array,

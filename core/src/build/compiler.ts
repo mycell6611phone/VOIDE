@@ -1,10 +1,10 @@
-import * as pb from "../proto/voide/v1/flow";
+import * as pb from "../proto/voide/v1/flow.js";
 import {
   Canvas,
   BuildError,
   validateCanvas,
   getPort,
-} from "./validate";
+} from "./validate.js";
 
 export function compile(canvas: Canvas): Uint8Array {
   validateCanvas(canvas);
@@ -36,7 +36,7 @@ export function compile(canvas: Canvas): Uint8Array {
   return pb.Flow.encode(flow).finish();
 }
 
-export { Canvas } from "./validate";
+export { Canvas } from "./validate.js";
 
-export { BuildError } from "./validate";
+export { BuildError } from "./validate.js";
 

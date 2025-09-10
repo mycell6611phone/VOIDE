@@ -2,12 +2,12 @@ import {
   NodeHandler,
   NodeRegistry,
   ExecuteArgs,
-} from "../sdk/node";
+} from "../sdk/node.js";
 import {
   UserText,
   PromptText,
   LLMText,
-} from "../runtime/types";
+} from "../runtime/types.js";
 
 // Provider interface
 export interface LLMProvider {

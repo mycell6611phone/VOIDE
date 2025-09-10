@@ -2,13 +2,18 @@
   "name": "@voide/core",
   "version": "0.1.0",
   "type": "module",
+  "bin": {
+    "voide": "./dist/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "proto:gen": "node --loader ts-node/esm scripts/gen-proto.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "start": "node dist/cli.js"
   },
   "dependencies": {
-    "protobufjs": "^7.2.3"
+    "protobufjs": "^7.2.3",
+    "commander": "^11.0.0"
   },
   "devDependencies": {
     "ts-node": "^10.9.1",

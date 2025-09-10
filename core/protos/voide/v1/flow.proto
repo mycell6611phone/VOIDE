@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package voide.v1;
+
+message UserText {
+  string text = 1;
+}
+
+message PromptText {
+  string text = 1;
+}
+
+message LLMText {
+  string text = 1;
+}
+
+message AnyBlob {
+  bytes data = 1;
+}
+
+message NodeConfig {
+  string id = 1;
+  string type = 2;
+}
+
+message Edge {
+  string from = 1;
+  string to = 2;
+  string type = 3;
+}
+
+message Flow {
+  repeated NodeConfig nodes = 1;
+  repeated Edge edges = 2;
+}
+
+message InputCfg {
+  string id = 1;
+}
+
+message PromptCfg {
+  string id = 1;
+}
+
+message LLMCfg {
+  string model = 1;
+}
+
+message BranchCfg {
+  string condition = 1;
+}
+
+message LogCfg {
+  string name = 1;
+}
+
+message OutputCfg {
+  string name = 1;
+}
+
+message ExecuteRequest {
+  Flow flow = 1;
+}
+
+message PortValue {
+  string port = 1;
+  bytes value = 2;
+  string type = 3;
+}
+
+message NodeEvent {
+  string node_id = 1;
+  string event = 2;
+  PortValue value = 3;
+}
+
+message ExecuteResponse {
+  repeated NodeEvent events = 1;
+}
+

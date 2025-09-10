@@ -1,0 +1,13 @@
+{
+  "root": true,
+  "env": {
+    "node": true,
+    "es2022": true
+  },
+  "extends": ["eslint:recommended"],
+  "parserOptions": {
+    "sourceType": "module"
+  },
+  "ignorePatterns": ["dist", "node_modules"]
+}
+

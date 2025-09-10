@@ -13,6 +13,7 @@ exports.getPayloadsForRun = getPayloadsForRun;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+// Using any type to avoid dependency on external type definitions
 let db;
 async function initDB() {
     const dir = path_1.default.join(process.env.HOME || process.cwd(), ".voide");
@@ -56,6 +57,7 @@ async function initDB() {
   );
   `);
 }
+// Return type is any for the same reason
 function getDB() { return db; }
 async function createRun(runId, flowId) {
     db.prepare("insert into runs(id,flow_id,status) values(?,?,?)").run(runId, flowId, "created");

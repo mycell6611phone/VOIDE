@@ -3,8 +3,9 @@
   "compilerOptions": {
     "outDir": "dist",
     "target": "ES2022",
-    "module": "CommonJS",
+    "module": "commonjs",
     "moduleResolution": "Node",
+    "rootDir": "src",
     "composite": true,
     "baseUrl": "../..",
     "types": ["node", "electron"],

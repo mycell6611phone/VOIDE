@@ -1,15 +1,20 @@
-import Database from "better-sqlite3";
+import BetterSqlite3 from "better-sqlite3";
+import type { Database } from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import type { PayloadT, RunLog } from "@voide/shared";
 
-// CORRECTED: The type is simply 'Database' from the import.
+<<<<<<< ours
 let db: Database;
+=======
+// Using any type to avoid dependency on external type definitions
+let db: any;
+>>>>>>> theirs
 
 export async function initDB() {
   const dir = path.join(process.env.HOME || process.cwd(), ".voide");
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  db = new Database(path.join(dir, "voide.db"));
+  db = new BetterSqlite3(path.join(dir, "voide.db"));
   db.exec(`
   create table if not exists flows(
     id text primary key,
@@ -48,8 +53,12 @@ export async function initDB() {
   `);
 }
 
-// CORRECTED: The return type is also 'Database'.
+<<<<<<< ours
 export function getDB(): Database { return db; }
+=======
+// Return type is any for the same reason
+export function getDB(): any { return db; }
+>>>>>>> theirs
 
 export async function createRun(runId: string, flowId: string) {
   db.prepare("insert into runs(id,flow_id,status) values(?,?,?)").run(runId, flowId, "created");

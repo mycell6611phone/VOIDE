@@ -1,16 +1,19 @@
 import * as pb from "../proto/voide/v1/flow.js";
 import { NodeRegistry, makeContext } from "../sdk/node.js";
 import { Providers } from "../nodes/builtins.js";
+import { Scheduler } from "./scheduler.js";
+
+export type NodeStatus =
+  | "idle"
+  | "queued"
+  | "running"
+  | "ok"
+  | "warn"
+  | "error";
 
 export type TelemetryEvent =
-  | { type: "NODE_START"; nodeId: string }
-  | { type: "NODE_END"; nodeId: string }
-  | { type: "NODE_ERROR"; nodeId: string; error: Error }
-  | {
-      type: "EDGE_EMIT";
-      from: string;
-      to: string;
-    };
+  | { type: "NODE_STATE"; nodeId: string; state: NodeStatus }
+  | { type: "EDGE_EMIT"; from: string; to: string };
 
 export interface RunResult {
   outputs: Record<string, any>;
@@ -67,7 +70,8 @@ export async function* orchestrate(
   flowBin: Uint8Array,
   runtimeInputs: Record<string, any>,
   registry: NodeRegistry,
-  providers: Providers = {}
+  providers: Providers = {},
+  scheduler: Scheduler = new Scheduler(),
 ): AsyncGenerator<TelemetryEvent, RunResult> {
   const flow = pb.Flow.decode(flowBin);
   const ctx = makeContext();
@@ -86,18 +90,26 @@ export async function* orchestrate(
     inEdges.set(e.toNode, ins);
   }
 
+  const states = new Map<string, NodeStatus>();
   const ready: string[] = [];
   for (const n of flow.nodes) {
+    states.set(n.id, "idle");
     if ((inEdges.get(n.id) ?? []).length === 0) {
       ready.push(n.id);
+      states.set(n.id, "queued");
+      yield { type: "NODE_STATE", nodeId: n.id, state: "queued" };
     }
   }
   const executed = new Set<string>();
 
   while (ready.length > 0) {
+    await scheduler.next();
+    ready.sort();
     const nodeId = ready.shift()!;
     if (executed.has(nodeId)) continue;
     executed.add(nodeId);
+    states.set(nodeId, "running");
+    yield { type: "NODE_STATE", nodeId, state: "running" };
 
     const cfg = nodes.get(nodeId)!;
     const handler = registry.get(cfg.type);
@@ -107,8 +119,6 @@ export async function* orchestrate(
         inputs[e.toPort] = e.mailbox.shift();
       }
     }
-
-    yield { type: "NODE_START", nodeId };
     let output: any;
     let attempt = 0;
     while (true) {
@@ -127,12 +137,14 @@ export async function* orchestrate(
         attempt++;
         if (attempt > DEFAULT_RETRIES) {
           const error = err instanceof Error ? err : new Error(String(err));
-          yield { type: "NODE_ERROR", nodeId, error };
+          states.set(nodeId, "error");
+          yield { type: "NODE_STATE", nodeId, state: "error" };
           throw error;
         }
       }
     }
-    yield { type: "NODE_END", nodeId };
+    states.set(nodeId, "ok");
+    yield { type: "NODE_STATE", nodeId, state: "ok" };
 
     for (const e of outEdges.get(nodeId) ?? []) {
       const val = output[e.fromPort];
@@ -154,6 +166,8 @@ export async function* orchestrate(
       const readyFlag = Array.from(portReady.values()).every(Boolean);
       if (readyFlag && !executed.has(e.toNode) && !ready.includes(e.toNode)) {
         ready.push(e.toNode);
+        states.set(e.toNode, "queued");
+        yield { type: "NODE_STATE", nodeId: e.toNode, state: "queued" };
       }
     }
   }

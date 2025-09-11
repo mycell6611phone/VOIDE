@@ -93,14 +93,18 @@ describe("router-divider", () => {
   it("routes valid payload forward", async () => {
     const { result, events } = await exec("- one\n- two");
     expect(result.outputs.out).toBe("- one\n- two");
-    const nodes = events.filter(e => e.type === "NODE_START").map(e => e.nodeId);
+    const nodes = events
+      .filter((e) => e.type === "NODE_STATE" && e.state === "running")
+      .map((e) => e.nodeId);
     expect(nodes).toEqual(["user", "router", "out"]);
   });
 
   it("normalizes invalid payload and continues", async () => {
     const { result, events } = await exec("hello world");
     expect(result.outputs.out).toBe("- hello world");
-    const nodes = events.filter(e => e.type === "NODE_START").map(e => e.nodeId);
+    const nodes = events
+      .filter((e) => e.type === "NODE_STATE" && e.state === "running")
+      .map((e) => e.nodeId);
     expect(nodes).toEqual(["user", "router", "norm", "out"]);
   });
 });

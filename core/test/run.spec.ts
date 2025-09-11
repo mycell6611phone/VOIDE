@@ -88,18 +88,28 @@ describe("runFlow", () => {
     }
 
     expect(result?.outputs.out).toBe("hello");
-    expect(events.map((e) => e.type)).toEqual([
-      "NODE_START",
-      "NODE_END",
-      "EDGE_EMIT",
-      "NODE_START",
-      "NODE_END",
-      "EDGE_EMIT",
-      "NODE_START",
-      "NODE_END",
-      "EDGE_EMIT",
-      "NODE_START",
-      "NODE_END",
+    expect(
+      events.map((e) =>
+        e.type === "NODE_STATE"
+          ? `${e.nodeId}:${e.state}`
+          : `${e.from}->${e.to}`
+      ),
+    ).toEqual([
+      "user:queued",
+      "user:running",
+      "user:ok",
+      "user.text->prompt.text",
+      "prompt:queued",
+      "prompt:running",
+      "prompt:ok",
+      "prompt.prompt->llm.prompt",
+      "llm:queued",
+      "llm:running",
+      "llm:ok",
+      "llm.text->out.text",
+      "out:queued",
+      "out:running",
+      "out:ok",
     ]);
   });
 });

@@ -104,9 +104,7 @@ export interface EdgeState {
 }
 
 export type TelemetryEvent =
-  | { type: "NODE_START"; nodeId: string }
-  | { type: "NODE_END"; nodeId: string }
-  | { type: "NODE_ERROR"; nodeId: string }
+  | { type: "NODE_STATE"; nodeId: string; state: LightState }
   | { type: "EDGE_EMIT"; from: string; to: string };
 
 interface FlowState {
@@ -195,14 +193,8 @@ export const useFlow = create<FlowState>((set, get) => ({
   handleTelemetry: (ev, record = true) => {
     if (record) set((s) => ({ events: [...s.events, ev] }));
     switch (ev.type) {
-      case "NODE_START":
-        get().setStatus(ev.nodeId, "running");
-        break;
-      case "NODE_END":
-        get().setStatus(ev.nodeId, "ok");
-        break;
-      case "NODE_ERROR":
-        get().setStatus(ev.nodeId, "error");
+      case "NODE_STATE":
+        get().setStatus(ev.nodeId, ev.state);
         break;
       case "EDGE_EMIT": {
         const edge = get().edges.find(

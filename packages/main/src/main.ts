@@ -1,10 +1,11 @@
 
 // ESM main process entry for Electron + Vite renderer
-import { app, BrowserWindow, session, shell, ipcMain } from 'electron';
+import { app, BrowserWindow, session, shell } from 'electron';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setupIPC } from './ipc.js';
 import { initDB } from './services/db.js';
+import { registerHandlers } from './ipc/handlers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -61,6 +62,7 @@ app.whenReady().then(async () => {
   blockNetworkRequests();
   await initDB().catch(() => {}); // keep free-mode resilient
   setupIPC();
+  registerHandlers();
   await createWindow();
 
   app.on('activate', async () => {
@@ -71,8 +73,4 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
-
-// Example IPC guards (keep schemas in ./ipc.ts)
-ipcMain.handle('app:get-version', async () => ({ ok: true, data: app.getVersion() }));
-
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFlow } from "../src/flow/schema";
+import { parseFlow } from "../dist/flow/schema.js";
 import { compile } from "../src/build/compiler";
 import * as pb from "../src/proto/voide/v1/flow";
 import { execFile } from "node:child_process";

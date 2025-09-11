@@ -13,7 +13,8 @@
   "include": ["src", "vite.config.ts"],
   "references": [
     { "path": "../shared" },
-    { "path": "../schemas" }
+    { "path": "../schemas" },
+    { "path": "../ipc" }
   ]
 }
 

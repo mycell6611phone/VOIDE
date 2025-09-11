@@ -3,16 +3,14 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "composite": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "declaration": true,
-    "types": ["node", "electron"]
+    "types": ["node"]
   },
-  "include": ["src"],
+  "include": ["src", "test"],
   "references": [
-    { "path": "../shared" },
-    { "path": "../ipc" }
+    { "path": "../shared" }
   ]
 }
 

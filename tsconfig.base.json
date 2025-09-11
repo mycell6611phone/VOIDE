@@ -13,7 +13,8 @@
       "@voide/shared": ["packages/shared/src/index.ts"],
       "@voide/schemas": ["packages/schemas/src/index.ts"],
       "@voide/adapters": ["packages/adapters/src"],
-      "@voide/workers": ["packages/workers/src/index.ts"]
+      "@voide/workers": ["packages/workers/src/index.ts"],
+      "@voide/ipc": ["packages/ipc/src/index.ts"]
     }
   }
 }

@@ -12,6 +12,7 @@
   "dependencies": {
     "@voide/shared": "workspace:*",
     "@voide/schemas": "workspace:*",
+    "@voide/ipc": "workspace:*",
     "ajv": "8.17.1",
     "better-sqlite3": "9.6.0",
     "electron-store": "^10.1.0",

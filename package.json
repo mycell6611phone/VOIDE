@@ -14,7 +14,7 @@
     "lint": "turbo run lint",
     "start": "electron --no-sandbox packages/main/dist/main.js",
     "pack:linux": "electron-builder --linux deb AppImage",
-    "test": "pnpm --filter @voide/core test && pnpm --filter @voide/ui test",
+    "test": "pnpm --filter @voide/ipc test && pnpm --filter @voide/core test && pnpm --filter @voide/ui test",
     "proto:gen": "pnpm --filter @voide/core proto:gen",
     "license:check": "pnpm -r --filter '!voide' exec license-checker-rseidelsohn --production --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC'"
   },

@@ -103,7 +103,9 @@ export async function* orchestrate(
     const handler = registry.get(cfg.type);
     const inputs: any = {};
     for (const e of inEdges.get(nodeId) ?? []) {
-      inputs[e.toPort] = e.mailbox.shift();
+      if (inputs[e.toPort] === undefined && e.mailbox.length > 0) {
+        inputs[e.toPort] = e.mailbox.shift();
+      }
     }
 
     yield { type: "NODE_START", nodeId };
@@ -143,7 +145,13 @@ export async function* orchestrate(
         };
       }
       const incoming = inEdges.get(e.toNode) ?? [];
-      const readyFlag = incoming.every((ie) => ie.mailbox.length > 0);
+      const portReady = new Map<string, boolean>();
+      for (const ie of incoming) {
+        const hasVal = ie.mailbox.length > 0;
+        const prev = portReady.get(ie.toPort) ?? false;
+        portReady.set(ie.toPort, prev || hasVal);
+      }
+      const readyFlag = Array.from(portReady.values()).every(Boolean);
       if (readyFlag && !executed.has(e.toNode) && !ready.includes(e.toNode)) {
         ready.push(e.toNode);
       }

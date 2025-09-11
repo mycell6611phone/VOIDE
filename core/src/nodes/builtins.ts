@@ -8,6 +8,7 @@ import {
   PromptText,
   LLMText,
 } from "../runtime/types.js";
+import { z } from "zod";
 
 // Provider interface
 export interface LLMProvider {
@@ -89,6 +90,49 @@ const BranchNode: NodeHandler<{ text: "LLMText" }, { pass: "LLMText"; fail: "LLM
   },
 };
 
+// Router-Divider Node
+const RouterDividerNode: NodeHandler<
+  { text: "UserText" },
+  { valid: "LLMText"; invalid: "LLMText" },
+  {}
+> = {
+  kind: "RouterDividerNode",
+  inPorts: { text: "UserText" },
+  outPorts: { valid: "LLMText", invalid: "LLMText" },
+  async execute({ inputs }: ExecuteArgs<{ text: "UserText" }, {}>) {
+    const schema = z
+      .object({ text: z.string() })
+      .refine((d) => d.text.trim().startsWith("-"));
+    const payload = inputs.text ?? { text: "" };
+    if (schema.safeParse(payload).success) {
+      return { valid: { text: payload.text } } as any;
+    }
+    return { invalid: { text: payload.text } } as any;
+  },
+};
+
+// Bullet List Normalizer
+const BulletListNormalizerNode: NodeHandler<
+  { text: "LLMText" },
+  { text: "LLMText" },
+  {}
+> = {
+  kind: "BulletListNormalizerNode",
+  inPorts: { text: "LLMText" },
+  outPorts: { text: "LLMText" },
+  async execute({ inputs }: ExecuteArgs<{ text: "LLMText" }, {}>) {
+    const raw = inputs.text?.text ?? "";
+    const lines = raw
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    const normalized = lines
+      .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+      .join("\n");
+    return { text: { text: normalized } };
+  },
+};
+
 // Log Node
 const LogNode: NodeHandler<{ value: "AnyBlob" }, { value: "AnyBlob" }, { name: string }> = {
   kind: "LogNode",
@@ -116,6 +160,8 @@ export function registerBuiltins(registry: NodeRegistry) {
   registry.register(PromptNode);
   registry.register(LLMNode);
   registry.register(BranchNode);
+  registry.register(RouterDividerNode);
+  registry.register(BulletListNormalizerNode);
   registry.register(LogNode);
   registry.register(OutputNode);
 }
@@ -125,6 +171,8 @@ export {
   PromptNode,
   LLMNode,
   BranchNode,
+  RouterDividerNode,
+  BulletListNormalizerNode,
   LogNode,
   OutputNode,
 };

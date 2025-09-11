@@ -1,5 +1,93 @@
-read the #1 prompt only. ///
-----  #1  -------
+
+# VOIDE — Codex Prompts (Free Offline Edition)
+Single user. Offline only. No external APIs. No disk logging except user-initiated saves and local model files. Diagnostics are real-time lights on the canvas.
+
+---
+
+## Chunk 00 — Free‑mode guardrails (offline, single‑user, no logs)
+
+**Prompt for Codex**
+
+- Add a config flag `VOIDE_FREE=1`. Default to on in dev and prod.
+- In Electron `session.defaultSession.webRequest.onBeforeRequest`, block `http://`, `https://`, `ws://`, `wss://`. Allow only `file://` and `dev://` in dev. Deny `autoUpdater`.
+- Remove any analytics or crash reporters. Do not import them.
+- Prohibit multi‑user: do not open a local HTTP server. All work stays in Electron processes only.
+- Disable persistent logs. Do not write to disk except user‑initiated saves and local model files. Keep a small in‑memory ring buffer only if needed to drive the lights UI.
+- Expose a single, typed “lights” event stream over IPC. No telemetry leaves the machine.
+
+**Acceptance**
+
+- Network requests are blocked at the browser and main process layers.
+- No log files appear after a full run.
+- App runs end‑to‑end fully offline with a local mock LLM.
+
+---
+
+## Chunk 01 — Core runtime and packaging (ESM, Electron, license gate)
+
+**Prompt for Codex**
+
+- Implement Electron app with Node ≥20.11, ESM only, strict TS, minimal preload API. Package for Linux first using `electron-builder`.
+- Keep GPU optional via `VOIDE_ENABLE_CUDA=1`. CPU default.
+- Enforce permissive license allowlist in CI using `license-checker-rseidelsohn`.
+
+**Acceptance**
+
+- `pnpm -w lint && pnpm -w build && pnpm -w test` pass.
+- `pnpm -w run dev` launches Electron with the renderer canvas.
+- `pnpm -w run pack:linux` builds `.deb` and `.AppImage`.
+- `pnpm -w run license:check` fails on a non‑permissive dep.
+
+---
+
+## Chunk 02 — Canonical flow schema + Proto output
+
+**Prompt for Codex**
+
+- Keep a canonical flow editor schema in TS/Zod for authoring and validation: `FlowEnvelope`, `Node`, `Edge`, `Ports`. Preserve unknown fields, apply defaults, provide a CLI validator.
+- Add `flow.proto` mirroring the canonical schema for execution and persistence. Build phase compiles JSON‑like editor state into protobuf bytes “Flow v1”. The runtime consumes only protobuf.
+- Add CLI: `pnpm voide validate <path>` uses Zod; `pnpm voide pack <path>` emits `.flow.pb`.
+
+**Acceptance**
+
+- Validate→stringify round‑trip preserves unknown fields. CLI exits 1 on invalid flows and 0 on valid samples.
+- `pack` produces deterministic protobuf for the same input. Renderer loads either JSON (edit) or protobuf (run).
+
+---
+
+## Chunk 03 — IPC and process boundaries + typed preload
+
+**Prompt for Codex**
+
+- Define typed channels and Zod payloads: `flow:validate`, `flow:run`, `model:ensure`, `telemetry:event`, `app:get-version`. Register handlers in `packages/main/src/ipc/handlers.ts` with validation and safe error mapping.
+- Expose a minimal `window.voide` preload surface with typed proxies in `packages/preload`.
+- Renderer wraps it in `ipcClient.ts`. Reject invalid payloads with structured errors.
+
+**Acceptance**
+
+- End‑to‑end type‑safe IPC. Unit tests for each channel schema. `preload` exposes only the documented API.
+
+---
+
+## Chunk 04 — Canvas UI with real‑time lights
+
+**Prompt for Codex**
+
+- Build a React canvas for nodes and edges. Nodes show port badges. Edges show flow pulses.
+- Implement a “lights” overlay: per‑node and per‑edge LEDs that update from `telemetry:event`.
+- State→light mapping:
+  - `idle` grey, `queued` blue, `running` white strobe, `ok` green, `warn` yellow, `error` red, `normalized` cyan, `routed` magenta.
+- Animate edge pulses when payloads move. Show small payload shape icons per port type.
+- Provide a “Simulate” toggle that replays the last run’s in‑memory events for visual debugging. No disk writes.
+
+**Acceptance**
+
+- In a sample flow, lights change and pulses traverse edges during execution.
+- Turning on “Simulate” replays the lights without executing modules again.
+
+---
+
+## Chunk 05 — Core modules (LLM, Prompt, Memory, ToolCall). No Log module.
 **Prompt for Codex**
 
 - Implement modules with strict sub‑schemas and graceful downgrades. Keep unknown fields passthrough.
@@ -11,11 +99,10 @@ read the #1 prompt only. ///
 **Acceptance**
 
 - Unit tests cover schema validation and downgrade behavior. End‑to‑end run passes with the mock LLM. 
-- Return back to agents_instructions.md  # 2. /// -----------------------------------
 
---- #2 ///---------
+---
 
-## Routers/Dividers and Normalizers
+## Chunk 06 --Routers/Dividers and Normalizers
 
 **Prompt for Codex**
 
@@ -26,11 +113,10 @@ read the #1 prompt only. ///
 **Acceptance**
 
 - Tests prove valid payloads go forward and invalid payloads get normalized and then continue.
-- Return back to Agents_instructions,md #3 ///
 
----  #3 ///-------------------
+---
 
-## Deterministic orchestrator and stepper
+## Chunk 07 --Deterministic orchestrator and stepper
 
 **Prompt for Codex**
 
@@ -41,9 +127,8 @@ read the #1 prompt only. ///
 **Acceptance**
 
 - The same flow and seeds produce identical event sequences. Lights reflect these events in real time.
-- STOP ///
 
---- when complete return here #4 -------------------
+--- 
 
 ## Chunk 08 — Model Manager (offline‑first)
 
@@ -57,7 +142,7 @@ read the #1 prompt only. ///
 
 - Invalid licenses are rejected. Partial installs resume. Progress streams to UI.
 
---- When complete return here #5 ----------
+--- 
 
 ## Chunk 09 — Model Picker UI
 

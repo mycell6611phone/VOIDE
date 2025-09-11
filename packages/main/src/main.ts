@@ -1,74 +1,78 @@
-<<<<<<< ours
-import { app, BrowserWindow, ipcMain, dialog, shell, session } from "electron";
-import http from "http";
-import https from "https";
-=======
-import { app, BrowserWindow, shell } from "electron";
->>>>>>> theirs
-import path from "path";
-import { fileURLToPath } from "url";
-import { setupIPC } from "./ipc.js";
-import { initDB } from "./services/db.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-if (process.env.VOIDE_ENABLE_CUDA !== "1") app.disableHardwareAcceleration();
+// ESM main process entry for Electron + Vite renderer
+import { app, BrowserWindow, session, shell, ipcMain } from 'electron';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { setupIPC } from './ipc.js';
+import { initDB } from './services/db.js';
 
-let win: BrowserWindow | null = null;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
 
-// Ensure VOIDE runs in "free" mode by default.
-if (!process.env.VOIDE_FREE) {
-  process.env.VOIDE_FREE = "1";
-}
+// Free-mode defaults
+if (!process.env.VOIDE_FREE) process.env.VOIDE_FREE = '1';
+
+// Optional CUDA toggle
+if (process.env.VOIDE_ENABLE_CUDA !== '1') app.disableHardwareAcceleration();
 
 function blockNetworkRequests() {
-  // Block http/https and websocket requests from the renderer process.
-  const allowedProtocols = new Set(["file:"]);
-  if (process.env.VITE_DEV_SERVER_URL) {
-    // Allow dev:// protocol during development for Vite dev server
-    allowedProtocols.add("dev:");
-  }
-  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+  const sess = session.defaultSession;
+  sess.webRequest.onBeforeRequest((details, callback) => {
     try {
-      const protocol = new URL(details.url).protocol;
-      if (!allowedProtocols.has(protocol)) {
-        return callback({ cancel: true });
-      }
+      const url = details.url;
+      if (url.startsWith('file://')) return callback({ cancel: false });
+      if (process.env.NODE_ENV === 'development' && url.startsWith('dev://')) return callback({ cancel: false });
+      return callback({ cancel: true });
     } catch {
       return callback({ cancel: true });
     }
-    callback({});
   });
-
-  // Block network access from the main process as well.
-  const block = () => {
-    throw new Error("Network access is disabled in VOIDE_FREE mode");
-  };
-  (http.request as any) = block;
-  (http.get as any) = block;
-  (https.request as any) = block;
-  (https.get as any) = block;
 }
 
-function createWindow() {
-  win = new BrowserWindow({
-    width: 1320,
-    height: 900,
+async function createWindow() {
+  const win = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    show: false,
     webPreferences: {
-      preload: path.join(__dirname, "../../preload/dist/preload.js"),
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
       nodeIntegration: false,
-      contextIsolation: true
-    }
+      sandbox: true,
+    },
   });
-  if (process.env.VITE_DEV_SERVER_URL) win.loadURL(process.env.VITE_DEV_SERVER_URL);
-  else win.loadFile(path.join(__dirname, "../../renderer/dist/index.html"));
-  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+
+  win.once('ready-to-show', () => win.show());
+
+  const devUrl = process.env.VITE_DEV_SERVER_URL;
+  if (devUrl) {
+    await win.loadURL(devUrl);
+  } else {
+    await win.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
+  }
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
 }
 
 app.whenReady().then(async () => {
   blockNetworkRequests();
-  await initDB();
-  createWindow();
+  await initDB().catch(() => {}); // keep free-mode resilient
   setupIPC();
-  app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  await createWindow();
+
+  app.on('activate', async () => {
+    if (BrowserWindow.getAllWindows().length === 0) await createWindow();
+  });
 });
-app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
+
+// Example IPC guards (keep schemas in ./ipc.ts)
+ipcMain.handle('app:get-version', async () => ({ ok: true, data: app.getVersion() }));
+
+

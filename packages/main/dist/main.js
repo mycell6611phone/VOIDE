@@ -1,34 +1,71 @@
-import { app, BrowserWindow, shell } from "electron";
-import path from "path";
-import { fileURLToPath } from "url";
-import { setupIPC } from "./ipc.js";
-import { initDB } from "./services/db.js";
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-if (process.env.VOIDE_ENABLE_CUDA !== "1")
+// ESM main process entry for Electron + Vite renderer
+import { app, BrowserWindow, session, shell, ipcMain } from 'electron';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { setupIPC } from './ipc.js';
+import { initDB } from './services/db.js';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// Free-mode defaults
+if (!process.env.VOIDE_FREE)
+    process.env.VOIDE_FREE = '1';
+// Optional CUDA toggle
+if (process.env.VOIDE_ENABLE_CUDA !== '1')
     app.disableHardwareAcceleration();
-let win = null;
-function createWindow() {
-    win = new BrowserWindow({
-        width: 1320,
-        height: 900,
-        webPreferences: {
-            preload: path.join(__dirname, "../../preload/dist/preload.js"),
-            nodeIntegration: false,
-            contextIsolation: true
+function blockNetworkRequests() {
+    const sess = session.defaultSession;
+    sess.webRequest.onBeforeRequest((details, callback) => {
+        try {
+            const url = details.url;
+            if (url.startsWith('file://'))
+                return callback({ cancel: false });
+            if (process.env.NODE_ENV === 'development' && url.startsWith('dev://'))
+                return callback({ cancel: false });
+            return callback({ cancel: true });
+        }
+        catch {
+            return callback({ cancel: true });
         }
     });
-    if (process.env.VITE_DEV_SERVER_URL)
-        win.loadURL(process.env.VITE_DEV_SERVER_URL);
-    else
-        win.loadFile(path.join(__dirname, "../../renderer/dist/index.html"));
-    win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+}
+async function createWindow() {
+    const win = new BrowserWindow({
+        width: 1280,
+        height: 800,
+        show: false,
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+        },
+    });
+    win.once('ready-to-show', () => win.show());
+    const devUrl = process.env.VITE_DEV_SERVER_URL;
+    if (devUrl) {
+        await win.loadURL(devUrl);
+    }
+    else {
+        await win.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
+    }
+    win.webContents.setWindowOpenHandler(({ url }) => {
+        shell.openExternal(url);
+        return { action: 'deny' };
+    });
 }
 app.whenReady().then(async () => {
-    await initDB();
-    createWindow();
+    blockNetworkRequests();
+    await initDB().catch(() => { }); // keep free-mode resilient
     setupIPC();
-    app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0)
-        createWindow(); });
+    await createWindow();
+    app.on('activate', async () => {
+        if (BrowserWindow.getAllWindows().length === 0)
+            await createWindow();
+    });
 });
-app.on("window-all-closed", () => { if (process.platform !== "darwin")
-    app.quit(); });
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin')
+        app.quit();
+});
+// Example IPC guards (keep schemas in ./ipc.ts)
+ipcMain.handle('app:get-version', async () => ({ ok: true, data: app.getVersion() }));

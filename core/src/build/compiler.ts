@@ -5,13 +5,32 @@ import {
   validateCanvas,
   getPort,
 } from "./validate.js";
+import { FlowEnvelope, Node, Edge as EdgeSpec, Port } from "../flow/schema.js";
 
-export function compile(canvas: Canvas): Uint8Array {
+export function compile(env: FlowEnvelope): Uint8Array {
+  const canvas: Canvas = {
+    nodes: env.nodes.map((n: Node) => ({
+      id: n.id,
+      type: n.type,
+      in: n.in,
+      out: n.out,
+    })),
+    edges: env.edges.map((e: EdgeSpec) => ({ from: e.from, to: e.to })),
+  };
   validateCanvas(canvas);
 
   const flow: pb.Flow = {
-    nodes: canvas.nodes.map((n) => ({ id: n.id, type: n.type })),
-    edges: canvas.edges.map((e) => {
+    id: env.id,
+    version: env.version,
+    nodes: env.nodes.map((n: Node) => ({
+      id: n.id,
+      type: n.type,
+      name: n.name ?? "",
+      paramsJson: JSON.stringify(n.params ?? {}),
+      in: n.in.map((p: Port) => ({ port: p.port, types: [...p.types] })),
+      out: n.out.map((p: Port) => ({ port: p.port, types: [...p.types] })),
+    })),
+    edges: env.edges.map((e: EdgeSpec) => {
       const fromNode = canvas.nodes.find((n) => n.id === e.from[0])!;
       const toNode = canvas.nodes.find((n) => n.id === e.to[0])!;
       const fromSpec = getPort(fromNode, "out", e.from[1])!;
@@ -26,8 +45,10 @@ export function compile(canvas: Canvas): Uint8Array {
         );
       }
       return {
-        from: `${e.from[0]}.${e.from[1]}`,
-        to: `${e.to[0]}.${e.to[1]}`,
+        id: e.id ?? "",
+        from: { node: e.from[0], port: e.from[1] },
+        to: { node: e.to[0], port: e.to[1] },
+        label: e.label ?? "",
         type,
       };
     }),

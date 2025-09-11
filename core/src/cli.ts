@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import * as fs from "fs/promises";
-import { compile, Canvas } from "./build/compiler.js";
+import { compile } from "./build/compiler.js";
+import { parseFlow } from "./flow/schema.js";
 import { runFlow } from "./run/index.js";
 import { StubProvider, Providers } from "./nodes/builtins.js";
 
@@ -23,14 +24,6 @@ function parseInputs(values: string[] | undefined): Record<string, any> {
     out[key] = val;
   }
   return out;
-}
-
-async function buildCanvas(canvasPath: string, outPath: string): Promise<void> {
-  const raw = await fs.readFile(canvasPath, "utf8");
-  const canvas = JSON.parse(raw) as Canvas;
-  const flowBin = compile(canvas);
-  await fs.writeFile(outPath, Buffer.from(flowBin));
-  console.log(`wrote ${outPath}`);
 }
 
 async function runFlowFile(
@@ -73,15 +66,48 @@ async function runFlowFile(
   }
 }
 
+async function validateFile(path: string): Promise<void> {
+  const raw = await fs.readFile(path, "utf8");
+  const flow = parseFlow(raw);
+  console.log(JSON.stringify(flow, null, 2));
+}
+
+async function packFile(src: string, outPath?: string): Promise<void> {
+  const raw = await fs.readFile(src, "utf8");
+  const flow = parseFlow(raw);
+  const bin = compile(flow);
+  const out =
+    outPath ?? src.replace(/\.flow\.json$/i, ".flow.pb");
+  await fs.writeFile(out, Buffer.from(bin));
+  console.log(`wrote ${out}`);
+}
+
 const program = new Command();
 program.name("voide").description("VOIDE CLI");
 
 program
-  .command("build")
-  .argument("<canvas>", "canvas JSON file")
-  .option("-o, --out <file>", "output flow binary", "flow.bin")
-  .action(async (canvas, opts) => {
-    await buildCanvas(canvas, opts.out);
+  .command("validate")
+  .argument("<flow>", "flow JSON file")
+  .action(async (flow) => {
+    try {
+      await validateFile(flow);
+    } catch (err) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("pack")
+  .argument("<flow>", "flow JSON file")
+  .option("-o, --out <file>", "output protobuf file")
+  .action(async (flow, opts) => {
+    try {
+      await packFile(flow, opts.out);
+    } catch (err) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
   });
 
 program

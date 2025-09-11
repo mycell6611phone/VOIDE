@@ -3,9 +3,14 @@ import { makeContext } from "../sdk/node.js";
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_RETRIES = 0;
 function parseEdge(e) {
-    const [fromNode, fromPort] = e.from.split(".");
-    const [toNode, toPort] = e.to.split(".");
-    return { fromNode, fromPort, toNode, toPort, type: e.type, mailbox: [] };
+    return {
+        fromNode: e.from?.node ?? "",
+        fromPort: e.from?.port ?? "",
+        toNode: e.to?.node ?? "",
+        toPort: e.to?.port ?? "",
+        type: e.type,
+        mailbox: [],
+    };
 }
 function nodeConfig(node) {
     switch (node.type) {

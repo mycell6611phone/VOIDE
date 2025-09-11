@@ -25,64 +25,38 @@ export interface AnyBlob {
   data: Uint8Array;
 }
 
-export interface NodeConfig {
+export interface Port {
+  port: string;
+  types: string[];
+}
+
+export interface NodePort {
+  node: string;
+  port: string;
+}
+
+export interface Node {
   id: string;
   type: string;
+  name: string;
+  paramsJson: string;
+  in: Port[];
+  out: Port[];
 }
 
 export interface Edge {
-  from: string;
-  to: string;
+  id: string;
+  from: NodePort | undefined;
+  to: NodePort | undefined;
+  label: string;
   type: string;
 }
 
 export interface Flow {
-  nodes: NodeConfig[];
+  id: string;
+  version: string;
+  nodes: Node[];
   edges: Edge[];
-}
-
-export interface InputCfg {
-  id: string;
-}
-
-export interface PromptCfg {
-  id: string;
-}
-
-export interface LLMCfg {
-  model: string;
-}
-
-export interface BranchCfg {
-  condition: string;
-}
-
-export interface LogCfg {
-  name: string;
-}
-
-export interface OutputCfg {
-  name: string;
-}
-
-export interface ExecuteRequest {
-  flow: Flow | undefined;
-}
-
-export interface PortValue {
-  port: string;
-  value: Uint8Array;
-  type: string;
-}
-
-export interface NodeEvent {
-  nodeId: string;
-  event: string;
-  value: PortValue | undefined;
-}
-
-export interface ExecuteResponse {
-  events: NodeEvent[];
 }
 
 function createBaseUserText(): UserText {
@@ -313,25 +287,185 @@ export const AnyBlob = {
   },
 };
 
-function createBaseNodeConfig(): NodeConfig {
-  return { id: "", type: "" };
+function createBasePort(): Port {
+  return { port: "", types: [] };
 }
 
-export const NodeConfig = {
-  encode(message: NodeConfig, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+export const Port = {
+  encode(message: Port, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.port !== "") {
+      writer.uint32(10).string(message.port);
+    }
+    for (const v of message.types) {
+      writer.uint32(18).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: _m0.Reader | Uint8Array, length?: number): Port {
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePort();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if (tag !== 10) {
+            break;
+          }
+
+          message.port = reader.string();
+          continue;
+        case 2:
+          if (tag !== 18) {
+            break;
+          }
+
+          message.types.push(reader.string());
+          continue;
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): Port {
+    return {
+      port: isSet(object.port) ? globalThis.String(object.port) : "",
+      types: globalThis.Array.isArray(object?.types) ? object.types.map((e: any) => globalThis.String(e)) : [],
+    };
+  },
+
+  toJSON(message: Port): unknown {
+    const obj: any = {};
+    if (message.port !== "") {
+      obj.port = message.port;
+    }
+    if (message.types?.length) {
+      obj.types = message.types;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<Port>, I>>(base?: I): Port {
+    return Port.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<Port>, I>>(object: I): Port {
+    const message = createBasePort();
+    message.port = object.port ?? "";
+    message.types = object.types?.map((e) => e) || [];
+    return message;
+  },
+};
+
+function createBaseNodePort(): NodePort {
+  return { node: "", port: "" };
+}
+
+export const NodePort = {
+  encode(message: NodePort, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.node !== "") {
+      writer.uint32(10).string(message.node);
+    }
+    if (message.port !== "") {
+      writer.uint32(18).string(message.port);
+    }
+    return writer;
+  },
+
+  decode(input: _m0.Reader | Uint8Array, length?: number): NodePort {
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseNodePort();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if (tag !== 10) {
+            break;
+          }
+
+          message.node = reader.string();
+          continue;
+        case 2:
+          if (tag !== 18) {
+            break;
+          }
+
+          message.port = reader.string();
+          continue;
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): NodePort {
+    return {
+      node: isSet(object.node) ? globalThis.String(object.node) : "",
+      port: isSet(object.port) ? globalThis.String(object.port) : "",
+    };
+  },
+
+  toJSON(message: NodePort): unknown {
+    const obj: any = {};
+    if (message.node !== "") {
+      obj.node = message.node;
+    }
+    if (message.port !== "") {
+      obj.port = message.port;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<NodePort>, I>>(base?: I): NodePort {
+    return NodePort.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<NodePort>, I>>(object: I): NodePort {
+    const message = createBaseNodePort();
+    message.node = object.node ?? "";
+    message.port = object.port ?? "";
+    return message;
+  },
+};
+
+function createBaseNode(): Node {
+  return { id: "", type: "", name: "", paramsJson: "", in: [], out: [] };
+}
+
+export const Node = {
+  encode(message: Node, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
     if (message.id !== "") {
       writer.uint32(10).string(message.id);
     }
     if (message.type !== "") {
       writer.uint32(18).string(message.type);
     }
+    if (message.name !== "") {
+      writer.uint32(26).string(message.name);
+    }
+    if (message.paramsJson !== "") {
+      writer.uint32(34).string(message.paramsJson);
+    }
+    for (const v of message.in) {
+      Port.encode(v!, writer.uint32(42).fork()).ldelim();
+    }
+    for (const v of message.out) {
+      Port.encode(v!, writer.uint32(50).fork()).ldelim();
+    }
     return writer;
   },
 
-  decode(input: _m0.Reader | Uint8Array, length?: number): NodeConfig {
+  decode(input: _m0.Reader | Uint8Array, length?: number): Node {
     const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
     let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseNodeConfig();
+    const message = createBaseNode();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -349,6 +483,34 @@ export const NodeConfig = {
 
           message.type = reader.string();
           continue;
+        case 3:
+          if (tag !== 26) {
+            break;
+          }
+
+          message.name = reader.string();
+          continue;
+        case 4:
+          if (tag !== 34) {
+            break;
+          }
+
+          message.paramsJson = reader.string();
+          continue;
+        case 5:
+          if (tag !== 42) {
+            break;
+          }
+
+          message.in.push(Port.decode(reader, reader.uint32()));
+          continue;
+        case 6:
+          if (tag !== 50) {
+            break;
+          }
+
+          message.out.push(Port.decode(reader, reader.uint32()));
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -358,14 +520,18 @@ export const NodeConfig = {
     return message;
   },
 
-  fromJSON(object: any): NodeConfig {
+  fromJSON(object: any): Node {
     return {
       id: isSet(object.id) ? globalThis.String(object.id) : "",
       type: isSet(object.type) ? globalThis.String(object.type) : "",
+      name: isSet(object.name) ? globalThis.String(object.name) : "",
+      paramsJson: isSet(object.paramsJson) ? globalThis.String(object.paramsJson) : "",
+      in: globalThis.Array.isArray(object?.in) ? object.in.map((e: any) => Port.fromJSON(e)) : [],
+      out: globalThis.Array.isArray(object?.out) ? object.out.map((e: any) => Port.fromJSON(e)) : [],
     };
   },
 
-  toJSON(message: NodeConfig): unknown {
+  toJSON(message: Node): unknown {
     const obj: any = {};
     if (message.id !== "") {
       obj.id = message.id;
@@ -373,34 +539,56 @@ export const NodeConfig = {
     if (message.type !== "") {
       obj.type = message.type;
     }
+    if (message.name !== "") {
+      obj.name = message.name;
+    }
+    if (message.paramsJson !== "") {
+      obj.paramsJson = message.paramsJson;
+    }
+    if (message.in?.length) {
+      obj.in = message.in.map((e) => Port.toJSON(e));
+    }
+    if (message.out?.length) {
+      obj.out = message.out.map((e) => Port.toJSON(e));
+    }
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<NodeConfig>, I>>(base?: I): NodeConfig {
-    return NodeConfig.fromPartial(base ?? ({} as any));
+  create<I extends Exact<DeepPartial<Node>, I>>(base?: I): Node {
+    return Node.fromPartial(base ?? ({} as any));
   },
-  fromPartial<I extends Exact<DeepPartial<NodeConfig>, I>>(object: I): NodeConfig {
-    const message = createBaseNodeConfig();
+  fromPartial<I extends Exact<DeepPartial<Node>, I>>(object: I): Node {
+    const message = createBaseNode();
     message.id = object.id ?? "";
     message.type = object.type ?? "";
+    message.name = object.name ?? "";
+    message.paramsJson = object.paramsJson ?? "";
+    message.in = object.in?.map((e) => Port.fromPartial(e)) || [];
+    message.out = object.out?.map((e) => Port.fromPartial(e)) || [];
     return message;
   },
 };
 
 function createBaseEdge(): Edge {
-  return { from: "", to: "", type: "" };
+  return { id: "", from: undefined, to: undefined, label: "", type: "" };
 }
 
 export const Edge = {
   encode(message: Edge, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    if (message.from !== "") {
-      writer.uint32(10).string(message.from);
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
     }
-    if (message.to !== "") {
-      writer.uint32(18).string(message.to);
+    if (message.from !== undefined) {
+      NodePort.encode(message.from, writer.uint32(18).fork()).ldelim();
+    }
+    if (message.to !== undefined) {
+      NodePort.encode(message.to, writer.uint32(26).fork()).ldelim();
+    }
+    if (message.label !== "") {
+      writer.uint32(34).string(message.label);
     }
     if (message.type !== "") {
-      writer.uint32(26).string(message.type);
+      writer.uint32(42).string(message.type);
     }
     return writer;
   },
@@ -417,17 +605,31 @@ export const Edge = {
             break;
           }
 
-          message.from = reader.string();
+          message.id = reader.string();
           continue;
         case 2:
           if (tag !== 18) {
             break;
           }
 
-          message.to = reader.string();
+          message.from = NodePort.decode(reader, reader.uint32());
           continue;
         case 3:
           if (tag !== 26) {
+            break;
+          }
+
+          message.to = NodePort.decode(reader, reader.uint32());
+          continue;
+        case 4:
+          if (tag !== 34) {
+            break;
+          }
+
+          message.label = reader.string();
+          continue;
+        case 5:
+          if (tag !== 42) {
             break;
           }
 
@@ -444,19 +646,27 @@ export const Edge = {
 
   fromJSON(object: any): Edge {
     return {
-      from: isSet(object.from) ? globalThis.String(object.from) : "",
-      to: isSet(object.to) ? globalThis.String(object.to) : "",
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      from: isSet(object.from) ? NodePort.fromJSON(object.from) : undefined,
+      to: isSet(object.to) ? NodePort.fromJSON(object.to) : undefined,
+      label: isSet(object.label) ? globalThis.String(object.label) : "",
       type: isSet(object.type) ? globalThis.String(object.type) : "",
     };
   },
 
   toJSON(message: Edge): unknown {
     const obj: any = {};
-    if (message.from !== "") {
-      obj.from = message.from;
+    if (message.id !== "") {
+      obj.id = message.id;
     }
-    if (message.to !== "") {
-      obj.to = message.to;
+    if (message.from !== undefined) {
+      obj.from = NodePort.toJSON(message.from);
+    }
+    if (message.to !== undefined) {
+      obj.to = NodePort.toJSON(message.to);
+    }
+    if (message.label !== "") {
+      obj.label = message.label;
     }
     if (message.type !== "") {
       obj.type = message.type;
@@ -469,24 +679,32 @@ export const Edge = {
   },
   fromPartial<I extends Exact<DeepPartial<Edge>, I>>(object: I): Edge {
     const message = createBaseEdge();
-    message.from = object.from ?? "";
-    message.to = object.to ?? "";
+    message.id = object.id ?? "";
+    message.from = (object.from !== undefined && object.from !== null) ? NodePort.fromPartial(object.from) : undefined;
+    message.to = (object.to !== undefined && object.to !== null) ? NodePort.fromPartial(object.to) : undefined;
+    message.label = object.label ?? "";
     message.type = object.type ?? "";
     return message;
   },
 };
 
 function createBaseFlow(): Flow {
-  return { nodes: [], edges: [] };
+  return { id: "", version: "", nodes: [], edges: [] };
 }
 
 export const Flow = {
   encode(message: Flow, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.version !== "") {
+      writer.uint32(18).string(message.version);
+    }
     for (const v of message.nodes) {
-      NodeConfig.encode(v!, writer.uint32(10).fork()).ldelim();
+      Node.encode(v!, writer.uint32(26).fork()).ldelim();
     }
     for (const v of message.edges) {
-      Edge.encode(v!, writer.uint32(18).fork()).ldelim();
+      Edge.encode(v!, writer.uint32(34).fork()).ldelim();
     }
     return writer;
   },
@@ -503,10 +721,24 @@ export const Flow = {
             break;
           }
 
-          message.nodes.push(NodeConfig.decode(reader, reader.uint32()));
+          message.id = reader.string();
           continue;
         case 2:
           if (tag !== 18) {
+            break;
+          }
+
+          message.version = reader.string();
+          continue;
+        case 3:
+          if (tag !== 26) {
+            break;
+          }
+
+          message.nodes.push(Node.decode(reader, reader.uint32()));
+          continue;
+        case 4:
+          if (tag !== 34) {
             break;
           }
 
@@ -523,15 +755,23 @@ export const Flow = {
 
   fromJSON(object: any): Flow {
     return {
-      nodes: globalThis.Array.isArray(object?.nodes) ? object.nodes.map((e: any) => NodeConfig.fromJSON(e)) : [],
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      version: isSet(object.version) ? globalThis.String(object.version) : "",
+      nodes: globalThis.Array.isArray(object?.nodes) ? object.nodes.map((e: any) => Node.fromJSON(e)) : [],
       edges: globalThis.Array.isArray(object?.edges) ? object.edges.map((e: any) => Edge.fromJSON(e)) : [],
     };
   },
 
   toJSON(message: Flow): unknown {
     const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.version !== "") {
+      obj.version = message.version;
+    }
     if (message.nodes?.length) {
-      obj.nodes = message.nodes.map((e) => NodeConfig.toJSON(e));
+      obj.nodes = message.nodes.map((e) => Node.toJSON(e));
     }
     if (message.edges?.length) {
       obj.edges = message.edges.map((e) => Edge.toJSON(e));
@@ -544,646 +784,10 @@ export const Flow = {
   },
   fromPartial<I extends Exact<DeepPartial<Flow>, I>>(object: I): Flow {
     const message = createBaseFlow();
-    message.nodes = object.nodes?.map((e) => NodeConfig.fromPartial(e)) || [];
+    message.id = object.id ?? "";
+    message.version = object.version ?? "";
+    message.nodes = object.nodes?.map((e) => Node.fromPartial(e)) || [];
     message.edges = object.edges?.map((e) => Edge.fromPartial(e)) || [];
-    return message;
-  },
-};
-
-function createBaseInputCfg(): InputCfg {
-  return { id: "" };
-}
-
-export const InputCfg = {
-  encode(message: InputCfg, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    if (message.id !== "") {
-      writer.uint32(10).string(message.id);
-    }
-    return writer;
-  },
-
-  decode(input: _m0.Reader | Uint8Array, length?: number): InputCfg {
-    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseInputCfg();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1:
-          if (tag !== 10) {
-            break;
-          }
-
-          message.id = reader.string();
-          continue;
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skipType(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): InputCfg {
-    return { id: isSet(object.id) ? globalThis.String(object.id) : "" };
-  },
-
-  toJSON(message: InputCfg): unknown {
-    const obj: any = {};
-    if (message.id !== "") {
-      obj.id = message.id;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<InputCfg>, I>>(base?: I): InputCfg {
-    return InputCfg.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<InputCfg>, I>>(object: I): InputCfg {
-    const message = createBaseInputCfg();
-    message.id = object.id ?? "";
-    return message;
-  },
-};
-
-function createBasePromptCfg(): PromptCfg {
-  return { id: "" };
-}
-
-export const PromptCfg = {
-  encode(message: PromptCfg, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    if (message.id !== "") {
-      writer.uint32(10).string(message.id);
-    }
-    return writer;
-  },
-
-  decode(input: _m0.Reader | Uint8Array, length?: number): PromptCfg {
-    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBasePromptCfg();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1:
-          if (tag !== 10) {
-            break;
-          }
-
-          message.id = reader.string();
-          continue;
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skipType(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): PromptCfg {
-    return { id: isSet(object.id) ? globalThis.String(object.id) : "" };
-  },
-
-  toJSON(message: PromptCfg): unknown {
-    const obj: any = {};
-    if (message.id !== "") {
-      obj.id = message.id;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<PromptCfg>, I>>(base?: I): PromptCfg {
-    return PromptCfg.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<PromptCfg>, I>>(object: I): PromptCfg {
-    const message = createBasePromptCfg();
-    message.id = object.id ?? "";
-    return message;
-  },
-};
-
-function createBaseLLMCfg(): LLMCfg {
-  return { model: "" };
-}
-
-export const LLMCfg = {
-  encode(message: LLMCfg, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    if (message.model !== "") {
-      writer.uint32(10).string(message.model);
-    }
-    return writer;
-  },
-
-  decode(input: _m0.Reader | Uint8Array, length?: number): LLMCfg {
-    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseLLMCfg();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1:
-          if (tag !== 10) {
-            break;
-          }
-
-          message.model = reader.string();
-          continue;
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skipType(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): LLMCfg {
-    return { model: isSet(object.model) ? globalThis.String(object.model) : "" };
-  },
-
-  toJSON(message: LLMCfg): unknown {
-    const obj: any = {};
-    if (message.model !== "") {
-      obj.model = message.model;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<LLMCfg>, I>>(base?: I): LLMCfg {
-    return LLMCfg.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<LLMCfg>, I>>(object: I): LLMCfg {
-    const message = createBaseLLMCfg();
-    message.model = object.model ?? "";
-    return message;
-  },
-};
-
-function createBaseBranchCfg(): BranchCfg {
-  return { condition: "" };
-}
-
-export const BranchCfg = {
-  encode(message: BranchCfg, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    if (message.condition !== "") {
-      writer.uint32(10).string(message.condition);
-    }
-    return writer;
-  },
-
-  decode(input: _m0.Reader | Uint8Array, length?: number): BranchCfg {
-    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseBranchCfg();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1:
-          if (tag !== 10) {
-            break;
-          }
-
-          message.condition = reader.string();
-          continue;
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skipType(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): BranchCfg {
-    return { condition: isSet(object.condition) ? globalThis.String(object.condition) : "" };
-  },
-
-  toJSON(message: BranchCfg): unknown {
-    const obj: any = {};
-    if (message.condition !== "") {
-      obj.condition = message.condition;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<BranchCfg>, I>>(base?: I): BranchCfg {
-    return BranchCfg.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<BranchCfg>, I>>(object: I): BranchCfg {
-    const message = createBaseBranchCfg();
-    message.condition = object.condition ?? "";
-    return message;
-  },
-};
-
-function createBaseLogCfg(): LogCfg {
-  return { name: "" };
-}
-
-export const LogCfg = {
-  encode(message: LogCfg, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    if (message.name !== "") {
-      writer.uint32(10).string(message.name);
-    }
-    return writer;
-  },
-
-  decode(input: _m0.Reader | Uint8Array, length?: number): LogCfg {
-    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseLogCfg();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1:
-          if (tag !== 10) {
-            break;
-          }
-
-          message.name = reader.string();
-          continue;
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skipType(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): LogCfg {
-    return { name: isSet(object.name) ? globalThis.String(object.name) : "" };
-  },
-
-  toJSON(message: LogCfg): unknown {
-    const obj: any = {};
-    if (message.name !== "") {
-      obj.name = message.name;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<LogCfg>, I>>(base?: I): LogCfg {
-    return LogCfg.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<LogCfg>, I>>(object: I): LogCfg {
-    const message = createBaseLogCfg();
-    message.name = object.name ?? "";
-    return message;
-  },
-};
-
-function createBaseOutputCfg(): OutputCfg {
-  return { name: "" };
-}
-
-export const OutputCfg = {
-  encode(message: OutputCfg, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    if (message.name !== "") {
-      writer.uint32(10).string(message.name);
-    }
-    return writer;
-  },
-
-  decode(input: _m0.Reader | Uint8Array, length?: number): OutputCfg {
-    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseOutputCfg();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1:
-          if (tag !== 10) {
-            break;
-          }
-
-          message.name = reader.string();
-          continue;
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skipType(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): OutputCfg {
-    return { name: isSet(object.name) ? globalThis.String(object.name) : "" };
-  },
-
-  toJSON(message: OutputCfg): unknown {
-    const obj: any = {};
-    if (message.name !== "") {
-      obj.name = message.name;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<OutputCfg>, I>>(base?: I): OutputCfg {
-    return OutputCfg.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<OutputCfg>, I>>(object: I): OutputCfg {
-    const message = createBaseOutputCfg();
-    message.name = object.name ?? "";
-    return message;
-  },
-};
-
-function createBaseExecuteRequest(): ExecuteRequest {
-  return { flow: undefined };
-}
-
-export const ExecuteRequest = {
-  encode(message: ExecuteRequest, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    if (message.flow !== undefined) {
-      Flow.encode(message.flow, writer.uint32(10).fork()).ldelim();
-    }
-    return writer;
-  },
-
-  decode(input: _m0.Reader | Uint8Array, length?: number): ExecuteRequest {
-    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseExecuteRequest();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1:
-          if (tag !== 10) {
-            break;
-          }
-
-          message.flow = Flow.decode(reader, reader.uint32());
-          continue;
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skipType(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): ExecuteRequest {
-    return { flow: isSet(object.flow) ? Flow.fromJSON(object.flow) : undefined };
-  },
-
-  toJSON(message: ExecuteRequest): unknown {
-    const obj: any = {};
-    if (message.flow !== undefined) {
-      obj.flow = Flow.toJSON(message.flow);
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<ExecuteRequest>, I>>(base?: I): ExecuteRequest {
-    return ExecuteRequest.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<ExecuteRequest>, I>>(object: I): ExecuteRequest {
-    const message = createBaseExecuteRequest();
-    message.flow = (object.flow !== undefined && object.flow !== null) ? Flow.fromPartial(object.flow) : undefined;
-    return message;
-  },
-};
-
-function createBasePortValue(): PortValue {
-  return { port: "", value: new Uint8Array(0), type: "" };
-}
-
-export const PortValue = {
-  encode(message: PortValue, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    if (message.port !== "") {
-      writer.uint32(10).string(message.port);
-    }
-    if (message.value.length !== 0) {
-      writer.uint32(18).bytes(message.value);
-    }
-    if (message.type !== "") {
-      writer.uint32(26).string(message.type);
-    }
-    return writer;
-  },
-
-  decode(input: _m0.Reader | Uint8Array, length?: number): PortValue {
-    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBasePortValue();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1:
-          if (tag !== 10) {
-            break;
-          }
-
-          message.port = reader.string();
-          continue;
-        case 2:
-          if (tag !== 18) {
-            break;
-          }
-
-          message.value = reader.bytes();
-          continue;
-        case 3:
-          if (tag !== 26) {
-            break;
-          }
-
-          message.type = reader.string();
-          continue;
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skipType(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): PortValue {
-    return {
-      port: isSet(object.port) ? globalThis.String(object.port) : "",
-      value: isSet(object.value) ? bytesFromBase64(object.value) : new Uint8Array(0),
-      type: isSet(object.type) ? globalThis.String(object.type) : "",
-    };
-  },
-
-  toJSON(message: PortValue): unknown {
-    const obj: any = {};
-    if (message.port !== "") {
-      obj.port = message.port;
-    }
-    if (message.value.length !== 0) {
-      obj.value = base64FromBytes(message.value);
-    }
-    if (message.type !== "") {
-      obj.type = message.type;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<PortValue>, I>>(base?: I): PortValue {
-    return PortValue.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<PortValue>, I>>(object: I): PortValue {
-    const message = createBasePortValue();
-    message.port = object.port ?? "";
-    message.value = object.value ?? new Uint8Array(0);
-    message.type = object.type ?? "";
-    return message;
-  },
-};
-
-function createBaseNodeEvent(): NodeEvent {
-  return { nodeId: "", event: "", value: undefined };
-}
-
-export const NodeEvent = {
-  encode(message: NodeEvent, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    if (message.nodeId !== "") {
-      writer.uint32(10).string(message.nodeId);
-    }
-    if (message.event !== "") {
-      writer.uint32(18).string(message.event);
-    }
-    if (message.value !== undefined) {
-      PortValue.encode(message.value, writer.uint32(26).fork()).ldelim();
-    }
-    return writer;
-  },
-
-  decode(input: _m0.Reader | Uint8Array, length?: number): NodeEvent {
-    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseNodeEvent();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1:
-          if (tag !== 10) {
-            break;
-          }
-
-          message.nodeId = reader.string();
-          continue;
-        case 2:
-          if (tag !== 18) {
-            break;
-          }
-
-          message.event = reader.string();
-          continue;
-        case 3:
-          if (tag !== 26) {
-            break;
-          }
-
-          message.value = PortValue.decode(reader, reader.uint32());
-          continue;
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skipType(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): NodeEvent {
-    return {
-      nodeId: isSet(object.nodeId) ? globalThis.String(object.nodeId) : "",
-      event: isSet(object.event) ? globalThis.String(object.event) : "",
-      value: isSet(object.value) ? PortValue.fromJSON(object.value) : undefined,
-    };
-  },
-
-  toJSON(message: NodeEvent): unknown {
-    const obj: any = {};
-    if (message.nodeId !== "") {
-      obj.nodeId = message.nodeId;
-    }
-    if (message.event !== "") {
-      obj.event = message.event;
-    }
-    if (message.value !== undefined) {
-      obj.value = PortValue.toJSON(message.value);
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<NodeEvent>, I>>(base?: I): NodeEvent {
-    return NodeEvent.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<NodeEvent>, I>>(object: I): NodeEvent {
-    const message = createBaseNodeEvent();
-    message.nodeId = object.nodeId ?? "";
-    message.event = object.event ?? "";
-    message.value = (object.value !== undefined && object.value !== null)
-      ? PortValue.fromPartial(object.value)
-      : undefined;
-    return message;
-  },
-};
-
-function createBaseExecuteResponse(): ExecuteResponse {
-  return { events: [] };
-}
-
-export const ExecuteResponse = {
-  encode(message: ExecuteResponse, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    for (const v of message.events) {
-      NodeEvent.encode(v!, writer.uint32(10).fork()).ldelim();
-    }
-    return writer;
-  },
-
-  decode(input: _m0.Reader | Uint8Array, length?: number): ExecuteResponse {
-    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseExecuteResponse();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1:
-          if (tag !== 10) {
-            break;
-          }
-
-          message.events.push(NodeEvent.decode(reader, reader.uint32()));
-          continue;
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skipType(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): ExecuteResponse {
-    return {
-      events: globalThis.Array.isArray(object?.events) ? object.events.map((e: any) => NodeEvent.fromJSON(e)) : [],
-    };
-  },
-
-  toJSON(message: ExecuteResponse): unknown {
-    const obj: any = {};
-    if (message.events?.length) {
-      obj.events = message.events.map((e) => NodeEvent.toJSON(e));
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<ExecuteResponse>, I>>(base?: I): ExecuteResponse {
-    return ExecuteResponse.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<ExecuteResponse>, I>>(object: I): ExecuteResponse {
-    const message = createBaseExecuteResponse();
-    message.events = object.events?.map((e) => NodeEvent.fromPartial(e)) || [];
     return message;
   },
 };

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { compile, BuildError, Canvas } from "../src/build/compiler";
+import { compile, BuildError } from "../src/build/compiler";
+import { FlowEnvelope } from "../src/flow/schema";
 import * as pb from "../src/proto/voide/v1/flow";
 
-function makeCanvas(): Canvas {
+function makeEnv(): FlowEnvelope {
   return {
+    id: "f1",
+    version: "1",
     nodes: [
       {
         id: "in",
@@ -18,26 +21,30 @@ function makeCanvas(): Canvas {
         out: [],
       },
     ],
-    edges: [{ from: ["in", "out"], to: ["out", "in"] }],
+    edges: [{ id: "e1", from: ["in", "out"], to: ["out", "in"] }],
   };
 }
 
 describe("compiler", () => {
   it("compiles a valid canvas", () => {
-    const bin = compile(makeCanvas());
+    const bin = compile(makeEnv());
     expect(bin).toBeInstanceOf(Uint8Array);
     const flow = pb.Flow.decode(bin);
     expect(flow.nodes.length).toBe(2);
     expect(flow.edges.length).toBe(1);
     expect(flow.edges[0]).toEqual({
-      from: "in.out",
-      to: "out.in",
+      id: "e1",
+      from: { node: "in", port: "out" },
+      to: { node: "out", port: "in" },
+      label: "",
       type: "UserText",
     });
   });
 
   it("detects cycles", () => {
-    const canvas: Canvas = {
+    const env: FlowEnvelope = {
+      id: "c2",
+      version: "1",
       nodes: [
         {
           id: "a",
@@ -53,12 +60,12 @@ describe("compiler", () => {
         },
       ],
       edges: [
-        { from: ["a", "out"], to: ["b", "in"] },
-        { from: ["b", "out"], to: ["a", "in"] },
+        { id: "e1", from: ["a", "out"], to: ["b", "in"] },
+        { id: "e2", from: ["b", "out"], to: ["a", "in"] },
       ],
     };
     try {
-      compile(canvas);
+      compile(env);
       expect(false).toBe(true);
     } catch (e) {
       const err = e as BuildError;
@@ -68,10 +75,10 @@ describe("compiler", () => {
   });
 
   it("detects type mismatch", () => {
-    const canvas = makeCanvas();
-    canvas.nodes[1].in[0].types = ["PromptText"];
+    const env = makeEnv();
+    env.nodes[1].in[0].types = ["PromptText"];
     try {
-      compile(canvas);
+      compile(env);
       expect(false).toBe(true);
     } catch (e) {
       const err = e as BuildError;
@@ -82,12 +89,11 @@ describe("compiler", () => {
   });
 
   it("detects missing menus", () => {
-    const canvas = makeCanvas();
-    // remove in/out from node
-    // @ts-expect-error purposely bad config
-    delete (canvas.nodes[0] as any).out;
+    const env = makeEnv();
+    // @ts-expect-error
+    delete (env.nodes[0] as any).out;
     try {
-      compile(canvas);
+      compile(env);
       expect(false).toBe(true);
     } catch (e) {
       const err = e as BuildError;
@@ -97,10 +103,10 @@ describe("compiler", () => {
   });
 
   it("detects dangling edge", () => {
-    const canvas = makeCanvas();
-    canvas.edges[0].to = ["missing", "in"] as any;
+    const env = makeEnv();
+    env.edges[0].to = ["missing", "in"] as any;
     try {
-      compile(canvas);
+      compile(env);
       expect(false).toBe(true);
     } catch (e) {
       const err = e as BuildError;
@@ -110,7 +116,9 @@ describe("compiler", () => {
   });
 
   it("detects unreachable output", () => {
-    const canvas: Canvas = {
+    const env: FlowEnvelope = {
+      id: "c3",
+      version: "1",
       nodes: [
         { id: "start", type: "input", in: [], out: [{ port: "out", types: ["UserText"] }] },
         {
@@ -126,10 +134,10 @@ describe("compiler", () => {
           out: [],
         },
       ],
-      edges: [{ from: ["start", "out"], to: ["mid", "in"] }],
+      edges: [{ id: "e1", from: ["start", "out"], to: ["mid", "in"] }],
     };
     try {
-      compile(canvas);
+      compile(env);
       expect(false).toBe(true);
     } catch (e) {
       const err = e as BuildError;
@@ -139,4 +147,3 @@ describe("compiler", () => {
     }
   });
 });
-

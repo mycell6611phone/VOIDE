@@ -29,12 +29,17 @@ interface RuntimeEdge {
 }
 
 function parseEdge(e: pb.Edge): RuntimeEdge {
-  const [fromNode, fromPort] = e.from.split(".");
-  const [toNode, toPort] = e.to.split(".");
-  return { fromNode, fromPort, toNode, toPort, type: e.type, mailbox: [] };
+  return {
+    fromNode: e.from?.node ?? "",
+    fromPort: e.from?.port ?? "",
+    toNode: e.to?.node ?? "",
+    toPort: e.to?.port ?? "",
+    type: e.type,
+    mailbox: [],
+  };
 }
 
-function nodeConfig(node: pb.NodeConfig): any {
+function nodeConfig(node: pb.Node): any {
   switch (node.type) {
     case "InputNode":
       return { id: node.id };

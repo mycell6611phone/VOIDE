@@ -2,79 +2,41 @@ syntax = "proto3";
 
 package voide.v1;
 
-message UserText {
-  string text = 1;
+message UserText { string text = 1; }
+message PromptText { string text = 1; }
+message LLMText { string text = 1; }
+message AnyBlob { bytes data = 1; }
+
+message Port {
+  string port = 1;
+  repeated string types = 2;
 }
 
-message PromptText {
-  string text = 1;
+message NodePort {
+  string node = 1;
+  string port = 2;
 }
 
-message LLMText {
-  string text = 1;
-}
-
-message AnyBlob {
-  bytes data = 1;
-}
-
-message NodeConfig {
+message Node {
   string id = 1;
   string type = 2;
+  string name = 3;
+  string params_json = 4;
+  repeated Port in = 5;
+  repeated Port out = 6;
 }
 
 message Edge {
-  string from = 1;
-  string to = 2;
-  string type = 3;
+  string id = 1;
+  NodePort from = 2;
+  NodePort to = 3;
+  string label = 4;
+  string type = 5;
 }
 
 message Flow {
-  repeated NodeConfig nodes = 1;
-  repeated Edge edges = 2;
-}
-
-message InputCfg {
   string id = 1;
+  string version = 2;
+  repeated Node nodes = 3;
+  repeated Edge edges = 4;
 }
-
-message PromptCfg {
-  string id = 1;
-}
-
-message LLMCfg {
-  string model = 1;
-}
-
-message BranchCfg {
-  string condition = 1;
-}
-
-message LogCfg {
-  string name = 1;
-}
-
-message OutputCfg {
-  string name = 1;
-}
-
-message ExecuteRequest {
-  Flow flow = 1;
-}
-
-message PortValue {
-  string port = 1;
-  bytes value = 2;
-  string type = 3;
-}
-
-message NodeEvent {
-  string node_id = 1;
-  string event = 2;
-  PortValue value = 3;
-}
-
-message ExecuteResponse {
-  repeated NodeEvent events = 1;
-}
-

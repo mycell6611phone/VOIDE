@@ -5,16 +5,64 @@ import { StubProvider } from "../src/nodes/builtins";
 
 function makeFlow(): Uint8Array {
   const flow: pb.Flow = {
+    id: "f1",
+    version: "1",
     nodes: [
-      { id: "user", type: "InputNode" },
-      { id: "prompt", type: "PromptNode" },
-      { id: "llm", type: "LLMNode" },
-      { id: "out", type: "OutputNode" },
+      {
+        id: "user",
+        type: "InputNode",
+        name: "",
+        paramsJson: "{}",
+        in: [],
+        out: [{ port: "text", types: ["UserText"] }],
+      },
+      {
+        id: "prompt",
+        type: "PromptNode",
+        name: "",
+        paramsJson: "{}",
+        in: [{ port: "text", types: ["UserText"] }],
+        out: [{ port: "prompt", types: ["PromptText"] }],
+      },
+      {
+        id: "llm",
+        type: "LLMNode",
+        name: "",
+        paramsJson: "{}",
+        in: [{ port: "prompt", types: ["PromptText"] }],
+        out: [{ port: "text", types: ["LLMText"] }],
+      },
+      {
+        id: "out",
+        type: "OutputNode",
+        name: "",
+        paramsJson: "{}",
+        in: [{ port: "text", types: ["LLMText"] }],
+        out: [],
+      },
     ],
     edges: [
-      { from: "user.text", to: "prompt.text", type: "UserText" },
-      { from: "prompt.prompt", to: "llm.prompt", type: "PromptText" },
-      { from: "llm.text", to: "out.text", type: "LLMText" },
+      {
+        id: "e1",
+        from: { node: "user", port: "text" },
+        to: { node: "prompt", port: "text" },
+        label: "",
+        type: "UserText",
+      },
+      {
+        id: "e2",
+        from: { node: "prompt", port: "prompt" },
+        to: { node: "llm", port: "prompt" },
+        label: "",
+        type: "PromptText",
+      },
+      {
+        id: "e3",
+        from: { node: "llm", port: "text" },
+        to: { node: "out", port: "text" },
+        label: "",
+        type: "LLMText",
+      },
     ],
   };
   return pb.Flow.encode(flow).finish();
@@ -55,4 +103,3 @@ describe("runFlow", () => {
     ]);
   });
 });
-

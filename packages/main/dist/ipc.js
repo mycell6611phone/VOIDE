@@ -5,7 +5,7 @@ import { flowSchema } from "@voide/schemas";
 import { getDB } from "./services/db.js";
 import { getSecretsService } from "./services/secrets.js";
 import { runFlow, stopFlow, stepFlow, getNodeCatalog, getLastRunPayloads } from "./orchestrator/engine.js";
-import { getModelRegistry } from "./services/models.js";
+import { getModelRegistry, installModel } from "./services/models.js";
 const AjvCtor = Ajv;
 const ajv = new AjvCtor({ allErrors: true, allowUnionTypes: true });
 const validate = ajv.compile(flowSchema);
@@ -39,6 +39,9 @@ export function setupIPC() {
         return { ok, errors: ok ? [] : validate.errors };
     });
     ipcMain.handle("voide:listModels", async () => getModelRegistry());
+    ipcMain.handle("voide:installModel", async (e, { modelId }) => {
+        return installModel(modelId, p => e.sender.send("voide:modelInstallProgress", p));
+    });
     ipcMain.handle("voide:getNodeCatalog", async () => getNodeCatalog());
     ipcMain.handle("voide:getLastRunPayloads", async (_e, runId) => getLastRunPayloads(runId));
     ipcMain.handle("voide:runFlow", async (_e, args) => {

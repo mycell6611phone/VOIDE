@@ -44,6 +44,9 @@ function setupIPC() {
         return { ok, errors: ok ? [] : validate.errors };
     });
     electron_1.ipcMain.handle("voide:listModels", async () => (0, models_1.getModelRegistry)());
+    electron_1.ipcMain.handle("voide:installModel", async (e, { modelId }) => {
+        return (0, models_1.installModel)(modelId, p => e.sender.send("voide:modelInstallProgress", p));
+    });
     electron_1.ipcMain.handle("voide:getNodeCatalog", async () => (0, engine_1.getNodeCatalog)());
     electron_1.ipcMain.handle("voide:getLastRunPayloads", async (_e, runId) => (0, engine_1.getLastRunPayloads)(runId));
     electron_1.ipcMain.handle("voide:runFlow", async (_e, args) => {

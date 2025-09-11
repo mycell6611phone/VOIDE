@@ -9,6 +9,8 @@ export default function BuildRunBar() {
     setStatus,
     setOutput,
     resetStatuses,
+    handleTelemetry,
+    simulate,
   } = useFlow();
 
   function handleBuild() {
@@ -43,6 +45,8 @@ export default function BuildRunBar() {
   function handleRun() {
     if (!flowBin) return;
     resetStatuses();
+    useFlow.setState({ events: [] });
+    nodes.forEach((n) => setStatus(n.id, "queued"));
     setOutput("");
     const worker = new Worker(
       new URL("../workers/runWorker.ts", import.meta.url),
@@ -50,20 +54,11 @@ export default function BuildRunBar() {
     );
     worker.onmessage = (e) => {
       const d = e.data;
-      switch (d.type) {
-        case "NODE_START":
-          setStatus(d.nodeId, "running");
-          break;
-        case "NODE_END":
-          setStatus(d.nodeId, "success");
-          break;
-        case "NODE_ERROR":
-          setStatus(d.nodeId, "error");
-          break;
-        case "done":
-          setOutput(Object.values(d.result.outputs)[0] as string);
-          worker.terminate();
-          break;
+      if (d.type === "done") {
+        setOutput(Object.values(d.result.outputs)[0] as string);
+        worker.terminate();
+      } else {
+        handleTelemetry(d);
       }
     };
     worker.postMessage({ flowBin });
@@ -82,6 +77,12 @@ export default function BuildRunBar() {
       onClick={handleRun}
       >
         Run
+      </button>
+      <button
+        className="px-3 py-1 bg-purple-600 text-white rounded"
+        onClick={simulate}
+      >
+        Simulate
       </button>
     </div>
   );

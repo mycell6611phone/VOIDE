@@ -1,25 +1,12 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.initDB = initDB;
-exports.getDB = getDB;
-exports.createRun = createRun;
-exports.updateRunStatus = updateRunStatus;
-exports.recordRunLog = recordRunLog;
-exports.savePayload = savePayload;
-exports.getPayloadsForRun = getPayloadsForRun;
-const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
-const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
-// Using any type to avoid dependency on external type definitions
+import BetterSqlite3 from "better-sqlite3";
+import path from "path";
+import fs from "fs";
 let db;
-async function initDB() {
-    const dir = path_1.default.join(process.env.HOME || process.cwd(), ".voide");
-    if (!fs_1.default.existsSync(dir))
-        fs_1.default.mkdirSync(dir, { recursive: true });
-    db = new better_sqlite3_1.default(path_1.default.join(dir, "voide.db"));
+export async function initDB() {
+    const dir = path.join(process.env.HOME || process.cwd(), ".voide");
+    if (!fs.existsSync(dir))
+        fs.mkdirSync(dir, { recursive: true });
+    db = new BetterSqlite3(path.join(dir, "voide.db"));
     db.exec(`
   create table if not exists flows(
     id text primary key,
@@ -57,24 +44,23 @@ async function initDB() {
   );
   `);
 }
-// Return type is any for the same reason
-function getDB() { return db; }
-async function createRun(runId, flowId) {
+export function getDB() { return db; }
+export async function createRun(runId, flowId) {
     db.prepare("insert into runs(id,flow_id,status) values(?,?,?)").run(runId, flowId, "created");
 }
-function updateRunStatus(runId, status) {
+export function updateRunStatus(runId, status) {
     const ended = status === "done" || status === "error" ? ", ended_at=strftime('%s','now')" : "";
     db.prepare(`update runs set status=? ${ended} where id=?`).run(status, runId);
 }
-async function recordRunLog(log) {
+export async function recordRunLog(log) {
     db.prepare("insert into logs(run_id,node_id,tokens,latency_ms,status,error) values(?,?,?,?,?,?)")
         .run(log.runId, log.nodeId, log.tokens, log.latencyMs, log.status, log.error ?? null);
 }
-async function savePayload(runId, nodeId, port, payload) {
+export async function savePayload(runId, nodeId, port, payload) {
     db.prepare("insert into payloads(run_id,node_id,port,kind,body) values(?,?,?,?,?)")
         .run(runId, nodeId, port, payload.kind, JSON.stringify(payload));
 }
-async function getPayloadsForRun(runId) {
+export async function getPayloadsForRun(runId) {
     const rows = db.prepare("select node_id,port,kind,body,created_at from payloads where run_id=? order by id asc").all(runId);
     return rows.map((r) => ({ nodeId: r.node_id, port: r.port, payload: JSON.parse(r.body) }));
 }

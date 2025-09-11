@@ -1,10 +1,11 @@
 import Piscina from "piscina";
 import path from "path";
+import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import type { FlowDef, NodeDef, LLMParams, LoopParams, PayloadT } from "@voide/shared";
-import { topoOrder, Frontier, downstream } from "./scheduler";
-import { getModelRegistry } from "../services/models";
-import { recordRunLog, createRun, updateRunStatus, savePayload, getPayloadsForRun } from "../services/db";
+import { topoOrder, Frontier, downstream } from "./scheduler.js";
+import { getModelRegistry } from "../services/models.js";
+import { recordRunLog, createRun, updateRunStatus, savePayload, getPayloadsForRun } from "../services/db.js";
 
 type RunState = {
   runId: string;
@@ -16,8 +17,10 @@ type RunState = {
 };
 
 const runs = new Map<string, RunState>();
-const poolLLM = new Piscina({ filename: path.join(__dirname, "../../workers/dist/llm.js") });
-const poolEmbed = new Piscina({ filename: path.join(__dirname, "../../workers/dist/embed.js") });
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PiscinaCtor = Piscina as any;
+const poolLLM = new PiscinaCtor({ filename: path.join(__dirname, "../../workers/dist/llm.js") });
+const poolEmbed = new PiscinaCtor({ filename: path.join(__dirname, "../../workers/dist/embed.js") });
 
 function nodeById(flow: FlowDef, id: string): NodeDef {
   const n = flow.nodes.find(n => n.id === id);

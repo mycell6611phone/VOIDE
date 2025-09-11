@@ -1,6 +1,7 @@
 {
   "name": "@voide/core",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "voide": "./dist/cli.js"

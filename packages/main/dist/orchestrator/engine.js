@@ -1,22 +1,15 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.runFlow = runFlow;
-exports.stopFlow = stopFlow;
-exports.stepFlow = stepFlow;
-exports.getLastRunPayloads = getLastRunPayloads;
-exports.getNodeCatalog = getNodeCatalog;
-const piscina_1 = __importDefault(require("piscina"));
-const path_1 = __importDefault(require("path"));
-const uuid_1 = require("uuid");
-const scheduler_1 = require("./scheduler");
-const models_1 = require("../services/models");
-const db_1 = require("../services/db");
+import Piscina from "piscina";
+import path from "path";
+import { fileURLToPath } from "url";
+import { v4 as uuidv4 } from "uuid";
+import { topoOrder, Frontier, downstream } from "./scheduler.js";
+import { getModelRegistry } from "../services/models.js";
+import { recordRunLog, createRun, updateRunStatus, savePayload, getPayloadsForRun } from "../services/db.js";
 const runs = new Map();
-const poolLLM = new piscina_1.default({ filename: path_1.default.join(__dirname, "../../workers/dist/llm.js") });
-const poolEmbed = new piscina_1.default({ filename: path_1.default.join(__dirname, "../../workers/dist/embed.js") });
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PiscinaCtor = Piscina;
+const poolLLM = new PiscinaCtor({ filename: path.join(__dirname, "../../workers/dist/llm.js") });
+const poolEmbed = new PiscinaCtor({ filename: path.join(__dirname, "../../workers/dist/embed.js") });
 function nodeById(flow, id) {
     const n = flow.nodes.find(n => n.id === id);
     if (!n)
@@ -24,24 +17,24 @@ function nodeById(flow, id) {
     return n;
 }
 function portKey(nid, port) { return `${nid}:${port}`; }
-async function runFlow(flow) {
-    const runId = (0, uuid_1.v4)();
-    const order = (0, scheduler_1.topoOrder)(flow);
-    const f0 = new scheduler_1.Frontier(order.filter(id => flow.edges.every(e => e.to[0] !== id)));
+export async function runFlow(flow) {
+    const runId = uuidv4();
+    const order = topoOrder(flow);
+    const f0 = new Frontier(order.filter(id => flow.edges.every(e => e.to[0] !== id)));
     const st = { runId, flow, frontier: f0, halted: false, iter: new Map(), values: new Map() };
     runs.set(runId, st);
-    await (0, db_1.createRun)(runId, flow.id);
-    (0, db_1.updateRunStatus)(runId, "running");
-    loop(runId).catch(err => { (0, db_1.updateRunStatus)(runId, "error"); console.error(err); });
+    await createRun(runId, flow.id);
+    updateRunStatus(runId, "running");
+    loop(runId).catch(err => { updateRunStatus(runId, "error"); console.error(err); });
     return { runId };
 }
-async function stopFlow(runId) { const st = runs.get(runId); if (st)
+export async function stopFlow(runId) { const st = runs.get(runId); if (st)
     st.halted = true; return { ok: true }; }
-async function stepFlow(_runId) { return { ok: true }; }
-async function getLastRunPayloads(runId) {
-    return (0, db_1.getPayloadsForRun)(runId);
+export async function stepFlow(_runId) { return { ok: true }; }
+export async function getLastRunPayloads(runId) {
+    return getPayloadsForRun(runId);
 }
-function getNodeCatalog() {
+export function getNodeCatalog() {
     return [
         { type: "orchestrator", in: [{ port: "in", types: ["text", "json", "messages"] }], out: [{ port: "out", types: ["text", "json", "messages"] }] },
         { type: "critic", in: [{ port: "text", types: ["text"] }], out: [{ port: "notes", types: ["text"] }] },
@@ -63,16 +56,16 @@ async function loop(runId) {
             const out = await executeNode(st, node);
             for (const [port, payload] of out) {
                 st.values.set(portKey(node.id, port), [payload]);
-                await (0, db_1.savePayload)(runId, node.id, port, payload);
+                await savePayload(runId, node.id, port, payload);
             }
-            (0, scheduler_1.downstream)(st.flow, node.id).forEach(n => st.frontier.add(n));
+            downstream(st.flow, node.id).forEach(n => st.frontier.add(n));
         }
         catch (err) {
-            await (0, db_1.recordRunLog)({ runId, nodeId, tokens: 0, latencyMs: 0, status: 'error', error: String(err) });
+            await recordRunLog({ runId, nodeId, tokens: 0, latencyMs: 0, status: 'error', error: String(err) });
         }
     }
     if (!st.halted)
-        (0, db_1.updateRunStatus)(runId, "done");
+        updateRunStatus(runId, "done");
 }
 async function executeNode(st, node) {
     const params = node.params;
@@ -80,26 +73,26 @@ async function executeNode(st, node) {
     if (node.type === "system.prompt") {
         const text = String(params.text ?? "");
         const dt = Date.now() - t0;
-        await (0, db_1.recordRunLog)({ runId: st.runId, nodeId: node.id, tokens: text.split(/\s+/).length, latencyMs: dt, status: 'ok' });
+        await recordRunLog({ runId: st.runId, nodeId: node.id, tokens: text.split(/\s+/).length, latencyMs: dt, status: 'ok' });
         return [["out", { kind: "text", text }]];
     }
     if (node.type === "llm.generic" || node.type === "critic") {
         const inputs = incomingText(st, node.id);
         const prompt = inputs.join("\n");
-        const reg = await (0, models_1.getModelRegistry)();
+        const reg = await getModelRegistry();
         const model = reg.models.find((m) => m.id === params.modelId);
         const result = await poolLLM.run({
             params,
             prompt,
             modelFile: model?.file ?? ""
         });
-        await (0, db_1.recordRunLog)({ runId: st.runId, nodeId: node.id, tokens: result.tokens, latencyMs: result.latencyMs, status: 'ok' });
+        await recordRunLog({ runId: st.runId, nodeId: node.id, tokens: result.tokens, latencyMs: result.latencyMs, status: 'ok' });
         return [[node.type === "critic" ? "notes" : "completion", { kind: "text", text: result.text }]];
     }
     if (node.type === "embedding") {
         const txt = incomingText(st, node.id).join("\n");
         const res = await poolEmbed.run({ text: txt });
-        await (0, db_1.recordRunLog)({ runId: st.runId, nodeId: node.id, tokens: txt.split(/\s+/).length, latencyMs: 1, status: 'ok' });
+        await recordRunLog({ runId: st.runId, nodeId: node.id, tokens: txt.split(/\s+/).length, latencyMs: 1, status: 'ok' });
         return [["vec", { kind: "vector", values: res.values }]];
     }
     if (node.type === "loop") {
@@ -113,12 +106,12 @@ async function executeNode(st, node) {
         out.push(["body", { kind: "text", text: body + (done ? "\nDONE" : "\n") }]);
         if (done)
             out.push(["out", { kind: "text", text: body }]);
-        await (0, db_1.recordRunLog)({ runId: st.runId, nodeId: node.id, tokens: body.split(/\s+/).length, latencyMs: Date.now() - t0, status: 'ok' });
+        await recordRunLog({ runId: st.runId, nodeId: node.id, tokens: body.split(/\s+/).length, latencyMs: Date.now() - t0, status: 'ok' });
         return out;
     }
     if (node.type === "output") {
         const body = incomingText(st, node.id).join("\n");
-        await (0, db_1.recordRunLog)({ runId: st.runId, nodeId: node.id, tokens: body.split(/\s+/).length, latencyMs: Date.now() - t0, status: 'ok' });
+        await recordRunLog({ runId: st.runId, nodeId: node.id, tokens: body.split(/\s+/).length, latencyMs: Date.now() - t0, status: 'ok' });
         return [];
     }
     throw new Error(`unknown node type ${node.type}`);

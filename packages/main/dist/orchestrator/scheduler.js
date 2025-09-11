@@ -1,9 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.Frontier = void 0;
-exports.topoOrder = topoOrder;
-exports.downstream = downstream;
-class Frontier {
+export class Frontier {
     ready = new Set();
     constructor(initial) {
         initial.forEach((n) => this.ready.add(n));
@@ -20,8 +15,7 @@ class Frontier {
         this.ready.add(n);
     }
 }
-exports.Frontier = Frontier;
-function topoOrder(flow) {
+export function topoOrder(flow) {
     const indeg = new Map();
     flow.nodes.forEach((n) => indeg.set(n.id, 0));
     flow.edges.forEach((e) => indeg.set(e.to[0], (indeg.get(e.to[0]) ?? 0) + 1));
@@ -43,7 +37,7 @@ function topoOrder(flow) {
     }
     return out;
 }
-function downstream(flow, nodeId) {
+export function downstream(flow, nodeId) {
     return flow.edges
         .filter((e) => e.from[0] === nodeId)
         .map((e) => e.to[0]);

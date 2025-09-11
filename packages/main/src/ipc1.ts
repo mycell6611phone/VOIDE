@@ -4,12 +4,13 @@ import path from "path";
 import Ajv from "ajv";
 import { flowSchema } from "@voide/schemas";
 import type { FlowDef } from "@voide/shared";
-import { getDB } from "./services/db";
-import { getSecretsService } from "./services/secrets";
-import { runFlow, stopFlow, stepFlow, getNodeCatalog, getLastRunPayloads } from "./orchestrator/engine";
-import { getModelRegistry } from "./services/models";
+import { getDB } from "./services/db.js";
+import { getSecretsService } from "./services/secrets.js";
+import { runFlow, stopFlow, stepFlow, getNodeCatalog, getLastRunPayloads } from "./orchestrator/engine.js";
+import { getModelRegistry } from "./services/models.js";
 
-const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
+const AjvCtor = Ajv as any;
+const ajv = new AjvCtor({ allErrors: true, allowUnionTypes: true });
 const validate = ajv.compile(flowSchema as unknown as object);
 
 export function setupIPC() {

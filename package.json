@@ -2,24 +2,33 @@
   "name": "voide",
   "private": true,
   "version": "0.1.0",
+  "type": "module",
   "main": "packages/main/dist/main.js",
+  "engines": { "node": ">=20.11" },
+  "author": { "name": "VOIDE", "email": "dev@voide.local" },
+  "description": "VOIDE application",
+  "homepage": "https://voide.example.com",
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev --parallel",
+    "dev": "turbo run build && concurrently \"turbo run dev --parallel\" \"wait-on packages/main/dist/main.js packages/preload/dist/preload.js && electron --no-sandbox .\"",
     "lint": "turbo run lint",
-    "start": "electron packages/main/dist/main.js",
-    "pack:linux": "electron-builder --linux deb",
+    "start": "electron --no-sandbox packages/main/dist/main.js",
+    "pack:linux": "electron-builder --linux deb AppImage",
     "test": "pnpm --filter @voide/core test && pnpm --filter @voide/ui test",
-    "proto:gen": "pnpm --filter @voide/core proto:gen"
+    "proto:gen": "pnpm --filter @voide/core proto:gen",
+    "license:check": "pnpm -r --filter '!voide' exec license-checker-rseidelsohn --production --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC'"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.3.0",
     "@types/uuid": "^10.0.0",
+    "concurrently": "9.0.1",
     "electron": "30.0.9",
     "electron-builder": "24.13.3",
+    "license-checker-rseidelsohn": "4.4.2",
     "turbo": "2.0.4",
-    "typescript": "5.5.4"
+    "typescript": "5.5.4",
+    "wait-on": "7.2.0"
   },
   "workspaces": [
     "packages/*",

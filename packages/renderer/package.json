@@ -1,6 +1,7 @@
 {
   "name": "@voide/renderer",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "vite build",

@@ -46,7 +46,7 @@ async function runFlowFile(
     }
 
     switch (value.type) {
-      case "NODE_STATE": {
+      case "node_state": {
         const { nodeId, state } = value;
         if (state === "running") {
           console.log(colors.cyan + `start ${nodeId}` + colors.reset);
@@ -57,10 +57,14 @@ async function runFlowFile(
         }
         break;
       }
-      case "EDGE_EMIT":
-        console.log(
-          colors.yellow + `${value.from} -> ${value.to}` + colors.reset,
-        );
+      case "edge_transfer":
+        console.log(colors.yellow + `${value.edgeId}` + colors.reset);
+        break;
+      case "normalize":
+        console.log(colors.cyan + `normalize ${value.nodeId}` + colors.reset);
+        break;
+      case "error":
+        console.log(colors.red + `${value.nodeId} ${value.message}` + colors.reset);
         break;
     }
   }

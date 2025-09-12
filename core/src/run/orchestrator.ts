@@ -12,8 +12,36 @@ export type NodeStatus =
   | "error";
 
 export type TelemetryEvent =
-  | { type: "NODE_STATE"; nodeId: string; state: NodeStatus }
-  | { type: "EDGE_EMIT"; from: string; to: string };
+  | {
+      type: "node_state";
+      runId: string;
+      nodeId: string;
+      state: NodeStatus;
+      at: number;
+    }
+  | {
+      type: "edge_transfer";
+      runId: string;
+      edgeId: string;
+      bytes: number;
+      at: number;
+    }
+  | {
+      type: "normalize";
+      runId: string;
+      nodeId: string;
+      fromType: string;
+      toType: string;
+      at: number;
+    }
+  | {
+      type: "error";
+      runId: string;
+      nodeId: string;
+      code: string;
+      message: string;
+      at: number;
+    };
 
 export interface RunResult {
   outputs: Record<string, any>;
@@ -23,6 +51,7 @@ const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_RETRIES = 0;
 
 interface RuntimeEdge {
+  id: string;
   fromNode: string;
   fromPort: string;
   toNode: string;
@@ -33,6 +62,7 @@ interface RuntimeEdge {
 
 function parseEdge(e: pb.Edge): RuntimeEdge {
   return {
+    id: e.id ?? "",
     fromNode: e.from?.node ?? "",
     fromPort: e.from?.port ?? "",
     toNode: e.to?.node ?? "",
@@ -72,6 +102,7 @@ export async function* orchestrate(
   registry: NodeRegistry,
   providers: Providers = {},
   scheduler: Scheduler = new Scheduler(),
+  runId: string,
 ): AsyncGenerator<TelemetryEvent, RunResult> {
   const flow = pb.Flow.decode(flowBin);
   const ctx = makeContext();
@@ -97,7 +128,13 @@ export async function* orchestrate(
     if ((inEdges.get(n.id) ?? []).length === 0) {
       ready.push(n.id);
       states.set(n.id, "queued");
-      yield { type: "NODE_STATE", nodeId: n.id, state: "queued" };
+      yield {
+        type: "node_state",
+        runId,
+        nodeId: n.id,
+        state: "queued",
+        at: Date.now(),
+      };
     }
   }
   const executed = new Set<string>();
@@ -109,7 +146,13 @@ export async function* orchestrate(
     if (executed.has(nodeId)) continue;
     executed.add(nodeId);
     states.set(nodeId, "running");
-    yield { type: "NODE_STATE", nodeId, state: "running" };
+    yield {
+      type: "node_state",
+      runId,
+      nodeId,
+      state: "running",
+      at: Date.now(),
+    };
 
     const cfg = nodes.get(nodeId)!;
     const handler = registry.get(cfg.type);
@@ -138,22 +181,45 @@ export async function* orchestrate(
         if (attempt > DEFAULT_RETRIES) {
           const error = err instanceof Error ? err : new Error(String(err));
           states.set(nodeId, "error");
-          yield { type: "NODE_STATE", nodeId, state: "error" };
+          yield {
+            type: "node_state",
+            runId,
+            nodeId,
+            state: "error",
+            at: Date.now(),
+          };
+          yield {
+            type: "error",
+            runId,
+            nodeId,
+            code: "runtime",
+            message: error.message,
+            at: Date.now(),
+          };
           throw error;
         }
       }
     }
     states.set(nodeId, "ok");
-    yield { type: "NODE_STATE", nodeId, state: "ok" };
+    yield {
+      type: "node_state",
+      runId,
+      nodeId,
+      state: "ok",
+      at: Date.now(),
+    };
 
     for (const e of outEdges.get(nodeId) ?? []) {
       const val = output[e.fromPort];
       if (val !== undefined) {
         e.mailbox.push(val);
+        const bytes = JSON.stringify(val).length;
         yield {
-          type: "EDGE_EMIT",
-          from: `${e.fromNode}.${e.fromPort}`,
-          to: `${e.toNode}.${e.toPort}`,
+          type: "edge_transfer",
+          runId,
+          edgeId: e.id,
+          bytes,
+          at: Date.now(),
         };
       }
       const incoming = inEdges.get(e.toNode) ?? [];
@@ -167,7 +233,13 @@ export async function* orchestrate(
       if (readyFlag && !executed.has(e.toNode) && !ready.includes(e.toNode)) {
         ready.push(e.toNode);
         states.set(e.toNode, "queued");
-        yield { type: "NODE_STATE", nodeId: e.toNode, state: "queued" };
+        yield {
+          type: "node_state",
+          runId,
+          nodeId: e.toNode,
+          state: "queued",
+          at: Date.now(),
+        };
       }
     }
   }

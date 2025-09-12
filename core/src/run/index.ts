@@ -7,6 +7,7 @@ import {
   NodeStatus,
 } from "./orchestrator.js";
 import { Scheduler } from "./scheduler.js";
+import { randomUUID } from "crypto";
 
 export { TelemetryEvent, RunResult, NodeStatus } from "./orchestrator.js";
 export { Scheduler } from "./scheduler.js";
@@ -19,6 +20,7 @@ export function runFlow(
 ): AsyncGenerator<TelemetryEvent, RunResult> {
   const registry = new NodeRegistry();
   registerBuiltins(registry);
-  return orchestrate(flowBin, runtimeInputs, registry, providers, scheduler);
+  const runId = randomUUID();
+  return orchestrate(flowBin, runtimeInputs, registry, providers, scheduler, runId);
 }
 

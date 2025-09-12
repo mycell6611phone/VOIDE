@@ -94,7 +94,7 @@ describe("router-divider", () => {
     const { result, events } = await exec("- one\n- two");
     expect(result.outputs.out).toBe("- one\n- two");
     const nodes = events
-      .filter((e) => e.type === "NODE_STATE" && e.state === "running")
+      .filter((e) => e.type === "node_state" && e.state === "running")
       .map((e) => e.nodeId);
     expect(nodes).toEqual(["user", "router", "out"]);
   });
@@ -103,7 +103,7 @@ describe("router-divider", () => {
     const { result, events } = await exec("hello world");
     expect(result.outputs.out).toBe("- hello world");
     const nodes = events
-      .filter((e) => e.type === "NODE_STATE" && e.state === "running")
+      .filter((e) => e.type === "node_state" && e.state === "running")
       .map((e) => e.nodeId);
     expect(nodes).toEqual(["user", "router", "norm", "out"]);
   });

@@ -104,8 +104,36 @@ export interface EdgeState {
 }
 
 export type TelemetryEvent =
-  | { type: "NODE_STATE"; nodeId: string; state: LightState }
-  | { type: "EDGE_EMIT"; from: string; to: string };
+  | {
+      type: "node_state";
+      runId: string;
+      nodeId: string;
+      state: LightState;
+      at: number;
+    }
+  | {
+      type: "edge_transfer";
+      runId: string;
+      edgeId: string;
+      bytes: number;
+      at: number;
+    }
+  | {
+      type: "normalize";
+      runId: string;
+      nodeId: string;
+      fromType: string;
+      toType: string;
+      at: number;
+    }
+  | {
+      type: "error";
+      runId: string;
+      nodeId: string;
+      code: string;
+      message: string;
+      at: number;
+    };
 
 interface FlowState {
   nodes: NodeState[];
@@ -114,6 +142,7 @@ interface FlowState {
   output: string;
   flowBin?: Uint8Array;
   events: TelemetryEvent[];
+  runId?: string;
   addNode: (type: NodeType, x: number, y: number) => void;
   updateNode: (id: string, cfg: Partial<NodeState>) => void;
   select: (id?: string) => void;
@@ -191,17 +220,19 @@ export const useFlow = create<FlowState>((set, get) => ({
       })),
     })),
   handleTelemetry: (ev, record = true) => {
-    if (record) set((s) => ({ events: [...s.events, ev] }));
+    if (record) {
+      set((s) =>
+        s.runId === ev.runId
+          ? { events: [...s.events, ev] }
+          : { runId: ev.runId, events: [ev] }
+      );
+    }
     switch (ev.type) {
-      case "NODE_STATE":
+      case "node_state":
         get().setStatus(ev.nodeId, ev.state);
         break;
-      case "EDGE_EMIT": {
-        const edge = get().edges.find(
-          (e) =>
-            `${e.from.node}.${e.from.port}` === ev.from &&
-            `${e.to.node}.${e.to.port}` === ev.to
-        );
+      case "edge_transfer": {
+        const edge = get().edges.find((e) => e.id === ev.edgeId);
         if (edge) {
           get().setEdgeStatus(edge.id, "routed");
           get().pulseEdge(edge.id);
@@ -209,6 +240,12 @@ export const useFlow = create<FlowState>((set, get) => ({
         }
         break;
       }
+      case "normalize":
+        get().setStatus(ev.nodeId, "normalized");
+        break;
+      case "error":
+        get().setStatus(ev.nodeId, "error");
+        break;
     }
   },
   simulate: () => {

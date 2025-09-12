@@ -72,20 +72,52 @@ export const modelEnsure = {
 export type ModelEnsureReq = z.infer<typeof modelEnsure.request>;
 export type ModelEnsureRes = z.infer<typeof modelEnsure.response>;
 
-export const runLog = z.object({
+const nodeState = z.object({
+  type: z.literal("node_state"),
   runId: z.string(),
   nodeId: z.string(),
-  tokens: z.number(),
-  latencyMs: z.number(),
-  status: z.enum(["ok", "error"]),
-  error: z.string().optional()
+  state: z.string(),
+  at: z.number(),
 });
 
-export type RunLog = z.infer<typeof runLog>;
+const edgeTransfer = z.object({
+  type: z.literal("edge_transfer"),
+  runId: z.string(),
+  edgeId: z.string(),
+  bytes: z.number(),
+  at: z.number(),
+});
+
+const normalize = z.object({
+  type: z.literal("normalize"),
+  runId: z.string(),
+  nodeId: z.string(),
+  fromType: z.string(),
+  toType: z.string(),
+  at: z.number(),
+});
+
+const error = z.object({
+  type: z.literal("error"),
+  runId: z.string(),
+  nodeId: z.string(),
+  code: z.string(),
+  message: z.string(),
+  at: z.number(),
+});
+
+export const telemetryPayload = z.union([
+  nodeState,
+  edgeTransfer,
+  normalize,
+  error,
+]);
+
+export type TelemetryPayload = z.infer<typeof telemetryPayload>;
 
 export const telemetryEvent = {
   name: "telemetry:event",
-  payload: runLog
+  payload: telemetryPayload,
 };
 
 export const appGetVersion = {

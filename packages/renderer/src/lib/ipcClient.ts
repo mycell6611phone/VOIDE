@@ -5,7 +5,7 @@ import {
   telemetryEvent,
   appGetVersion,
   Flow,
-  RunLog,
+  TelemetryPayload,
 } from "@voide/ipc";
 import { z } from "zod";
 
@@ -45,9 +45,9 @@ export const ipcClient = {
   runFlow: (flow: Flow) => invoke<Flow, z.infer<typeof flowRun.response>>(window.voide.runFlow, flowRun.request, flowRun.response, flow),
   ensureModel: (modelId: string) => invoke<{ modelId: string }, z.infer<typeof modelEnsure.response>>(window.voide.ensureModel, modelEnsure.request, modelEnsure.response, { modelId }),
   getVersion: () => invoke<void, z.infer<typeof appGetVersion.response>>(window.voide.getVersion, appGetVersion.request, appGetVersion.response, undefined),
-  onTelemetry: (cb: (log: RunLog) => void) => {
-    window.voide.onTelemetry((ev: unknown) => {
-      const parsed = telemetryEvent.payload.safeParse(ev);
+  onTelemetry: (cb: (ev: TelemetryPayload) => void) => {
+    window.voide.onTelemetry((evRaw: unknown) => {
+      const parsed = telemetryEvent.payload.safeParse(evRaw);
       if (parsed.success) cb(parsed.data);
     });
   }

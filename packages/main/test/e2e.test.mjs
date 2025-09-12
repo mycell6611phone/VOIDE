@@ -17,7 +17,7 @@ test("basic flow runs via electron", async () => {
   });
   const { events, result } = JSON.parse(stdout.trim());
   const lights = events
-    .filter((e) => e.type === "NODE_STATE")
+    .filter((e) => e.type === "node_state")
     .map((e) => `${e.nodeId}:${e.state}`);
   assert.deepEqual(lights, [
     "input:queued",
@@ -33,6 +33,8 @@ test("basic flow runs via electron", async () => {
     "out:running",
     "out:ok",
   ]);
+  const pulses = events.filter((e) => e.type === "edge_transfer").map((e) => e.edgeId);
+  assert.deepEqual(pulses, ["e1", "e2", "e3"]);
   assert.ok(result.outputs);
 });
 

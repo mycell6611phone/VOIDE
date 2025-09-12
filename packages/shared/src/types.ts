@@ -31,15 +31,6 @@ export interface FlowDef {
 
 export type RuntimeProfile = 'CPU' | 'CUDA';
 
-export interface RunLog {
-  runId: string;
-  nodeId: string;
-  tokens: number;
-  latencyMs: number;
-  status: 'ok' | 'error';
-  error?: string;
-}
-
 export interface LLMParams {
   adapter: 'llama.cpp' | 'gpt4all' | 'mock';
   modelId: string;

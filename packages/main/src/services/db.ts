@@ -2,8 +2,9 @@ import BetterSqlite3 from "better-sqlite3";
 import type { Database } from "better-sqlite3";
 import path from "path";
 import fs from "fs";
-import type { PayloadT, RunLog } from "@voide/shared";
+import type { PayloadT } from "@voide/shared";
 import { emitTelemetry } from "../ipc/telemetry.js";
+import type { TelemetryPayload } from "@voide/ipc";
 
 let db: Database;
 
@@ -36,16 +37,6 @@ export async function initDB() {
     body text,
     created_at integer default (strftime('%s','now'))
   );
-  create table if not exists logs(
-    id integer primary key autoincrement,
-    run_id text,
-    node_id text,
-    tokens integer,
-    latency_ms integer,
-    status text,
-    error text,
-    created_at integer default (strftime('%s','now'))
-  );
   `);
 }
 
@@ -60,10 +51,8 @@ export function updateRunStatus(runId: string, status: string) {
   db.prepare(`update runs set status=? ${ended} where id=?`).run(status, runId);
 }
 
-export async function recordRunLog(log: RunLog) {
-  db.prepare("insert into logs(run_id,node_id,tokens,latency_ms,status,error) values(?,?,?,?,?,?)")
-    .run(log.runId, log.nodeId, log.tokens, log.latencyMs, log.status, log.error ?? null);
-  emitTelemetry(log);
+export async function recordRunLog(ev: TelemetryPayload) {
+  emitTelemetry(ev);
 }
 
 export async function savePayload(runId: string, nodeId: string, port: string, payload: PayloadT) {

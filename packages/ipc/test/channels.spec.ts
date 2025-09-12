@@ -43,15 +43,15 @@ describe("model ensure", () => {
 });
 
 describe("telemetry events", () => {
-  it("parses run log", () => {
-    const log = {
+  it("parses node_state event", () => {
+    const ev = {
+      type: "node_state" as const,
       runId: "r",
       nodeId: "n",
-      tokens: 1,
-      latencyMs: 2,
-      status: "ok" as const,
+      state: "running",
+      at: 0,
     };
-    expect(telemetryEvent.payload.parse(log)).toEqual(log);
+    expect(telemetryEvent.payload.parse(ev)).toEqual(ev);
   });
 });
 

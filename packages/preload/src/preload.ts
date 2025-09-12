@@ -6,7 +6,7 @@ import {
   modelEnsure,
   appGetVersion,
   telemetryEvent,
-  RunLog,
+  TelemetryPayload,
 } from "@voide/ipc";
 
 const api = {
@@ -14,8 +14,8 @@ const api = {
   runFlow: (flow: Flow) => ipcRenderer.invoke(flowRun.name, flow),
   ensureModel: (modelId: string) => ipcRenderer.invoke(modelEnsure.name, { modelId }),
   getVersion: () => ipcRenderer.invoke(appGetVersion.name),
-  onTelemetry: (cb: (log: RunLog) => void) => {
-    ipcRenderer.on(telemetryEvent.name, (_e, log: RunLog) => cb(log));
+  onTelemetry: (cb: (ev: TelemetryPayload) => void) => {
+    ipcRenderer.on(telemetryEvent.name, (_e, ev: TelemetryPayload) => cb(ev));
   },
 };
 

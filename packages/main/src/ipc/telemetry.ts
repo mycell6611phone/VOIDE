@@ -1,9 +1,9 @@
 import { BrowserWindow } from "electron";
-import { telemetryEvent, RunLog } from "@voide/ipc";
+import { telemetryEvent, TelemetryPayload } from "@voide/ipc";
 
-export function emitTelemetry(log: RunLog) {
+export function emitTelemetry(ev: TelemetryPayload) {
   BrowserWindow.getAllWindows().forEach((w) => {
-    w.webContents.send(telemetryEvent.name, log);
+    w.webContents.send(telemetryEvent.name, ev);
   });
 }
 

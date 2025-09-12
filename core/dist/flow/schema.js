@@ -1,21 +1,21 @@
 import { z } from "zod";
-export const Port = z
+export const PortSchema = z
     .object({
     port: z.string(),
     types: z.array(z.string()).default([]),
 })
     .passthrough();
-export const Node = z
+export const NodeSchema = z
     .object({
     id: z.string(),
     type: z.string(),
     name: z.string().optional(),
     params: z.record(z.any()).default({}),
-    in: z.array(Port).default([]),
-    out: z.array(Port).default([]),
+    in: z.array(PortSchema).default([]),
+    out: z.array(PortSchema).default([]),
 })
     .passthrough();
-export const Edge = z
+export const EdgeSchema = z
     .object({
     id: z.string().optional(),
     from: z.tuple([z.string(), z.string()]),
@@ -23,15 +23,15 @@ export const Edge = z
     label: z.string().optional(),
 })
     .passthrough();
-export const FlowEnvelope = z
+export const FlowEnvelopeSchema = z
     .object({
     id: z.string(),
     version: z.string().default("1.0.0"),
-    nodes: z.array(Node).default([]),
-    edges: z.array(Edge).default([]),
+    nodes: z.array(NodeSchema).default([]),
+    edges: z.array(EdgeSchema).default([]),
 })
     .passthrough();
 export function parseFlow(text) {
     const obj = JSON.parse(text);
-    return FlowEnvelope.parse(obj);
+    return FlowEnvelopeSchema.parse(obj);
 }

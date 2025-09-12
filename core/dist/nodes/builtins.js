@@ -1,3 +1,4 @@
+import { z } from "zod";
 // Input Node
 const InputNode = {
     kind: "InputNode",
@@ -64,6 +65,39 @@ const BranchNode = {
         return { fail: text };
     },
 };
+// Router-Divider Node
+const RouterDividerNode = {
+    kind: "RouterDividerNode",
+    inPorts: { text: "UserText" },
+    outPorts: { valid: "LLMText", invalid: "LLMText" },
+    async execute({ inputs }) {
+        const schema = z
+            .object({ text: z.string() })
+            .refine((d) => d.text.trim().startsWith("-"));
+        const payload = inputs.text ?? { text: "" };
+        if (schema.safeParse(payload).success) {
+            return { valid: { text: payload.text } };
+        }
+        return { invalid: { text: payload.text } };
+    },
+};
+// Bullet List Normalizer
+const BulletListNormalizerNode = {
+    kind: "BulletListNormalizerNode",
+    inPorts: { text: "LLMText" },
+    outPorts: { text: "LLMText" },
+    async execute({ inputs }) {
+        const raw = String(inputs.text?.text ?? "");
+        const lines = raw
+            .split(/\n+/)
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0);
+        const normalized = lines
+            .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+            .join("\n");
+        return { text: { text: normalized } };
+    },
+};
 // Log Node
 const LogNode = {
     kind: "LogNode",
@@ -89,7 +123,9 @@ export function registerBuiltins(registry) {
     registry.register(PromptNode);
     registry.register(LLMNode);
     registry.register(BranchNode);
+    registry.register(RouterDividerNode);
+    registry.register(BulletListNormalizerNode);
     registry.register(LogNode);
     registry.register(OutputNode);
 }
-export { InputNode, PromptNode, LLMNode, BranchNode, LogNode, OutputNode, };
+export { InputNode, PromptNode, LLMNode, BranchNode, RouterDividerNode, BulletListNormalizerNode, LogNode, OutputNode, };

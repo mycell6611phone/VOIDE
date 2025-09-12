@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.default = vector;
-async function vector(job) {
+export default async function vector(job) {
     if (job.op === 'upsert')
         return { upserted: job.vectors?.length ?? 0 };
     if (job.op === 'query')

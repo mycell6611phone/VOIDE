@@ -1,13 +1,10 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.default = run;
 const { runLlamaCpp } = require("../../adapters/dist/llamaCpp.js");
 const { runGpt4All } = require("../../adapters/dist/gpt4all.js");
 const { runMock } = require("../../adapters/dist/mock.js");
 function tokensOf(s) {
     return Math.max(1, Math.round(s.split(/\s+/).length * 1.3));
 }
-async function run(job) {
+export default async function run(job) {
     const { params, prompt, modelFile } = job;
     const t0 = Date.now();
     let text = "";

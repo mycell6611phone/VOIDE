@@ -21,6 +21,7 @@ ui/node_modules
 .key
 .py~
 *~
+Keys/
 
 # Logs
 npm-debug.log*
@@ -52,5 +53,7 @@ Thumbs.db
 *.zip
 *.tar.gz
 *.rar
-
+/agents/*
+Agents/
+/Agents
 

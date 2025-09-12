@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.runMock = runMock;
-async function runMock(prompt) {
+export async function runMock(prompt) {
     const lines = prompt.split(/\n/).slice(-4).join(" ").slice(0, 400);
     const verdict = /DONE/i.test(prompt) ? "DONE" : "CONTINUE";
     const summary = lines.replace(/\s+/g, " ").trim();

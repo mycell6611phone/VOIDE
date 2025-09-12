@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.default = embed;
-async function embed(job) {
+export default async function embed(job) {
     const dim = 64;
     const values = new Array(dim).fill(0).map((_, i) => {
         const code = job.text.charCodeAt(i % job.text.length) || 0;

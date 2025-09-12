@@ -1,8 +1,5 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.runLlamaCpp = runLlamaCpp;
-const execa_1 = require("execa");
-async function runLlamaCpp(args) {
+import { execa } from "execa";
+export async function runLlamaCpp(args) {
     const llamaBin = args.llamaBin ?? process.env.LLAMA_BIN ?? "llama-cli";
     const threads = args.threads ?? Math.max(1, require('os').cpus().length - 1);
     const gpuLayers = args.gpuLayers ?? (args.runtime === 'CUDA' ? 35 : 0);
@@ -15,6 +12,6 @@ async function runLlamaCpp(args) {
         "-ngl", String(gpuLayers),
         "--no-display-prompt"
     ];
-    const { stdout } = await (0, execa_1.execa)(llamaBin, cmdArgs, { env: { LLAMA_ARG_MAX: "65536" } });
+    const { stdout } = await execa(llamaBin, cmdArgs, { env: { LLAMA_ARG_MAX: "65536" } });
     return stdout.trim();
 }

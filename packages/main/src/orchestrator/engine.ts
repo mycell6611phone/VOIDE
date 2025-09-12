@@ -94,7 +94,7 @@ async function executeNode(st: RunState, node: NodeDef): Promise<Array<[string, 
     const inputs = incomingText(st, node.id);
     const prompt = inputs.join("\n");
     const reg = await getModelRegistry();
-    const model = reg.models.find((m: any) => m.id === params.modelId);
+    const model = reg.models.find((m: any) => m.id === params.modelId) as any;
     const result = await poolLLM.run({
       params,
       prompt,

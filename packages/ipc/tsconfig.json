@@ -6,9 +6,10 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "declaration": true,
-    "types": ["node"]
+    "types": ["node"],
+    "composite": true
   },
-  "include": ["src", "test"],
+  "include": ["src"],
   "references": [
     { "path": "../shared" }
   ]

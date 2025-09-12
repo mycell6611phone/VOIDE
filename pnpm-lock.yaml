@@ -17,6 +17,9 @@ importers:
       '@types/uuid':
         specifier: ^10.0.0
         version: 10.0.0
+      '@voide/cli':
+        specifier: workspace:*
+        version: link:packages/cli
       concurrently:
         specifier: 9.0.1
         version: 9.0.1
@@ -41,6 +44,9 @@ importers:
 
   core:
     dependencies:
+      better-sqlite3:
+        specifier: ^9.6.0
+        version: 9.6.0
       commander:
         specifier: ^11.0.0
         version: 11.1.0
@@ -69,6 +75,15 @@ importers:
       execa:
         specifier: 9.3.0
         version: 9.3.0
+
+  packages/cli:
+    dependencies:
+      '@voide/core':
+        specifier: workspace:*
+        version: link:../../core
+      commander:
+        specifier: ^11.0.0
+        version: 11.1.0
 
   packages/ipc:
     dependencies:

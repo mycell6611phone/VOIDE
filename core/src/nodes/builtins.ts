@@ -102,7 +102,7 @@ const RouterDividerNode: NodeHandler<
   async execute({ inputs }: ExecuteArgs<{ text: "UserText" }, {}>) {
     const schema = z
       .object({ text: z.string() })
-      .refine((d) => d.text.trim().startsWith("-"));
+      .refine((d: { text: string }) => d.text.trim().startsWith("-"));
     const payload = inputs.text ?? { text: "" };
     if (schema.safeParse(payload).success) {
       return { valid: { text: payload.text } } as any;
@@ -121,13 +121,13 @@ const BulletListNormalizerNode: NodeHandler<
   inPorts: { text: "LLMText" },
   outPorts: { text: "LLMText" },
   async execute({ inputs }: ExecuteArgs<{ text: "LLMText" }, {}>) {
-    const raw = inputs.text?.text ?? "";
+    const raw: string = String(inputs.text?.text ?? "");
     const lines = raw
       .split(/\n+/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+      .map((l: string) => l.trim())
+      .filter((l: string) => l.length > 0);
     const normalized = lines
-      .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+      .map((l: string) => (l.startsWith("-") ? l : `- ${l}`))
       .join("\n");
     return { text: { text: normalized } };
   },

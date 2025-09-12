@@ -5,7 +5,7 @@ import {
   validateCanvas,
   getPort,
 } from "./validate.js";
-import { FlowEnvelope, Node, Edge as EdgeSpec, Port } from "../flow/schema.js";
+import type { FlowEnvelope, Node, Edge as EdgeSpec, Port } from "../flow/schema";
 
 export function compile(env: FlowEnvelope): Uint8Array {
   const canvas: Canvas = {

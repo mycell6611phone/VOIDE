@@ -5,8 +5,8 @@
     "declaration": true,
     "declarationMap": true, 
     "composite": true,
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["node"]

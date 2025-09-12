@@ -6,7 +6,7 @@ import {
   modelEnsure,
   telemetryEvent,
   appGetVersion,
-} from "../src/channels.js";
+} from "../dist/channels.js";
 
 const sampleFlow: Flow = {
   id: "f1",

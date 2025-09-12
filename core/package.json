@@ -6,6 +6,7 @@
   "bin": {
     "voide": "./dist/cli.js"
   },
+  "engines": { "node": ">=20.11" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "proto:gen": "node --loader ts-node/esm scripts/gen-proto.ts",

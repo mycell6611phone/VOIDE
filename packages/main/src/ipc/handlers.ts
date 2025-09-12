@@ -17,7 +17,7 @@ export function registerHandlers() {
   ipcMain.handle(flowValidate.name, async (_e, payload) => {
     const parsed = flowValidate.request.safeParse(payload);
     if (!parsed.success) return formatError(parsed.error.flatten());
-    const res = validateFlow(parsed.data);
+    const res = validateFlow(parsed.data as any);
     const errs = res.errors.map((e: any) => JSON.stringify(e));
     return flowValidate.response.parse({ ok: res.ok, errors: errs });
   });
@@ -26,7 +26,7 @@ export function registerHandlers() {
     const parsed = flowRun.request.safeParse(payload);
     if (!parsed.success) return formatError(parsed.error.flatten());
     try {
-      const out = await runFlow(parsed.data);
+      const out = await runFlow(parsed.data as any);
       return flowRun.response.parse(out);
     } catch (err) {
       return formatError(err);

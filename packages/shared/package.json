@@ -15,6 +15,7 @@
       "default": "./dist/types.js"
     }
   },
-  "scripts": { "build": "tsc -p tsconfig.json" }
+  "scripts": { "build": "tsc -p tsconfig.json" },
+  "engines": { "node": ">=20.11" }
 }
 

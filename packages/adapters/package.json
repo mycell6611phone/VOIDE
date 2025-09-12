@@ -12,5 +12,6 @@
   },
   "optionalDependencies": {
     "gpt4all": "2.8.1"
-  }
+  },
+  "engines": { "node": ">=20.11" }
 }

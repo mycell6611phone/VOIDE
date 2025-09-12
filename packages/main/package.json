@@ -7,7 +7,8 @@
   "engines": { "node": ">=20.11" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsc -w -p tsconfig.json"
+    "dev": "tsc -w -p tsconfig.json",
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@voide/shared": "workspace:*",

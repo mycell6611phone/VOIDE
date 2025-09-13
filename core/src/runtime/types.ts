@@ -1,4 +1,4 @@
-import * as pb from "../proto/voide/v1/flow.js";
+import * as pb from "../proto/voide/v1/flow";
 
 export type UserText = pb.UserText;
 export type PromptText = pb.PromptText;

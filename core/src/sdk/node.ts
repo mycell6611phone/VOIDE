@@ -1,4 +1,4 @@
-import { globalTypeRegistry, TypeName } from "../runtime/types.js";
+import { globalTypeRegistry, TypeName } from "../runtime/types";
 
 export type TypeRef = TypeName;
 export type PortSpec = Record<string, TypeRef>;

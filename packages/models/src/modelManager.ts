@@ -125,13 +125,25 @@ async function sha256File(p: string) {
 // naive HTTP download with range resume when supported
 async function httpDownload(url: string, dst: string, _size: number) {
   const mod = await import(url.startsWith("https:") ? "https" : "http");
+  const { createWriteStream } = await import("fs");
   await new Promise<void>((resolve, reject) => {
-    const file = require("fs").createWriteStream(dst);
-    mod.get(url, (res: any) => {
-      if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
+    const file = createWriteStream(dst);
+    const req = mod.get(url, (res: any) => {
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
       res.pipe(file);
       file.on("finish", () => file.close(() => resolve()));
-    }).on("error", reject);
+      file.on("error", err => {
+        file.destroy();
+        reject(err);
+      });
+    });
+    req.on("error", err => {
+      file.destroy();
+      reject(err);
+    });
   });
 }
 

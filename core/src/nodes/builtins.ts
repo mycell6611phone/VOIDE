@@ -2,12 +2,12 @@ import {
   NodeHandler,
   NodeRegistry,
   ExecuteArgs,
-} from "../sdk/node.js";
+} from "../sdk/node";
 import {
   UserText,
   PromptText,
   LLMText,
-} from "../runtime/types.js";
+} from "../runtime/types";
 import { z } from "zod";
 
 // Provider interface
@@ -83,6 +83,9 @@ const BranchNode: NodeHandler<{ text: "LLMText" }, { pass: "LLMText"; fail: "LLM
   outPorts: { pass: "LLMText", fail: "LLMText" },
   async execute({ inputs, config }: ExecuteArgs<{ text: "LLMText" }, { condition: string }>) {
     const text = inputs.text;
+    if (!text || typeof text.text !== "string") {
+      throw new Error("BranchNode: missing 'text' input");
+    }
     if (text.text.includes(config.condition)) {
       return { pass: text } as any;
     }

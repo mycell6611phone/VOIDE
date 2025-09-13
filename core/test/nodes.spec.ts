@@ -58,6 +58,18 @@ describe("built-in nodes", () => {
     expect(fail.fail?.text).toBe("ok done");
   });
 
+  it("BranchNode throws when text input is missing", async () => {
+    const ctx = makeContext();
+    const handler = registry.get("BranchNode");
+    await expect(
+      handler.execute({
+        config: { condition: "ok" },
+        inputs: {},
+        context: ctx,
+      })
+    ).rejects.toThrow("BranchNode: missing 'text' input");
+  });
+
   it("LogNode logs and passes through", async () => {
     const logs: any[] = [];
     const ctx = makeContext((...args) => logs.push(args));

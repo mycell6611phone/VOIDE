@@ -58,5 +58,6 @@ Agents/
 /Agents
 /.turbo
 turbo/*
-.turbo/*
+.turbo
+*/.turbo
 

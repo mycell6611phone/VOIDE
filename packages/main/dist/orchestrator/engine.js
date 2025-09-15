@@ -8,8 +8,14 @@ import { recordRunLog, createRun, updateRunStatus, savePayload, getPayloadsForRu
 const runs = new Map();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PiscinaCtor = Piscina;
-const poolLLM = new PiscinaCtor({ filename: path.join(__dirname, "../../workers/dist/llm.js") });
-const poolEmbed = new PiscinaCtor({ filename: path.join(__dirname, "../../workers/dist/embed.js") });
+// Worker bundles live in packages/workers/dist. From the compiled file
+// location (packages/main/dist/orchestrator) we need to traverse three
+// directories up to reach the workspace root and then into workers/dist.
+// Using only "../../" resulted in a path within the main package, causing
+// runtime module resolution errors when Piscina attempted to load the
+// workers. The extra "../" correctly points to the sibling package.
+const poolLLM = new PiscinaCtor({ filename: path.join(__dirname, "../../../workers/dist/llm.js") });
+const poolEmbed = new PiscinaCtor({ filename: path.join(__dirname, "../../../workers/dist/embed.js") });
 function nodeById(flow, id) {
     const n = flow.nodes.find(n => n.id === id);
     if (!n)
@@ -61,7 +67,15 @@ async function loop(runId) {
             downstream(st.flow, node.id).forEach(n => st.frontier.add(n));
         }
         catch (err) {
-            await recordRunLog({ runId, nodeId, tokens: 0, latencyMs: 0, status: 'error', error: String(err) });
+            await recordRunLog({
+                type: "operation_progress",
+                runId,
+                nodeId,
+                tokens: 0,
+                latencyMs: 0,
+                status: "error",
+                reason: String(err),
+            });
         }
     }
     if (!st.halted)
@@ -73,7 +87,14 @@ async function executeNode(st, node) {
     if (node.type === "system.prompt") {
         const text = String(params.text ?? "");
         const dt = Date.now() - t0;
-        await recordRunLog({ runId: st.runId, nodeId: node.id, tokens: text.split(/\s+/).length, latencyMs: dt, status: 'ok' });
+        await recordRunLog({
+            type: "operation_progress",
+            runId: st.runId,
+            nodeId: node.id,
+            tokens: text.split(/\s+/).length,
+            latencyMs: dt,
+            status: "ok",
+        });
         return [["out", { kind: "text", text }]];
     }
     if (node.type === "llm.generic" || node.type === "critic") {
@@ -86,13 +107,27 @@ async function executeNode(st, node) {
             prompt,
             modelFile: model?.file ?? ""
         });
-        await recordRunLog({ runId: st.runId, nodeId: node.id, tokens: result.tokens, latencyMs: result.latencyMs, status: 'ok' });
+        await recordRunLog({
+            type: "operation_progress",
+            runId: st.runId,
+            nodeId: node.id,
+            tokens: result.tokens,
+            latencyMs: result.latencyMs,
+            status: "ok",
+        });
         return [[node.type === "critic" ? "notes" : "completion", { kind: "text", text: result.text }]];
     }
     if (node.type === "embedding") {
         const txt = incomingText(st, node.id).join("\n");
         const res = await poolEmbed.run({ text: txt });
-        await recordRunLog({ runId: st.runId, nodeId: node.id, tokens: txt.split(/\s+/).length, latencyMs: 1, status: 'ok' });
+        await recordRunLog({
+            type: "operation_progress",
+            runId: st.runId,
+            nodeId: node.id,
+            tokens: txt.split(/\s+/).length,
+            latencyMs: 1,
+            status: "ok",
+        });
         return [["vec", { kind: "vector", values: res.values }]];
     }
     if (node.type === "loop") {
@@ -106,12 +141,26 @@ async function executeNode(st, node) {
         out.push(["body", { kind: "text", text: body + (done ? "\nDONE" : "\n") }]);
         if (done)
             out.push(["out", { kind: "text", text: body }]);
-        await recordRunLog({ runId: st.runId, nodeId: node.id, tokens: body.split(/\s+/).length, latencyMs: Date.now() - t0, status: 'ok' });
+        await recordRunLog({
+            type: "operation_progress",
+            runId: st.runId,
+            nodeId: node.id,
+            tokens: body.split(/\s+/).length,
+            latencyMs: Date.now() - t0,
+            status: "ok",
+        });
         return out;
     }
     if (node.type === "output") {
         const body = incomingText(st, node.id).join("\n");
-        await recordRunLog({ runId: st.runId, nodeId: node.id, tokens: body.split(/\s+/).length, latencyMs: Date.now() - t0, status: 'ok' });
+        await recordRunLog({
+            type: "operation_progress",
+            runId: st.runId,
+            nodeId: node.id,
+            tokens: body.split(/\s+/).length,
+            latencyMs: Date.now() - t0,
+            status: "ok",
+        });
         return [];
     }
     throw new Error(`unknown node type ${node.type}`);

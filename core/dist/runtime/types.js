@@ -1,4 +1,4 @@
-import * as pb from "../proto/voide/v1/flow";
+import * as pb from "../proto/voide/v1/flow.js";
 function makeProtoCodec(msg) {
     return {
         encode(value) {

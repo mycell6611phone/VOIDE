@@ -982,6 +982,30 @@ export declare const telemetryPayload: z.ZodUnion<[z.ZodObject<{
     at: number;
     runId: string;
     nodeId: string;
+}>, z.ZodObject<{
+    type: z.ZodLiteral<"operation_progress">;
+    runId: z.ZodString;
+    nodeId: z.ZodString;
+    tokens: z.ZodNumber;
+    latencyMs: z.ZodNumber;
+    status: z.ZodEnum<["ok", "error"]>;
+    reason: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    type: "operation_progress";
+    status: "ok" | "error";
+    runId: string;
+    nodeId: string;
+    tokens: number;
+    latencyMs: number;
+    reason?: string | undefined;
+}, {
+    type: "operation_progress";
+    status: "ok" | "error";
+    runId: string;
+    nodeId: string;
+    tokens: number;
+    latencyMs: number;
+    reason?: string | undefined;
 }>]>;
 export type TelemetryPayload = z.infer<typeof telemetryPayload>;
 export declare const telemetryEvent: {
@@ -1064,6 +1088,30 @@ export declare const telemetryEvent: {
         at: number;
         runId: string;
         nodeId: string;
+    }>, z.ZodObject<{
+        type: z.ZodLiteral<"operation_progress">;
+        runId: z.ZodString;
+        nodeId: z.ZodString;
+        tokens: z.ZodNumber;
+        latencyMs: z.ZodNumber;
+        status: z.ZodEnum<["ok", "error"]>;
+        reason: z.ZodOptional<z.ZodString>;
+    }, "strip", z.ZodTypeAny, {
+        type: "operation_progress";
+        status: "ok" | "error";
+        runId: string;
+        nodeId: string;
+        tokens: number;
+        latencyMs: number;
+        reason?: string | undefined;
+    }, {
+        type: "operation_progress";
+        status: "ok" | "error";
+        runId: string;
+        nodeId: string;
+        tokens: number;
+        latencyMs: number;
+        reason?: string | undefined;
     }>]>;
 };
 export declare const appGetVersion: {

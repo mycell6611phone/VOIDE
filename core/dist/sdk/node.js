@@ -1,4 +1,4 @@
-import { globalTypeRegistry } from "../runtime/types";
+import { globalTypeRegistry } from "../runtime/types.js";
 function sampleValue(type) {
     switch (type) {
         case "UserText":

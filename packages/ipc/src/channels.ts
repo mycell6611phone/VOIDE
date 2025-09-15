@@ -106,11 +106,22 @@ const error = z.object({
   at: z.number(),
 });
 
+const operationProgress = z.object({
+  type: z.literal("operation_progress"),
+  runId: z.string(),
+  nodeId: z.string(),
+  tokens: z.number(),
+  latencyMs: z.number(),
+  status: z.enum(["ok", "error"]),
+  reason: z.string().optional(),
+});
+
 export const telemetryPayload = z.union([
   nodeState,
   edgeTransfer,
   normalize,
   error,
+  operationProgress,
 ]);
 
 export type TelemetryPayload = z.infer<typeof telemetryPayload>;

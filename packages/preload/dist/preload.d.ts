@@ -1,18 +1,15 @@
-export type VoideAPI = {
-    openFlow: () => Promise<unknown>;
-    saveFlow: (flow: unknown, filePath?: string) => Promise<unknown>;
-    validateFlow: (flow: unknown) => Promise<unknown>;
-    listModels: () => Promise<unknown>;
-    getNodeCatalog: () => Promise<unknown>;
-    runFlow: (flow: unknown) => Promise<unknown>;
-    stopFlow: (runId: string) => Promise<unknown>;
-    stepFlow: (runId: string) => Promise<unknown>;
-    getLastRunPayloads: (runId: string) => Promise<unknown>;
-    secretSet: (scope: string, key: string, value: string) => Promise<unknown>;
-    secretGet: (scope: string, key: string) => Promise<unknown>;
+import { Flow, TelemetryPayload } from "@voide/ipc";
+declare const api: {
+    validateFlow: (flow: Flow) => Promise<any>;
+    runFlow: (flow: Flow) => Promise<any>;
+    ensureModel: (modelId: string) => Promise<any>;
+    getVersion: () => Promise<any>;
+    onTelemetry: (cb: (ev: TelemetryPayload) => void) => void;
 };
+export type VoideAPI = typeof api;
 declare global {
     interface Window {
         voide: VoideAPI;
     }
 }
+export {};

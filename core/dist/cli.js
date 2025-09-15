@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import * as fs from "fs/promises";
-import { compile } from "./build/compiler.js";
-import { parseFlow } from "./flow/schema.js";
-import { runFlow } from "./run/index.js";
-import { StubProvider } from "./nodes/builtins.js";
+import { compile } from "./build/compiler";
+import { parseFlow } from "./flow/schema";
+import { runFlow } from "./run";
+import { StubProvider } from "./nodes/builtins";
 const colors = {
     reset: "\x1b[0m",
     red: "\x1b[31m",

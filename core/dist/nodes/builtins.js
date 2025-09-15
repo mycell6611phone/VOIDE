@@ -59,6 +59,9 @@ const BranchNode = {
     outPorts: { pass: "LLMText", fail: "LLMText" },
     async execute({ inputs, config }) {
         const text = inputs.text;
+        if (!text || typeof text.text !== "string") {
+            throw new Error("BranchNode: missing 'text' input");
+        }
         if (text.text.includes(config.condition)) {
             return { pass: text };
         }

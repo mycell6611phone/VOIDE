@@ -1,15 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { flowValidate, flowRun, modelEnsure, appGetVersion, telemetryEvent, } from "@voide/ipc";
 const api = {
-    openFlow: () => ipcRenderer.invoke("voide:openFlow"),
-    saveFlow: (flow, filePath) => ipcRenderer.invoke("voide:saveFlow", { flow, filePath }),
-    validateFlow: flow => ipcRenderer.invoke("voide:validateFlow", flow),
-    listModels: () => ipcRenderer.invoke("voide:listModels"),
-    getNodeCatalog: () => ipcRenderer.invoke("voide:getNodeCatalog"),
-    runFlow: flow => ipcRenderer.invoke("voide:runFlow", { flow }),
-    stopFlow: runId => ipcRenderer.invoke("voide:stopFlow", { runId }),
-    stepFlow: runId => ipcRenderer.invoke("voide:stepFlow", { runId }),
-    getLastRunPayloads: runId => ipcRenderer.invoke("voide:getLastRunPayloads", runId),
-    secretSet: (scope, key, value) => ipcRenderer.invoke("voide:secretSet", { scope, key, value }),
-    secretGet: (scope, key) => ipcRenderer.invoke("voide:secretGet", { scope, key })
+    validateFlow: (flow) => ipcRenderer.invoke(flowValidate.name, flow),
+    runFlow: (flow) => ipcRenderer.invoke(flowRun.name, flow),
+    ensureModel: (modelId) => ipcRenderer.invoke(modelEnsure.name, { modelId }),
+    getVersion: () => ipcRenderer.invoke(appGetVersion.name),
+    onTelemetry: (cb) => {
+        ipcRenderer.on(telemetryEvent.name, (_e, ev) => cb(ev));
+    },
 };
 contextBridge.exposeInMainWorld("voide", api);

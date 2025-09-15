@@ -1,6 +1,6 @@
-import * as pb from "../proto/voide/v1/flow.js";
-import { makeContext } from "../sdk/node.js";
-import { Scheduler } from "./scheduler.js";
+import * as pb from "../proto/voide/v1/flow";
+import { makeContext } from "../sdk/node";
+import { Scheduler } from "./scheduler";
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_RETRIES = 0;
 function parseEdge(e) {

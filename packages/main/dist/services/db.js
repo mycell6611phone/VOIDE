@@ -1,6 +1,7 @@
 import BetterSqlite3 from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { emitTelemetry } from "../ipc/telemetry.js";
 let db;
 export async function initDB() {
     const dir = path.join(process.env.HOME || process.cwd(), ".voide");
@@ -32,16 +33,6 @@ export async function initDB() {
     body text,
     created_at integer default (strftime('%s','now'))
   );
-  create table if not exists logs(
-    id integer primary key autoincrement,
-    run_id text,
-    node_id text,
-    tokens integer,
-    latency_ms integer,
-    status text,
-    error text,
-    created_at integer default (strftime('%s','now'))
-  );
   `);
 }
 export function getDB() { return db; }
@@ -52,9 +43,8 @@ export function updateRunStatus(runId, status) {
     const ended = status === "done" || status === "error" ? ", ended_at=strftime('%s','now')" : "";
     db.prepare(`update runs set status=? ${ended} where id=?`).run(status, runId);
 }
-export async function recordRunLog(log) {
-    db.prepare("insert into logs(run_id,node_id,tokens,latency_ms,status,error) values(?,?,?,?,?,?)")
-        .run(log.runId, log.nodeId, log.tokens, log.latencyMs, log.status, log.error ?? null);
+export async function recordRunLog(ev) {
+    emitTelemetry(ev);
 }
 export async function savePayload(runId, nodeId, port, payload) {
     db.prepare("insert into payloads(run_id,node_id,port,kind,body) values(?,?,?,?,?)")

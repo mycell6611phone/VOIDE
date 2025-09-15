@@ -1,5 +1,5 @@
-import * as pb from "../proto/voide/v1/flow.js";
-import { BuildError, validateCanvas, getPort, } from "./validate.js";
+import * as pb from "../proto/voide/v1/flow";
+import { BuildError, validateCanvas, getPort, } from "./validate";
 export function compile(env) {
     const canvas = {
         nodes: env.nodes.map((n) => ({
@@ -42,4 +42,4 @@ export function compile(env) {
     };
     return pb.Flow.encode(flow).finish();
 }
-export { BuildError } from "./validate.js";
+export { BuildError } from "./validate";

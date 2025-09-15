@@ -1,9 +1,9 @@
-import { NodeRegistry } from "../sdk/node.js";
-import { registerBuiltins } from "../nodes/builtins.js";
-import { orchestrate, } from "./orchestrator.js";
-import { Scheduler } from "./scheduler.js";
+import { NodeRegistry } from "../sdk/node";
+import { registerBuiltins } from "../nodes/builtins";
+import { orchestrate, } from "./orchestrator";
+import { Scheduler } from "./scheduler";
 import { randomUUID } from "crypto";
-export { Scheduler } from "./scheduler.js";
+export { Scheduler } from "./scheduler";
 export function runFlow(flowBin, runtimeInputs, providers = {}, scheduler = new Scheduler()) {
     const registry = new NodeRegistry();
     registerBuiltins(registry);

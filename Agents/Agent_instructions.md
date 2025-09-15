@@ -1,10 +1,10 @@
 
 # VOIDE — Codex Prompts (Free Offline Edition)
-Single user. Offline only. No external APIs. No disk logging except user-initiated saves and local model files. Diagnostics are real-time lights on the canvas.
+Single user. Offline only. No external APIs. No disk logging except user-initiated saves and local model files. Diagnostics are real-time lights on the canvas. information from the log module user puts in place
 
 ---
 
-## Chunk 00 — Free‑mode guardrails (offline, single‑user, no logs)
+## Chunk 00 — Free‑mode guardrails (no outside server API calls, single‑user, loacl LLMs)
 
 **Prompt for Codex**
 

@@ -1,11 +1,11 @@
-import * as pb from "../proto/voide/v1/flow";
+import * as pb from "../proto/voide/v1/flow.js";
 import {
   Canvas,
   BuildError,
   validateCanvas,
   getPort,
-} from "./validate";
-import type { FlowEnvelope, Node, Edge as EdgeSpec, Port } from "../flow/schema";
+} from "./validate.js";
+import type { FlowEnvelope, Node, Edge as EdgeSpec, Port } from "../flow/schema.js";
 
 export function compile(env: FlowEnvelope): Uint8Array {
   const canvas: Canvas = {
@@ -57,7 +57,7 @@ export function compile(env: FlowEnvelope): Uint8Array {
   return pb.Flow.encode(flow).finish();
 }
 
-export { Canvas } from "./validate";
+export { Canvas } from "./validate.js";
 
-export { BuildError } from "./validate";
+export { BuildError } from "./validate.js";
 

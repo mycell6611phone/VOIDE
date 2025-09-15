@@ -1,7 +1,7 @@
-import * as pb from "../proto/voide/v1/flow";
-import { NodeRegistry, makeContext } from "../sdk/node";
-import { Providers } from "../nodes/builtins";
-import { Scheduler } from "./scheduler";
+import * as pb from "../proto/voide/v1/flow.js";
+import { NodeRegistry, makeContext } from "../sdk/node.js";
+import { Providers } from "../nodes/builtins.js";
+import { Scheduler } from "./scheduler.js";
 
 export type NodeStatus =
   | "idle"

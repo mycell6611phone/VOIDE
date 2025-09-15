@@ -1,16 +1,16 @@
-import { NodeRegistry } from "../sdk/node";
-import { registerBuiltins, Providers } from "../nodes/builtins";
+import { NodeRegistry } from "../sdk/node.js";
+import { registerBuiltins, Providers } from "../nodes/builtins.js";
 import {
   orchestrate,
   TelemetryEvent,
   RunResult,
   NodeStatus,
-} from "./orchestrator";
-import { Scheduler } from "./scheduler";
+} from "./orchestrator.js";
+import { Scheduler } from "./scheduler.js";
 import { randomUUID } from "crypto";
 
-export { TelemetryEvent, RunResult, NodeStatus } from "./orchestrator";
-export { Scheduler } from "./scheduler";
+export { TelemetryEvent, RunResult, NodeStatus } from "./orchestrator.js";
+export { Scheduler } from "./scheduler.js";
 
 export function runFlow(
   flowBin: Uint8Array,

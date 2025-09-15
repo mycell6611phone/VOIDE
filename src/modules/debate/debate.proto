@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package voide.modules.debate.v1;
+
+enum DebateFormat {
+  SINGLE_PASS_VALIDATE = 0;
+  CONCISENESS_MULTI_PASS = 1;
+  DEBATE_ADD_ON = 2;
+  CUSTOM = 3;
+}
+
+message DebateConfig {
+  DebateFormat debate_format = 1;
+  string custom_prompt = 2;
+  int32 round_number = 3;
+  bool iterative_loop = 4;
+  string loop_target_module_id = 5;
+}
+

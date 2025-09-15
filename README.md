@@ -1,4 +1,21 @@
-# VOIDE (Visual Orchestration IDE) — MVP
+# VOIDE is an interactive visual IDE. A user drags modules onto a canvas, wires them into a directed acyclic graph (like a breadboard), presses Build to validate and compile the graph into a Flow v1 protobuf, then presses Run to execute it. Execution is deterministic and versioned. The core purpose is to give non-programmers and technical builders alike a way to assemble complex LLM/data pipelines visually without hand-coding orchestration logic.
+
+What the app should do in practice:
+
+Design phase (UI): Let a user visually build workflows by dragging modules, connecting them, and configuring parameters.
+
+Build phase (compiler): Check correctness (no cycles, port schemas match), generate a protobuf workflow spec.
+
+Run phase (orchestrator): Execute the graph step by step, pass data between modules, handle branching/diverters, and stream live telemetry.
+
+Persistence: Save projects as protobuf snapshots; reload them later deterministically.
+
+Assets: Manage local models and templates, enforce checksums and licensing.
+
+Modes: MVP is single-user, local execution. Pro edition can offload execution to cloud and enable multi-user canvases.
+
+So: VOIDE is not a generic IDE, not a notebook, and not just a model runner. It is a workflow composer and executor for LLM-centric pipelines, with strong guarantees of determinism, schema safety, and reproducibility.
+
 
 ## Prereqs
 - Linux (Pop!_OS). Node 20+, PNPM 9+, Python 3.11+, Docker or Podman.
@@ -43,3 +60,40 @@ pnpm --filter @voide/core build
 pnpm --filter @voide/core exec voide build examples/bulletizer.canvas.json -o bulletizer.flow
 pnpm --filter @voide/core exec voide run bulletizer.flow --input 'text=Hello world' --provider stub
 ```
+
+## Debate Module
+
+The Debate module can be dragged from the palette onto the canvas. It accepts a text payload and emits refined text. Configuration is stored as protobuf bytes (`src/modules/debate/debate.proto`).
+
+### Example configs
+
+Single round single pass:
+```json
+{
+  "nodes": [
+    {"id":"llm1","type":"LLM"},
+    {"id":"deb1","type":"Debate","config":"base64cfg=="}
+  ],
+  "edges":[{"from":{"node":"llm1","port":"text"},"to":{"node":"deb1","port":"input"}}]
+}
+```
+
+Two-round chained debate:
+```json
+{
+  "edges":[
+    {"from":{"node":"llm1","port":"text"},"to":{"node":"deb1","port":"input"}},
+    {"from":{"node":"deb1","port":"output"},"to":{"node":"deb2","port":"input"}}
+  ]
+}
+```
+
+Iterative loop with target module:
+```json
+{
+  "nodes":[{"id":"debLoop","type":"Debate","config":"cfgbytes..."}],
+  "meta":{"next_module":"debLoop","round":2}
+}
+```
+
+Each example embeds the DebateConfig protobuf in Base64 form for persistence.

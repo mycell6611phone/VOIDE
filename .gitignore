@@ -56,4 +56,7 @@ Thumbs.db
 /agents/*
 Agents/
 /Agents
+/.turbo
+turbo/*
+.turbo/*
 

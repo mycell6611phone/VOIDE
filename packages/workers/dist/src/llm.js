@@ -1,6 +1,6 @@
-const { runLlamaCpp } = require("../../adapters/dist/llamaCpp.js");
-const { runGpt4All } = require("../../adapters/dist/gpt4all.js");
-const { runMock } = require("../../adapters/dist/mock.js");
+import { runLlamaCpp } from "../../adapters/dist/llamaCpp.js";
+import { runGpt4All } from "../../adapters/dist/gpt4all.js";
+import { runMock } from "../../adapters/dist/mock.js";
 function tokensOf(s) {
     return Math.max(1, Math.round(s.split(/\s+/).length * 1.3));
 }
@@ -17,4 +17,3 @@ export default async function run(job) {
     const dt = Date.now() - t0;
     return { text, tokens: tokensOf(text), latencyMs: dt };
 }
-module.exports = run;

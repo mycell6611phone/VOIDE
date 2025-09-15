@@ -1,7 +1,8 @@
 import { execa } from "execa";
+import os from "node:os";
 export async function runLlamaCpp(args) {
     const llamaBin = args.llamaBin ?? process.env.LLAMA_BIN ?? "llama-cli";
-    const threads = args.threads ?? Math.max(1, require('os').cpus().length - 1);
+    const threads = args.threads ?? Math.max(1, os.cpus().length - 1);
     const gpuLayers = args.gpuLayers ?? (args.runtime === 'CUDA' ? 35 : 0);
     const cmdArgs = [
         "-m", args.modelFile,

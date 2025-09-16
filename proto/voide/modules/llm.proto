@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package voide.modules.llm.v1;
+
+message ParamValue {
+  oneof kind {
+    string string_value = 1;
+    double double_value = 2;
+    int64 int_value = 3;
+    bool bool_value = 4;
+  }
+}
+
+message PromptMsg {
+  enum Role {
+    ROLE_UNSPECIFIED = 0;
+    ROLE_SYSTEM = 1;
+    ROLE_USER = 2;
+    ROLE_ASSISTANT = 3;
+  }
+
+  Role role = 1;
+  string content = 2;
+}
+
+message LLMConfig {
+  string adapter = 1;
+  string model_id = 2;
+  double temperature = 3;
+  int32 max_tokens = 4;
+  string runtime = 5;
+  repeated PromptMsg prompts = 6;
+  map<string, ParamValue> params = 7;
+}

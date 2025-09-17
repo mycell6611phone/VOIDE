@@ -1,5 +1,5 @@
 import React from "react";
-import { Handle, Position, type NodeProps } from "react-flow-renderer";
+import { Handle, Position, type NodeProps } from "reactflow";
 import type { NodeDef } from "@voide/shared";
 
 export default function BasicNode({ data }: NodeProps<NodeDef>) {

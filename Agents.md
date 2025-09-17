@@ -1,0 +1,73 @@
+Guardrails for Agents
+1. Stage Awareness
+
+Always ask: “Is this needed at this stage of development?”
+
+Current stage is the GUI (canvas, menus, palette, wiring tool, modules, buttons).
+
+Minimal backend code is acceptable only if required to make GUI elements function (e.g., menu stubs, save/load stubs).
+
+Features like telemetry, logging, adapters, or cloud are not needed until explicitly requested in later stages.
+
+2. Need Gate
+
+Before adding or modifying code, confirm:
+
+Did the user explicitly ask for this?
+
+Is it required for the current stage?
+
+Does it align with the North Star?
+
+Does it help achieve Build → Run → Watch flow?
+
+If any answer is “no,” defer to a later phase.
+
+3. Simplicity First
+
+Keep implementations as simple and modular as possible.
+
+Avoid premature abstractions, logging systems, telemetry, or cross-platform concerns unless explicitly requested.
+
+Each module is self-contained with explicit ports.
+
+4. Module Contracts
+
+Every module has explicit input/output ports.
+
+Port types remain stable (TEXT, JSON_BYTES, VECTOR, BLOB), but accepted schemas may vary depending on module settings (e.g., an LLM module’s schema depends on the model chosen).
+
+Treat these schema differences as module-internal behavior, not global system changes.
+
+5. Dynamic Behavior
+
+Ports may stay the same, but the data structure expected at a port can change with module configuration.
+
+Handle this by keeping port IDs stable, and documenting in the manifest how schema may vary.
+
+6. Logging
+
+Do not add global event logging.
+
+Add targeted logs only when debugging a specific issue. Remove or disable after the issue is resolved.
+
+7. Documentation
+
+Update ROADMAP.md, SCOPE.md, or TRACK.md if stage or scope changes.
+
+Never edit NORTH_STAR.md — that file is immutable except by the project owner.
+
+Workflow
+
+GUI — build visible interface, palettes, modules, wiring tool, menus, buttons.
+
+Build — implement backend wiring logic.
+
+Run — execution engine + activation lights.
+
+Debug/Safety — targeted logging, error handling, crash isolation.
+
+Packaging — cross-platform builds.
+
+Cloud — sync, sharing, multi-user features.
+

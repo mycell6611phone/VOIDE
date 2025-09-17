@@ -8,25 +8,27 @@
     "dev": "vite"
   },
   "dependencies": {
+    "@voide/ipc": "workspace:*",
+    "@voide/shared": "workspace:*",
     "ajv": "8.17.1",
     "elkjs": "0.9.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "react-flow-renderer": "^10.3.17",
     "react-hook-form": "7.51.5",
     "react-icons": "4.11.0",
+    "reactflow": "^11.11.4",
     "yup": "1.4.0",
-    "zustand": "4.5.4",
-    "@voide/shared": "workspace:*",
-    "@voide/ipc": "workspace:*",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "zustand": "4.5.4"
   },
   "devDependencies": {
     "@types/react": "18.2.73",
     "@types/react-dom": "18.2.24",
+    "@vitejs/plugin-react": "4.3.1",
     "typescript": "5.5.4",
-    "vite": "5.4.3",
-    "@vitejs/plugin-react": "4.3.1"
+    "vite": "5.4.3"
   },
-  "engines": { "node": ">=20.11" }
+  "engines": {
+    "node": ">=20.11"
+  }
 }

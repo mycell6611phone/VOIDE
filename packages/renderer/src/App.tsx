@@ -1,23 +1,46 @@
-import React, { useState } from "react";
+import React from "react";
 import GraphCanvas from "./components/GraphCanvas";
-import PropertiesPanel from "./components/PropertiesPanel";
 import RunControls from "./components/RunControls";
-import Inspector from "./components/Inspector";
+import Palette from "./components/Palette";
 import { useFlowStore } from "./state/flowStore";
 import { ipcClient } from "./lib/ipcClient";
 
 export default function App() {
-  const { flow } = useFlowStore();
-  const [runId, setRunId] = useState<string | null>(null);
+  const flow = useFlowStore((state) => state.flow);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", height: "100vh" }}>
-      <div style={{ display: "grid", gridTemplateRows: "48px 1fr 200px" }}>
-        <RunControls onRun={async () => { const r = await ipcClient.runFlow(flow); setRunId(r.runId); }} />
-        <GraphCanvas />
-        <Inspector runId={runId} />
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        background: "#e2e8f0"
+      }}
+    >
+      <RunControls
+        onRun={async () => {
+          await ipcClient.runFlow(flow);
+        }}
+      />
+      <div
+        style={{
+          display: "flex",
+          flex: 1,
+          minHeight: 0
+        }}
+      >
+        <Palette />
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            position: "relative",
+            background: "#ffffff"
+          }}
+        >
+          <GraphCanvas />
+        </div>
       </div>
-      <PropertiesPanel />
     </div>
   );
 }

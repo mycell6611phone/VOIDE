@@ -29,7 +29,14 @@ export default function GraphCanvas() {
     flow.nodes.map(rfNodeFrom)
   );
   const [edges, setEdges, onEdgesChange] = useEdgesState(
-    flow.edges.map((e) => ({ id: e.id, source: e.from[0], target: e.to[0] }))
+    flow.edges.map((e) => ({
+      id: e.id,
+      source: e.from[0],
+      target: e.to[0],
+      sourceHandle: `${e.from[0]}:${e.from[1]}`,
+      targetHandle: `${e.to[0]}:${e.to[1]}`,
+      label: e.label ?? ""
+    }))
   );
 
   const onConnect = useCallback(

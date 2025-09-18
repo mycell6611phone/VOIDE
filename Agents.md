@@ -53,7 +53,7 @@ Add targeted logs only when debugging a specific issue. Remove or disable after 
 
 7. Documentation
 
-Update ROADMAP.md, SCOPE.md, or TRACK.md if stage or scope changes.
+Update RoadMap.md, SCOPE.md, or TRACK.md if stage or scope changes.
 
 Never edit NORTH_STAR.md — that file is immutable except by the project owner.
 

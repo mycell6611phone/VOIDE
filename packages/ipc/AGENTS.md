@@ -1,0 +1,19 @@
+# /packages/ipc — Typed IPC Contracts
+
+**Purpose**
+Defines channel names, request/response schemas, and validation helpers shared
+between main, preload, renderer, and workers.
+
+**Structure**
+- `src/` — TypeScript source with Zod schemas.
+- `dist/` — Compiled output used at runtime.
+- `package.json` exposes `build` + `test` (Vitest) scripts.
+
+**Workflow**
+- Update schemas: edit `src`, run `pnpm --filter @voide/ipc build`.
+- Run tests: `pnpm --filter @voide/ipc test`.
+
+**Guidelines**
+- Keep channel enums stable; coordinate changes across `main` and `preload`.
+- Validation errors should return structured results (no thrown strings).
+- Remain offline—do not embed URLs or remote fetchers here.

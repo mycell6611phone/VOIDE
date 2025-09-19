@@ -71,3 +71,24 @@ Packaging — cross-platform builds.
 
 Cloud — sync, sharing, multi-user features.
 
+---
+
+## Repository Breadcrumbs
+
+Use these waypoints to jump to the right subdirectory quickly. Each location
+has its own `AGENTS.md` with deeper notes.
+
+- `/core` — Runtime, CLI, flow compiler. See `core/AGENTS.md` for build/test
+  commands and layout.
+- `/src` — Front-end friendly module shims used in tests and experiments.
+  Start with `src/AGENTS.md`.
+- `/ui` — Vite/React canvas prototype. Details in `ui/AGENTS.md`.
+- `/packages` — Electron workspace packages (main, preload, renderer, IPC,
+  shared libraries, adapters). Overview in `packages/AGENTS.md`.
+- `/flows` — Sample flow JSON + schema. Guidance in `flows/AGENTS.md`.
+- `/tests` — Vitest suites that cover module behavior. See `tests/AGENTS.md`.
+- `/tools` — Ancillary services (e.g., FAISS daemon). See `tools/AGENTS.md`.
+- `/examples` — Saved canvas layouts. See `examples/AGENTS.md`.
+- `/models` — Offline model manifest. Notes in `models/AGENTS.md`.
+- `/scripts` — Shell helpers for dev/build. Start at `scripts/AGENTS.md`.
+

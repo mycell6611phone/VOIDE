@@ -1,4 +1,4 @@
-import create from "zustand";
+import { create } from "zustand";
 import { nanoid } from "nanoid";
 
 export type NodeType =
@@ -7,7 +7,8 @@ export type NodeType =
   | "LLM"
   | "Branch"
   | "Log"
-  | "Output";
+  | "Output"
+  | "Interface";
 
 export interface PortSpec {
   port: string;
@@ -67,6 +68,12 @@ export const NODE_SPECS: Record<NodeType, NodeSpec> = {
     out: [],
     config: [{ key: "name", label: "Name", type: "string" }],
   },
+  Interface: {
+    type: "Interface",
+    in: [{ port: "input", types: ["AnyBlob"] }],
+    out: [{ port: "output", types: ["AnyBlob"] }],
+    config: [],
+  },
 };
 
 export type LightState =
@@ -102,6 +109,18 @@ export interface EdgeState {
   status?: LightState;
   pulses: Pulse[];
 }
+
+export interface InterfaceWindowState {
+  inputText: string;
+  outputText: string;
+  size: { width: number; height: number };
+  position: { x: number; y: number };
+  isMinimized: boolean;
+  zIndex: number;
+}
+
+type Bounds = { width: number; height: number };
+type Point = { x: number; y: number };
 
 export type TelemetryEvent =
   | {
@@ -143,6 +162,8 @@ interface FlowState {
   flowBin?: Uint8Array;
   events: TelemetryEvent[];
   runId?: string;
+  interfaceWindows: Record<string, InterfaceWindowState>;
+  maxInterfaceZ: number;
   addNode: (type: NodeType, x: number, y: number) => void;
   updateNode: (id: string, cfg: Partial<NodeState>) => void;
   select: (id?: string) => void;
@@ -156,6 +177,21 @@ interface FlowState {
   setOutput: (text: string) => void;
   setFlowBin: (bin: Uint8Array) => void;
   resetStatuses: () => void;
+  openInterface: (
+    id: string,
+    options: { bounds: Bounds; preferredPosition?: Point }
+  ) => void;
+  minimizeInterface: (id: string) => void;
+  closeInterface: (id: string) => void;
+  setInterfaceInput: (id: string, text: string) => void;
+  setInterfaceOutput: (id: string, text: string) => void;
+  setInterfaceGeometry: (
+    id: string,
+    geometry: { position: Point; size: { width: number; height: number } },
+    bounds: Bounds
+  ) => void;
+  focusInterface: (id: string) => void;
+  clampInterfaceWindows: (bounds: Bounds) => void;
 }
 
 export const useFlow = create<FlowState>((set, get) => ({
@@ -163,6 +199,8 @@ export const useFlow = create<FlowState>((set, get) => ({
   edges: [],
   output: "",
   events: [],
+  interfaceWindows: {},
+  maxInterfaceZ: 1,
   addNode: (type, x, y) => {
     const spec = NODE_SPECS[type];
     set((s) => ({
@@ -265,7 +303,139 @@ export const useFlow = create<FlowState>((set, get) => ({
       nodes: s.nodes.map((n) => ({ ...n, status: "idle" })),
       edges: s.edges.map((e) => ({ ...e, status: "idle", pulses: [] })),
     })),
+  openInterface: (id, { bounds, preferredPosition }) =>
+    set((s) => {
+      const existing = s.interfaceWindows[id];
+      const size = existing
+        ? clampSize(existing.size, bounds)
+        : clampSize(
+            { width: INTERFACE_DEFAULT_WIDTH, height: INTERFACE_DEFAULT_HEIGHT },
+            bounds
+          );
+      const position = existing
+        ? clampPosition(existing.position, size, bounds)
+        : clampPosition(preferredPosition ?? { x: 40, y: 40 }, size, bounds);
+      const zIndex = s.maxInterfaceZ + 1;
+      return {
+        interfaceWindows: {
+          ...s.interfaceWindows,
+          [id]: {
+            inputText: existing?.inputText ?? "",
+            outputText: existing?.outputText ?? "",
+            size,
+            position,
+            isMinimized: false,
+            zIndex,
+          },
+        },
+        maxInterfaceZ: zIndex,
+      };
+    }),
+  minimizeInterface: (id) =>
+    set((s) => {
+      const win = s.interfaceWindows[id];
+      if (!win) return {};
+      return {
+        interfaceWindows: {
+          ...s.interfaceWindows,
+          [id]: { ...win, isMinimized: true },
+        },
+      };
+    }),
+  closeInterface: (id) => get().minimizeInterface(id),
+  setInterfaceInput: (id, text) =>
+    set((s) => {
+      const win = s.interfaceWindows[id];
+      if (!win) return {};
+      return {
+        interfaceWindows: {
+          ...s.interfaceWindows,
+          [id]: { ...win, inputText: text },
+        },
+      };
+    }),
+  setInterfaceOutput: (id, text) =>
+    set((s) => {
+      const win = s.interfaceWindows[id];
+      if (!win) return {};
+      return {
+        interfaceWindows: {
+          ...s.interfaceWindows,
+          [id]: { ...win, outputText: text },
+        },
+      };
+    }),
+  setInterfaceGeometry: (id, geometry, bounds) =>
+    set((s) => {
+      const win = s.interfaceWindows[id];
+      if (!win) return {};
+      const size = clampSize(geometry.size, bounds);
+      const position = clampPosition(geometry.position, size, bounds);
+      return {
+        interfaceWindows: {
+          ...s.interfaceWindows,
+          [id]: { ...win, size, position },
+        },
+      };
+    }),
+  focusInterface: (id) =>
+    set((s) => {
+      const win = s.interfaceWindows[id];
+      if (!win) return {};
+      const zIndex = s.maxInterfaceZ + 1;
+      return {
+        interfaceWindows: {
+          ...s.interfaceWindows,
+          [id]: { ...win, zIndex },
+        },
+        maxInterfaceZ: zIndex,
+      };
+    }),
+  clampInterfaceWindows: (bounds) =>
+    set((s) => {
+      let changed = false;
+      const next: Record<string, InterfaceWindowState> = {};
+      for (const [key, win] of Object.entries(s.interfaceWindows)) {
+        const size = clampSize(win.size, bounds);
+        const position = clampPosition(win.position, size, bounds);
+        if (
+          size.width !== win.size.width ||
+          size.height !== win.size.height ||
+          position.x !== win.position.x ||
+          position.y !== win.position.y
+        ) {
+          changed = true;
+        }
+        next[key] = { ...win, size, position };
+      }
+      return changed ? { interfaceWindows: next } : {};
+    }),
 }));
+
+const INTERFACE_MIN_WIDTH = 480;
+const INTERFACE_MIN_HEIGHT = 240;
+const INTERFACE_DEFAULT_WIDTH = 816;
+const INTERFACE_DEFAULT_HEIGHT = 320;
+
+function clampDimension(value: number, min: number, max: number) {
+  const effectiveMin = Math.min(min, max);
+  return Math.min(Math.max(value, effectiveMin), max);
+}
+
+function clampSize(size: { width: number; height: number }, bounds: Bounds) {
+  const width = clampDimension(size.width, INTERFACE_MIN_WIDTH, Math.max(bounds.width, 0));
+  const height = clampDimension(size.height, INTERFACE_MIN_HEIGHT, Math.max(bounds.height, 0));
+  return { width, height };
+}
+
+function clampPosition(position: Point, size: { width: number; height: number }, bounds: Bounds) {
+  const maxX = Math.max(0, bounds.width - size.width);
+  const maxY = Math.max(0, bounds.height - size.height);
+  return {
+    x: Math.min(Math.max(position.x, 0), maxX),
+    y: Math.min(Math.max(position.y, 0), maxY),
+  };
+}
 
 export function portPosition(
   node: NodeState,

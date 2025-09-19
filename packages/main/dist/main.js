@@ -5,6 +5,21 @@ import { fileURLToPath } from 'node:url';
 import { setupIPC } from './ipc.js';
 import { initDB } from './services/db.js';
 import { registerHandlers } from './ipc/handlers.js';
+const DEFAULT_RENDERER_DEV_PORT = 5173;
+function resolveRendererDevServerURL() {
+    const explicitUrl = process.env.VITE_DEV_SERVER_URL;
+    if (explicitUrl)
+        return explicitUrl;
+    if (app.isPackaged)
+        return undefined;
+    const envPort = Number.parseInt(process.env.VITE_RENDERER_PORT ?? '', 10);
+    const port = Number.isInteger(envPort) && envPort > 0 ? envPort : DEFAULT_RENDERER_DEV_PORT;
+    const resolvedUrl = `http://localhost:${port}`;
+    if (!process.env.VITE_RENDERER_PORT)
+        process.env.VITE_RENDERER_PORT = String(port);
+    process.env.VITE_DEV_SERVER_URL = resolvedUrl;
+    return resolvedUrl;
+}
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 // Free-mode defaults
@@ -42,7 +57,7 @@ async function createWindow() {
         },
     });
     win.once('ready-to-show', () => win.show());
-    const devUrl = process.env.VITE_DEV_SERVER_URL;
+    const devUrl = resolveRendererDevServerURL();
     if (devUrl) {
         await win.loadURL(devUrl);
     }

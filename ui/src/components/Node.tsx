@@ -1,4 +1,5 @@
 import { Group, Rect, Text, Circle, RegularPolygon } from "react-konva";
+import type { KonvaEventObject } from "konva/lib/Node";
 import { NodeState, NODE_SPECS, useFlow, LightState } from "../store";
 
 interface Props {
@@ -9,13 +10,19 @@ interface Props {
     port: string,
     types: string[]
   ) => void;
+  onContextMenu?: (
+    node: NodeState,
+    event: KonvaEventObject<PointerEvent>
+  ) => void;
 }
 
-export default function Node({ node, onPortClick }: Props) {
+export default function Node({ node, onPortClick, onContextMenu }: Props) {
   const select = useFlow((s) => s.select);
   const update = useFlow((s) => s.updateNode);
   const spec = NODE_SPECS[node.type];
-  const height = Math.max(spec.in.length, spec.out.length) * 20 + 40;
+  const isInterface = node.type === "Interface";
+  const baseHeight = Math.max(spec.in.length, spec.out.length) * 20 + 40;
+  const height = isInterface ? Math.max(baseHeight, 120) : baseHeight;
 
   const lightColor: Record<LightState, string> = {
     idle: "#9ca3af",
@@ -88,9 +95,43 @@ export default function Node({ node, onPortClick }: Props) {
         e.cancelBubble = true;
         select(node.id);
       }}
+      onContextMenu={(e) => {
+        e.evt.preventDefault();
+        e.cancelBubble = true;
+        select(node.id);
+        onContextMenu?.(node, e);
+      }}
     >
-      <Rect width={120} height={height} fill="#f3f4f6" stroke="#4b5563" />
-      <Text text={node.type} x={5} y={5} fontSize={14} />
+      <Rect
+        width={120}
+        height={height}
+        fill={isInterface ? "#ffffff" : "#f3f4f6"}
+        stroke={isInterface ? "#dc2626" : "#4b5563"}
+        strokeWidth={isInterface ? 2 : 1}
+      />
+      {isInterface ? (
+        <>
+          <Text
+            text="Interface"
+            x={0}
+            y={height / 2 - 8}
+            width={120}
+            align="center"
+            fontSize={14}
+          />
+          <Text
+            text={`#${node.id}`}
+            x={0}
+            y={height - 20}
+            width={120}
+            align="center"
+            fontSize={10}
+            fill="#6b7280"
+          />
+        </>
+      ) : (
+        <Text text={node.type} x={5} y={5} fontSize={14} />
+      )}
       {/* status badge */}
       <Circle
         x={110}

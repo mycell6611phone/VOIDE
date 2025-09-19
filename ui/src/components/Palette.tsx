@@ -1,6 +1,14 @@
 import { NodeType, useFlow } from "../store";
 
-const TYPES: NodeType[] = ["Input", "Prompt", "LLM", "Branch", "Log", "Output"];
+const TYPES: NodeType[] = [
+  "Input",
+  "Prompt",
+  "LLM",
+  "Branch",
+  "Log",
+  "Output",
+  "Interface",
+];
 
 export default function Palette() {
   const add = useFlow((s) => s.addNode);

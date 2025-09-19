@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import type { FlowDef, NodeDef } from "@voide/shared";
-
-const empty: FlowDef = { id: "flow:new", version: "1.0.0", nodes: [], edges: [] };
+import { createInitialFlow } from "../constants/mockLayout";
 
 interface S {
   flow: FlowDef;
@@ -13,7 +12,7 @@ interface S {
   setActiveTool: (tool: "select" | "wire") => void;
 }
 export const useFlowStore = create<S>((set) => ({
-  flow: empty,
+  flow: createInitialFlow(),
   setFlow: (f: FlowDef) => set({ flow: f }),
   addNode: (node: NodeDef) =>
     set((state) => ({

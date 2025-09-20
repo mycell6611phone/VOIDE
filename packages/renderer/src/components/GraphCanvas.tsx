@@ -1,5 +1,5 @@
 import "reactflow/dist/style.css";
-import React, { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import ReactFlow, {
   Background,
   Connection,
@@ -14,6 +14,7 @@ import type { EdgeDef, NodeDef } from "@voide/shared";
 import { useFlowStore } from "../state/flowStore";
 import ModuleNode from "./nodes/BasicNode";
 import LLMNode from "./nodes/LLMNode";
+import { CanvasBoundaryProvider } from "./CanvasBoundaryContext";
 
 const POSITION_KEY = "__position";
 
@@ -152,25 +153,32 @@ export default function GraphCanvas() {
     [flow, setEdges, setFlow]
   );
 
+  const canvasRef = useRef<HTMLDivElement>(null);
+
   return (
-    <div style={{ width: "100%", height: "100%" }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={handleNodesChange}
-        onEdgesChange={handleEdgesChange}
-        onConnect={onConnect}
-        nodeTypes={nodeTypes}
-        fitView
-        proOptions={{ hideAttribution: true }}
-        style={{
-          background: "#ffffff",
-          cursor: activeTool === "wire" ? "crosshair" : "default"
-        }}
+    <CanvasBoundaryProvider value={canvasRef}>
+      <div
+        ref={canvasRef}
+        style={{ width: "100%", height: "100%", position: "relative" }}
       >
-        <Background color="#e2e8f0" gap={32} size={1} />
-      </ReactFlow>
-    </div>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={handleNodesChange}
+          onEdgesChange={handleEdgesChange}
+          onConnect={onConnect}
+          nodeTypes={nodeTypes}
+          fitView
+          proOptions={{ hideAttribution: true }}
+          style={{
+            background: "#ffffff",
+            cursor: activeTool === "wire" ? "crosshair" : "default"
+          }}
+        >
+          <Background color="#e2e8f0" gap={32} size={1} />
+        </ReactFlow>
+      </div>
+    </CanvasBoundaryProvider>
   );
 }
 

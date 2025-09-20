@@ -6,6 +6,10 @@ interface S {
   flow: FlowDef;
   setFlow: (f: FlowDef) => void;
   addNode: (node: NodeDef) => void;
+  updateNodeParams: (
+    nodeId: string,
+    updater: (prev: Record<string, unknown>) => Record<string, unknown>
+  ) => void;
   catalog: any[];
   setCatalog: (c: any[]) => void;
   activeTool: "select" | "wire";
@@ -19,6 +23,23 @@ export const useFlowStore = create<S>((set) => ({
       flow: {
         ...state.flow,
         nodes: [...state.flow.nodes, node]
+      }
+    })),
+  updateNodeParams: (nodeId, updater) =>
+    set((state) => ({
+      flow: {
+        ...state.flow,
+        nodes: state.flow.nodes.map((node) => {
+          if (node.id !== nodeId) {
+            return node;
+          }
+          const previous = { ...(node.params ?? {}) };
+          const next = updater(previous);
+          return {
+            ...node,
+            params: next
+          };
+        })
       }
     })),
   catalog: [],

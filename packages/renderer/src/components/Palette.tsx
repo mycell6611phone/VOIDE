@@ -110,7 +110,10 @@ const makeNode = (config: ModuleConfig, index: number): NodeDef => {
     id: uniqueNodeId(config.key),
     type: config.nodeType,
     name: config.label,
-    params: { [POSITION_KEY]: position },
+    params: {
+      [POSITION_KEY]: position,
+      moduleKey: config.key
+    },
     in: config.inputs,
     out: config.outputs
   };

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "test": "vitest run"
   },
   "dependencies": {
     "@voide/ipc": "workspace:*",
@@ -23,10 +24,18 @@
   },
   "devDependencies": {
     "@types/react": "18.2.73",
+    "@testing-library/jest-dom": "6.4.5",
+    "@testing-library/react": "14.3.1",
     "@types/react-dom": "18.2.24",
     "@vitejs/plugin-react": "4.3.1",
+    "jsdom": "24.1.0",
     "typescript": "5.5.4",
-    "vite": "5.4.3"
+    "vite": "5.4.3",
+<<<<<<< ours
+    "vitest": "^1.6.1"
+=======
+    "vitest": "1.6.0"
+>>>>>>> theirs
   },
   "engines": {
     "node": ">=20.11"

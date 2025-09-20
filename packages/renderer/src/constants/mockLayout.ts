@@ -12,7 +12,8 @@ export const mockLayoutFlow: FlowDef = {
       name: "UI",
       params: {
         __position: { x: 120, y: 360 },
-        role: "entrypoint"
+        role: "entrypoint",
+        moduleKey: "interface"
       },
       in: [{ port: "feedback", types: text }],
       out: [{ port: "conversation", types: text }]
@@ -34,7 +35,8 @@ export const mockLayoutFlow: FlowDef = {
       name: "Prompt A",
       params: {
         __position: { x: 480, y: 360 },
-        preset: "analysis"
+        preset: "analysis",
+        moduleKey: "prompt"
       },
       in: [{ port: "context", types: text }],
       out: [{ port: "prompt", types: text }]
@@ -60,7 +62,8 @@ export const mockLayoutFlow: FlowDef = {
       name: "Prompt B",
       params: {
         __position: { x: 840, y: 360 },
-        preset: "critique"
+        preset: "critique",
+        moduleKey: "prompt"
       },
       in: [{ port: "draft", types: text }],
       out: [{ port: "prompt", types: text }]
@@ -97,7 +100,8 @@ export const mockLayoutFlow: FlowDef = {
       name: "Debate K",
       params: {
         __position: { x: 1200, y: 360 },
-        format: "single-pass"
+        format: "single-pass",
+        moduleKey: "debate"
       },
       in: [
         { port: "argument", types: text },

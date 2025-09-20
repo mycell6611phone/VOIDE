@@ -35,15 +35,38 @@ if (process.env.VOIDE_ENABLE_CUDA !== '1') app.disableHardwareAcceleration();
 
 function blockNetworkRequests() {
   const sess = session.defaultSession;
+  // allow local dev and devtools while keeping file:// blocked-for-everything policy
   sess.webRequest.onBeforeRequest((details, callback) => {
-    try {
-      const url = details.url;
-      if (url.startsWith('file://')) return callback({ cancel: false });
-      if (process.env.NODE_ENV === 'development' && url.startsWith('dev://')) return callback({ cancel: false });
-      return callback({ cancel: true });
-    } catch {
-      return callback({ cancel: true });
+    const url = details.url || '';
+
+    // always allow local files
+    if (url.startsWith('file://')) return callback({ cancel: false });
+
+    // development allowances
+    if (process.env.NODE_ENV === 'development') {
+      // allow Vite / local dev servers and localhost IPs
+      if (
+        url.startsWith('http://localhost') ||
+        url.startsWith('https://localhost') ||
+        url.startsWith('http://127.0.0.1') ||
+        url.startsWith('https://127.0.0.1') ||
+        url.startsWith('http://[::1]') ||
+        url.startsWith('https://[::1]') ||
+        url.startsWith('dev://') ||
+        url.startsWith('devtools://') ||
+        url.includes('chrome-devtools-frontend.appspot.com')
+      ) {
+        return callback({ cancel: false });
+      }
+
+      // allow local websockets used by dev servers
+      if (url.startsWith('ws://localhost') || url.startsWith('wss://localhost')) {
+        return callback({ cancel: false });
+      }
     }
+
+    // default: block
+    return callback({ cancel: true });
   });
 }
 

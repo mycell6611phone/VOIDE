@@ -1,0 +1,219 @@
+
+Voide Modular LLM Workflow System: Build Blueprint
+1. Core Philosophy
+
+Always Connect:
+Modules always connect as wired, never blocking due to schema mismatches.
+
+User Responsibility:
+The user is responsible for meaningful data flows; the system never restricts creativity.
+
+Modularity:
+All modules are “Lego-like” with defined input/output pinouts and internal encapsulation.
+
+Accessibility & Debuggability:
+Every visual and interaction element is accessible and provides clear state.
+
+2. System Architecture
+2.1 Canvas UI
+
+Drag-and-drop modules from a left-hand palette onto a central canvas.
+
+Draw wires between module input and output ports to specify data flow and execution order.
+
+Live activation lights (input/output) on each module:
+
+Input port lights up when data arrives.
+
+Output port lights up when data is emitted; input light turns off.
+
+Module labels always visible, stating type (LLM, Prompt, Memory, etc.) and configuration (e.g., provider name).
+
+Color is used for module type (not status) but is never the only indicator.
+
+Ports: Each module displays one input dot (left) and one output dot (right) by default.
+
+Wire labels (optional): User can annotate connections (“critique”, “score”, etc.).
+
+2.2 Control Panel
+
+Build / Play / Pause / Stop buttons at the top (standard simulation/workflow UI).
+
+Context menu (right-click) on modules opens options/config (provider selection, parameters, etc.).
+
+Validation on build: System checks for unsatisfied inputs; if outputs don’t match expected schema, will coerce as plain text and warn the user (never blocks).
+
+3. Module Design
+3.1 Module Manifest
+
+Each module includes a manifest describing:
+
+module_type: [LLM | Prompt | Memory | etc.]
+
+input_schema: Dict mapping field names to types (with optional/required flags)
+
+output_schema: Dict mapping field names to types
+
+options_schema: Fields for user configuration (shown in options menu)
+
+version: [MODULE_VERSION]
+
+display_label: Default and/or dynamic (e.g., shows provider name if LLM)
+
+Example Manifest (Protobuf/JSON/YAML):
+```
+{
+  "module_type": "llm",
+  "input_schema": {
+    "system": {"type": "string", "required": false},
+    "user": {"type": "string", "required": true},
+    "context": {"type": "string", "required": false},
+    "history": {"type": "list", "required": false}
+  },
+  "output_schema": {
+    "assistant": {"type": "string", "required": true},
+    "metadata": {"type": "dict", "required": false}
+  },
+  "options_schema": {
+    "provider": ["openai", "ollama", "gemini"],
+    "temperature": {"type": "float", "default": 1.0}
+  },
+  "version": "1.0.0",
+  "display_label": "LLM"
+}
+
+```
+[INPUT: Choose your canonical schema language: Protobuf/JSON/YAML/etc.]
+
+3.2 Pinout Connection Formula
+
+A module can connect to another if its output schema covers all the required fields of the next module’s input schema.
+
+If not, data is coerced to plain text (str or JSON string), and a warning is shown (optional).
+
+No connections are blocked; user can always wire any module to any other.
+
+3.3 Module Execution
+
+Internal processing is a black box; only input/output pinouts matter for wiring.
+
+Modules can be written in [INPUT: Supported languages, e.g., Python, JS, etc.].
+
+Standard module interface: Each module implements:
+
+process(input_data: dict) -> output_data: dict or str
+
+3.4 Options UI
+
+Right-click a module → options menu pops up
+
+Fields shown are from options_schema
+
+Any changes update the module config and display label
+
+4. Data Flow and Execution
+
+Central state: [Optional] If using a blackboard model, use a central state dictionary/database per run.
+
+Wire-based flow: If using pure wiring, data is passed along edges (wires); if input schema mismatch, pass as string.
+
+Activation lights: Follow data through canvas in real-time (input and output ports).
+
+On error or block: Module input light stays lit; output does not, signaling stuck state.
+
+User can attach a Log module anywhere to capture data passing through.
+
+5. Accessibility
+
+Labels, icons, and lights are always present (never color only).
+
+Port dots: Show clear on/off status, not just color.
+
+Optional: Shape or icon variation for different module types (e.g., LLM = rounded, Tool = rectangle).
+
+[INPUT: Add high-contrast or text-only mode if needed.]
+
+6. Extensibility
+
+Palette of default modules: [LLM, Prompt, Debate/Loop, Cache, Log, Memory, Divider, etc.]
+
+Plugin system: Users can author and register new modules with their manifest and code.
+
+Community sharing: [INPUT: Define if/when you want a public registry or flow sharing.]
+
+7. Example Flow (Usage)
+
+User drags LLM, Prompt, and Debate modules to the canvas.
+
+Wires connect Prompt → LLM → Debate.
+
+User right-clicks LLM, picks “GPT-4O”.
+
+Hits Build: system validates, injects any missing fields as blank or plain text, no blocks.
+
+Hits Play: Data flows. Lights indicate module activity; output port lights as response leaves.
+
+If something breaks, user sees where (input light on, output off), attaches Log to inspect, adjusts, repeats.
+
+8. Missing Information Placeholders
+
+[INPUT: Canonical schema serialization format: Protobuf/
+
+[INPUT: Programming languages for module authoring? Python , 
+
+[INPUT: Storage for central state/logs: to be determand
+[INPUT: Do you want user accounts/collaboration/sharing?]yes
+
+[INPUT: Initial list of included modules, with descriptions. LLM, debate, log, cache, memory, divider, prompt, 
+
+[INPUT: How are module manifests registered/loaded—file system, web, package manager?] Unknown
+
+[INPUT: Should there be built-in adapters/normalizers, or only user-created?]yes there will be addaptors built into the modules. each module will be required to take the data and fit it to the required schema of that module. 
+
+9. Development Milestones
+
+Core engine:
+
+Module manifest spec and validation engine
+
+Pinout connection logic
+
+Visual canvas:
+
+Drag/drop, wiring, port dots/lights, build/run controls
+
+Module authoring:
+
+Standard interface for process/input/output:   interface module
+
+Options UI
+
+Runtime and debugging:
+
+Real-time data flow/activation lights
+
+Log module
+
+Extensibility:
+
+Plugin registration system
+
+Palette management
+
+Accessibility pass:
+
+High-contrast, shape-coding, screen reader support (if needed)
+
+10. Future / Optional Features
+
+Community module/flow sharing
+
+Live data previews (hover wires/lights)
+
+Timeline/scrubber for debugging
+
+Collaboration (multi-user, comments, etc.)
+
+Summary Statement
+
+Voide is a modular, always-connect visual LLM workflow builder. Users assemble flows by wiring labeled modules with clear, accessible input/output ports. The system never blocks or enforces “perfect” data; it connect correct schema when avalible, otherwise uses adaptor logic for the mis matched schema instead, it passes mismatched data as plain text and lets users experiment freely. Real-time activation lights and logs make debugging and iteration fast, transparent, and creative.

@@ -16,3 +16,6 @@ Defines the preload script that exposes a constrained API to the renderer via
 - Only expose the documented surface on `window.voide`.
 - Keep IPC channel names/types in sync with `packages/ipc`.
 - Avoid heavy dependencies; this bundle is loaded eagerly by Electron.
+- Separate Build vs Run entry points: preload should proxy `flow:build` to submit
+  a `FlowGraph` and hand the compiled handle back to the renderer, and `flow:run`
+  should forward only the compiled token plus run options.

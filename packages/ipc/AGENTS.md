@@ -17,3 +17,6 @@ between main, preload, renderer, and workers.
 - Keep channel enums stable; coordinate changes across `main` and `preload`.
 - Validation errors should return structured results (no thrown strings).
 - Remain offline—do not embed URLs or remote fetchers here.
+- Distinguish between Build and Run contracts: `flow:build` accepts a
+  `FlowGraph` payload and returns a `CompiledFlow` reference/bytes, while
+  `flow:run` should consume only compiled artifacts plus run options.

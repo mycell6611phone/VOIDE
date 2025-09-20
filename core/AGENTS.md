@@ -4,6 +4,11 @@
 Electron app. Everything here is ESM and must obey the free/offline guardrails
 from the root `Agents.md`.
 
+The pipeline lives entirely here: Build consumes the renderer's `FlowGraph`
+protobuf, runs the compiler passes, and emits a deterministic `CompiledFlow`
+protobuf that the runtime executes. Run paths (CLI and Electron) must accept
+only that compiled artifact.
+
 **Key subfolders**
 - `src/` — Source TypeScript. See `core/src/AGENTS.md` for a deeper breakdown.
 - `protos/` — Generated protobuf output (`proto:gen` overwrites these).

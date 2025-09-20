@@ -17,3 +17,9 @@ standalone `/ui` package but integrates tightly with IPC and Electron APIs.
 - Any IPC usage must go through the typed preload bridge (`window.voide`).
 - Keep component state minimal; heavy logic should live in shared packages.
 - Mirror UI conventions defined in `/ui` to avoid divergence.
+- The canvas owns mutable editor state (nodes, ports, edges). On **Build** it
+  serializes to the canonical `FlowGraph` protobuf and sends it across IPC for
+  compilation. JSON exports are for debugging only.
+- Pressing **Run** must reuse the `CompiledFlow` returned by Build rather than
+  re-reading renderer state, ensuring runtime parity with the CLI and main
+  process.

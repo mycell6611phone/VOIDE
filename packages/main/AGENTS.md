@@ -18,3 +18,10 @@ threads. Written in TypeScript, compiled to `dist/main.js`.
 - Keep IPC schemas aligned with `packages/ipc`.
 - Use `@voide/shared` helpers instead of duplicating utilities.
 - Respect offline guardrails: disable auto-updaters, avoid network calls.
+- Treat Build/Run as separate steps: on `flow:build` consume the renderer's
+  `FlowGraph`, invoke the core compiler, cache the resulting `CompiledFlow`, and
+  on `flow:run` dispatch only that compiled artifact to workers. Never hydrate a
+  run directly from renderer state.
+- Main launches worker threads that instantiate operators defined in
+  `CompiledFlow.operators` and streams telemetry back to the renderer for the
+  lights UI.

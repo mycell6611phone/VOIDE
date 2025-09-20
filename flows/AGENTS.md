@@ -13,3 +13,5 @@
 - Keep samples minimal but representative; they drive acceptance testing.
 - Update schemas + runtime together to avoid compatibility issues.
 - Preserve formatting (2-space JSON) to keep diffs readable.
+- JSON files here mirror the `FlowGraph` protobuf for human inspection, but the
+  protobuf emitted by `voide pack` is the source of truth for Build/Run.

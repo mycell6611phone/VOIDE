@@ -13,3 +13,8 @@ modules under `src/modules` and renderer expectations.
   protobuf definitions under `core/src/proto`.
 - Implement modules in a way that respects offline mode — no network fetches.
 - Add/update targeted tests in `core/test` whenever behavior changes.
+- The compiler resolves nodes through the handler registry exposed here. Each
+  module registers a `type_id → OperatorFactory` that declares port types,
+  capabilities, and allowed adapters so Build can materialize `CompiledFlow`.
+  Keep these contracts deterministic; runtime workers instantiate operators
+  directly from the compiled registry entries.

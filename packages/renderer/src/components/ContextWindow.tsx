@@ -1,4 +1,5 @@
 <<<<<<< ours
+<<<<<<< ours
 import React, {
   useEffect,
   useMemo,
@@ -805,4 +806,360 @@ function renderResizeHandle(
 }
 
 =======
+>>>>>>> theirs
+=======
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
+import type { NodeDef } from "@voide/shared";
+import { useCanvasBoundary } from "./CanvasBoundaryContext";
+
+const DEFAULT_SIZE = { width: 280, height: 200 } as const;
+const MIN_SIZE = { width: 200, height: 140 } as const;
+
+export interface ContextWindowGeometry {
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+}
+
+export interface ClampBounds {
+  width: number;
+  height: number;
+}
+
+export function clampGeometry(
+  geometry: ContextWindowGeometry,
+  bounds: ClampBounds,
+  minSize: { width: number; height: number } = MIN_SIZE
+): ContextWindowGeometry {
+  const width = Math.min(Math.max(geometry.size.width, minSize.width), bounds.width);
+  const height = Math.min(Math.max(geometry.size.height, minSize.height), bounds.height);
+
+  const maxX = Math.max(bounds.width - width, 0);
+  const maxY = Math.max(bounds.height - height, 0);
+
+  const x = Math.min(Math.max(geometry.position.x, 0), maxX);
+  const y = Math.min(Math.max(geometry.position.y, 0), maxY);
+
+  return {
+    position: { x, y },
+    size: { width, height }
+  };
+}
+
+interface ContextWindowProps {
+  node: NodeDef;
+  anchor: { x: number; y: number };
+  onClose: () => void;
+}
+
+export default function ContextWindow({ node, anchor, onClose }: ContextWindowProps) {
+  const { overlayRef, bounds, refreshBounds } = useCanvasBoundary();
+  const windowRef = useRef<HTMLDivElement | null>(null);
+  const geometryRef = useRef<ContextWindowGeometry | null>(null);
+  const dragState = useRef<{
+    startX: number;
+    startY: number;
+    origin: { x: number; y: number };
+  } | null>(null);
+  const resizeState = useRef<{
+    startX: number;
+    startY: number;
+    origin: ContextWindowGeometry;
+  } | null>(null);
+
+  const [geometry, setGeometry] = useState<ContextWindowGeometry>(() => ({
+    position: { x: anchor.x, y: anchor.y },
+    size: { ...DEFAULT_SIZE }
+  }));
+
+  geometryRef.current = geometry;
+
+  const handleDragMove = useCallback(
+    (event: PointerEvent) => {
+      const overlay = overlayRef.current;
+      if (!dragState.current || !overlay) {
+        return;
+      }
+      const rect = overlay.getBoundingClientRect();
+      const next = clampGeometry(
+        {
+          position: {
+            x: dragState.current.origin.x + (event.clientX - dragState.current.startX),
+            y: dragState.current.origin.y + (event.clientY - dragState.current.startY)
+          },
+          size: geometryRef.current ? geometryRef.current.size : { ...DEFAULT_SIZE }
+        },
+        { width: rect.width, height: rect.height }
+      );
+      setGeometry(next);
+    },
+    [overlayRef]
+  );
+
+  const handleDragEnd = useCallback(() => {
+    dragState.current = null;
+    window.removeEventListener("pointermove", handleDragMove);
+    window.removeEventListener("pointerup", handleDragEnd);
+  }, [handleDragMove]);
+
+  const handleDragStart = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const overlay = overlayRef.current;
+      if (!overlay) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      dragState.current = {
+        startX: event.clientX,
+        startY: event.clientY,
+        origin: geometryRef.current
+          ? { ...geometryRef.current.position }
+          : { x: anchor.x, y: anchor.y }
+      };
+      window.addEventListener("pointermove", handleDragMove);
+      window.addEventListener("pointerup", handleDragEnd);
+    },
+    [anchor.x, anchor.y, handleDragEnd, handleDragMove, overlayRef]
+  );
+
+  const handleResizeMove = useCallback(
+    (event: PointerEvent) => {
+      const overlay = overlayRef.current;
+      if (!resizeState.current || !overlay) {
+        return;
+      }
+      const rect = overlay.getBoundingClientRect();
+      const origin = resizeState.current.origin;
+      const next = clampGeometry(
+        {
+          position: { ...origin.position },
+          size: {
+            width: origin.size.width + (event.clientX - resizeState.current.startX),
+            height: origin.size.height + (event.clientY - resizeState.current.startY)
+          }
+        },
+        { width: rect.width, height: rect.height }
+      );
+      setGeometry(next);
+    },
+    [overlayRef]
+  );
+
+  const handleResizeEnd = useCallback(() => {
+    resizeState.current = null;
+    window.removeEventListener("pointermove", handleResizeMove);
+    window.removeEventListener("pointerup", handleResizeEnd);
+  }, [handleResizeMove]);
+
+  const handleResizeStart = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const overlay = overlayRef.current;
+      if (!overlay) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      resizeState.current = {
+        startX: event.clientX,
+        startY: event.clientY,
+        origin: geometryRef.current
+          ? {
+              position: { ...geometryRef.current.position },
+              size: { ...geometryRef.current.size }
+            }
+          : {
+              position: { x: anchor.x, y: anchor.y },
+              size: { ...DEFAULT_SIZE }
+            }
+      };
+      window.addEventListener("pointermove", handleResizeMove);
+      window.addEventListener("pointerup", handleResizeEnd);
+    },
+    [anchor.x, anchor.y, handleResizeEnd, handleResizeMove, overlayRef]
+  );
+
+  const overlay = overlayRef.current;
+
+  useEffect(() => {
+    if (!overlay) {
+      return;
+    }
+    const rect = overlay.getBoundingClientRect();
+    setGeometry((previous) =>
+      clampGeometry(
+        {
+          position: { x: anchor.x, y: anchor.y },
+          size: previous ? previous.size : { ...DEFAULT_SIZE }
+        },
+        { width: rect.width, height: rect.height }
+      )
+    );
+  }, [anchor.x, anchor.y, overlay]);
+
+  useEffect(() => {
+    if (!bounds) {
+      return;
+    }
+    setGeometry((previous) =>
+      clampGeometry(
+        previous ?? {
+          position: { x: anchor.x, y: anchor.y },
+          size: { ...DEFAULT_SIZE }
+        },
+        { width: bounds.width, height: bounds.height }
+      )
+    );
+  }, [anchor.x, anchor.y, bounds]);
+
+  useEffect(() => refreshBounds(), [refreshBounds]);
+
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (windowRef.current && !windowRef.current.contains(target)) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    window.addEventListener("mousedown", handleMouseDown);
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("mousedown", handleMouseDown);
+    };
+  }, [onClose]);
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener("pointermove", handleDragMove);
+      window.removeEventListener("pointerup", handleDragEnd);
+      window.removeEventListener("pointermove", handleResizeMove);
+      window.removeEventListener("pointerup", handleResizeEnd);
+    };
+  }, [handleDragEnd, handleDragMove, handleResizeEnd, handleResizeMove]);
+
+  const ports = useMemo(() => ({
+    inputs: node.in ?? [],
+    outputs: node.out ?? []
+  }), [node.in, node.out]);
+
+  if (!overlay) {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      ref={windowRef}
+      data-testid="context-window"
+      role="menu"
+      style={{
+        position: "absolute",
+        left: `${geometry.position.x}px`,
+        top: `${geometry.position.y}px`,
+        width: `${geometry.size.width}px`,
+        height: `${geometry.size.height}px`,
+        borderRadius: 12,
+        border: "1px solid #cbd5f5",
+        background: "#ffffff",
+        boxShadow: "0 12px 32px rgba(15, 23, 42, 0.18)",
+        display: "flex",
+        flexDirection: "column",
+        pointerEvents: "auto",
+        overflow: "hidden"
+      }}
+    >
+      <div
+        onPointerDown={handleDragStart}
+        style={{
+          cursor: "move",
+          padding: "12px 16px",
+          fontWeight: 600,
+          fontSize: 14,
+          background: "#1f2937",
+          color: "#f9fafb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }}
+      >
+        <span style={{ marginRight: 12 }}>Node: {node.name}</span>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "#f9fafb",
+            cursor: "pointer",
+            fontSize: 16,
+            fontWeight: 600,
+            lineHeight: 1
+          }}
+          aria-label="Close context window"
+        >
+          ×
+        </button>
+      </div>
+      <div
+        style={{
+          flex: 1,
+          padding: "12px 16px",
+          display: "grid",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+          gap: 12,
+          fontSize: 13,
+          color: "#111827",
+          overflow: "auto"
+        }}
+      >
+        <div>
+          <strong style={{ display: "block", marginBottom: 8 }}>Inputs</strong>
+          {ports.inputs.length === 0 ? (
+            <span style={{ color: "#6b7280" }}>None</span>
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: 16 }}>
+              {ports.inputs.map((port) => (
+                <li key={port.port}>{port.port}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <strong style={{ display: "block", marginBottom: 8 }}>Outputs</strong>
+          {ports.outputs.length === 0 ? (
+            <span style={{ color: "#6b7280" }}>None</span>
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: 16 }}>
+              {ports.outputs.map((port) => (
+                <li key={port.port}>{port.port}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+      <div
+        onPointerDown={handleResizeStart}
+        aria-label="Resize context window"
+        style={{
+          position: "absolute",
+          right: 4,
+          bottom: 4,
+          width: 16,
+          height: 16,
+          cursor: "nwse-resize",
+          borderRight: "2px solid #1f2937",
+          borderBottom: "2px solid #1f2937"
+        }}
+      />
+    </div>,
+    overlay
+  );
+}
+
 >>>>>>> theirs

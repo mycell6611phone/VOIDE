@@ -31,11 +31,7 @@
     "jsdom": "24.1.0",
     "typescript": "5.5.4",
     "vite": "5.4.3",
-<<<<<<< ours
-    "vitest": "^1.6.1"
-=======
     "vitest": "1.6.0"
->>>>>>> theirs
   },
   "engines": {
     "node": ">=20.11"

@@ -1,20 +1,32 @@
 import "reactflow/dist/style.css";
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
+
 import ReactFlow, {
   Background,
   Connection,
   Edge,
   EdgeChange,
+  Node,
   NodeChange,
   addEdge,
   useEdgesState,
   useNodesState
 } from "reactflow";
+
 import type { EdgeDef, NodeDef } from "@voide/shared";
 import { useFlowStore } from "../state/flowStore";
 import ModuleNode from "./nodes/BasicNode";
 import LLMNode from "./nodes/LLMNode";
 import { CanvasBoundaryProvider } from "./CanvasBoundaryContext";
+import ContextWindow from "./ContextWindow";
 
 const POSITION_KEY = "__position";
 
@@ -49,6 +61,49 @@ export default function GraphCanvas() {
     setFlow: state.setFlow,
     activeTool: state.activeTool
   }));
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const [bounds, setBounds] = useState<DOMRectReadOnly | null>(null);
+  const [contextWindow, setContextWindow] = useState<
+    | null
+    | {
+        node: NodeDef;
+        anchor: { x: number; y: number };
+      }
+  >(null);
+
+  const refreshBounds = useCallback(() => {
+    if (!containerRef.current) {
+      return;
+    }
+    setBounds(containerRef.current.getBoundingClientRect());
+  }, []);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    refreshBounds();
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => refreshBounds());
+      observer.observe(container);
+    }
+
+    const handleWindowResize = () => refreshBounds();
+    window.addEventListener("resize", handleWindowResize);
+    window.addEventListener("scroll", handleWindowResize, true);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", handleWindowResize);
+      window.removeEventListener("scroll", handleWindowResize, true);
+    };
+  }, [refreshBounds]);
 
   const nodeTypes = useMemo(
     () => ({
@@ -153,12 +208,49 @@ export default function GraphCanvas() {
     [flow, setEdges, setFlow]
   );
 
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const handleNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node<NodeDef>) => {
+      event.preventDefault();
+      const overlay = overlayRef.current;
+      if (!overlay) {
+        return;
+      }
+      const rect = overlay.getBoundingClientRect();
+      setContextWindow({
+        node: node.data,
+        anchor: {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top
+        }
+      });
+      refreshBounds();
+    },
+    [refreshBounds]
+  );
+
+  const handlePaneClick = useCallback(() => {
+    setContextWindow(null);
+  }, []);
+
+  const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    setContextWindow(null);
+  }, []);
+
+  const boundaryValue = useMemo(
+    () => ({
+      bounds,
+      refreshBounds,
+      overlayRef
+    }),
+    [bounds, refreshBounds]
+  );
 
   return (
-    <CanvasBoundaryProvider value={canvasRef}>
+    <CanvasBoundaryProvider value={boundaryValue}>
       <div
-        ref={canvasRef}
+        ref={containerRef}
+        data-testid="graph-canvas-container"
         style={{ width: "100%", height: "100%", position: "relative" }}
       >
         <ReactFlow
@@ -168,6 +260,9 @@ export default function GraphCanvas() {
           onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
           nodeTypes={nodeTypes}
+          onNodeContextMenu={handleNodeContextMenu}
+          onPaneClick={handlePaneClick}
+          onPaneContextMenu={handlePaneContextMenu}
           fitView
           proOptions={{ hideAttribution: true }}
           style={{
@@ -177,6 +272,24 @@ export default function GraphCanvas() {
         >
           <Background color="#e2e8f0" gap={32} size={1} />
         </ReactFlow>
+
+        <div
+          ref={overlayRef}
+          data-testid="graph-canvas-overlay"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none"
+          }}
+        />
+
+        {contextWindow && (
+          <ContextWindow
+            node={contextWindow.node}
+            anchor={contextWindow.anchor}
+            onClose={() => setContextWindow(null)}
+          />
+        )}
       </div>
     </CanvasBoundaryProvider>
   );

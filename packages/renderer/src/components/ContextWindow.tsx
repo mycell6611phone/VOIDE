@@ -15,7 +15,7 @@ import {
   type WindowGeometry,
   type WindowPosition,
   type WindowSize,
-} from "./contextWindowUtils"; // Note: You'll need to create this utility file.
+} from "./contextWindowUtils";
 
 const HEADER_HEIGHT = 40;
 const TRANSITION_MS = 180;

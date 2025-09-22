@@ -7,14 +7,15 @@ import React, {
 } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import type { NodeDef } from "@voide/shared";
-import ContextWindow, {
+import ContextWindow from "../ContextWindow";
+import {
+  CanvasViewport,
+  ContextWindowRect,
   CONTEXT_WINDOW_MIN_HEIGHT,
   CONTEXT_WINDOW_MIN_WIDTH,
   CONTEXT_WINDOW_PADDING,
-  CanvasViewport,
-  ContextWindowRect,
   constrainRectToBounds
-} from "../ContextWindow";
+} from "../contextWindowUtils";
 
 const containerStyle: React.CSSProperties = {
   width: 184,

@@ -1,3 +1,7 @@
+export const CONTEXT_WINDOW_PADDING = 16;
+export const CONTEXT_WINDOW_MIN_WIDTH = 280;
+export const CONTEXT_WINDOW_MIN_HEIGHT = 220;
+
 export interface WindowSize {
   width: number;
   height: number;
@@ -18,10 +22,31 @@ export interface Bounds {
   height: number;
 }
 
+export interface CanvasViewport {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+export interface ContextWindowRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 export type ResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
+
+function clampSize(value: number, min: number, max: number) {
+  if (max < min) {
+    return min;
+  }
+  return clampNumber(value, min, max);
+}
 
 export function clampGeometry(geometry: WindowGeometry, bounds: Bounds): WindowGeometry {
   const width = Math.min(geometry.size.width, bounds.width);
@@ -52,11 +77,43 @@ export function moveGeometry(
   return clampGeometry(geometry, bounds);
 }
 
-function clampSize(value: number, min: number, max: number) {
-  if (max < min) {
-    return min;
-  }
-  return clampNumber(value, min, max);
+export function constrainRectToBounds(
+  rect: ContextWindowRect,
+  canvas: CanvasViewport
+): ContextWindowRect {
+  const maxWidth = Math.max(0, canvas.width - CONTEXT_WINDOW_PADDING * 2);
+  const maxHeight = Math.max(0, canvas.height - CONTEXT_WINDOW_PADDING * 2);
+
+  const width = clampSize(
+    rect.width,
+    Math.min(CONTEXT_WINDOW_MIN_WIDTH, maxWidth),
+    maxWidth
+  );
+
+  const height = clampSize(
+    rect.height,
+    Math.min(CONTEXT_WINDOW_MIN_HEIGHT, maxHeight),
+    maxHeight
+  );
+
+  const maxLeft = Math.max(
+    CONTEXT_WINDOW_PADDING,
+    canvas.width - CONTEXT_WINDOW_PADDING - width
+  );
+  const maxTop = Math.max(
+    CONTEXT_WINDOW_PADDING,
+    canvas.height - CONTEXT_WINDOW_PADDING - height
+  );
+
+  const left = clampNumber(rect.left, CONTEXT_WINDOW_PADDING, maxLeft);
+  const top = clampNumber(rect.top, CONTEXT_WINDOW_PADDING, maxTop);
+
+  return {
+    left,
+    top,
+    width,
+    height
+  };
 }
 
 export function resizeGeometry(

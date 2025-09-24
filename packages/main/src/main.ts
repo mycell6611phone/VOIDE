@@ -28,6 +28,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 const PRELOAD_BUNDLE_PATH = path.join(__dirname, '../../preload/dist/preload.js');
 
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = app.isPackaged ? 'production' : 'development';
+}
+
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = app.isPackaged ? 'production' : 'development';
+}
+
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = app.isPackaged ? 'production' : 'development';
+}
+
 // Free-mode defaults
 if (!process.env.VOIDE_FREE) process.env.VOIDE_FREE = '1';
 
@@ -37,6 +49,8 @@ if (process.env.VOIDE_ENABLE_CUDA !== '1') app.disableHardwareAcceleration();
 function blockNetworkRequests() {
   const sess = session.defaultSession;
   // allow local dev and devtools while keeping file:// blocked-for-everything policy
+  const isDevEnvironment = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
   sess.webRequest.onBeforeRequest((details, callback) => {
     const url = details.url || '';
 
@@ -44,7 +58,7 @@ function blockNetworkRequests() {
     if (url.startsWith('file://')) return callback({ cancel: false });
 
     // development allowances
-    if (process.env.NODE_ENV === 'development') {
+    if (isDevEnvironment) {
       // allow Vite / local dev servers and localhost IPs
       if (
         url.startsWith('http://localhost') ||

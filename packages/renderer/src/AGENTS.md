@@ -14,3 +14,4 @@
 - Import IPC bindings from `window.voide` (typed preload) only.
 - Keep feature boundaries clear to avoid tangled imports.
 - Align UX with `/ui` unless Electron-specific behavior is required.
+- `state/flowStore.ts` now auto-syncs LLM node names with the selected model metadata. If you add new LLM params, expose a string label (e.g., `modelLabel`) or update the helper so the canvas name stays in sync.

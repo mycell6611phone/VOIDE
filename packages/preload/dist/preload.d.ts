@@ -5,7 +5,9 @@ declare const api: {
     ensureModel: (modelId: string) => Promise<any>;
     getVersion: () => Promise<any>;
     onTelemetry: (cb: (ev: TelemetryPayload) => void) => void;
-    openChatWindow: () => Promise<any>;
+    openChatWindow: () => Promise<{
+        ok: boolean;
+    }>;
 };
 export type VoideAPI = typeof api;
 declare global {

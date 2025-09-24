@@ -13,6 +13,13 @@ import {
   type WindowGeometry,
   type WindowSize
 } from "../contextWindowUtils";
+import EditMenu, {
+  EDIT_MENU_DATA_ATTRIBUTE,
+  EDIT_MENU_HEIGHT,
+  EDIT_MENU_ITEMS,
+  EDIT_MENU_WIDTH,
+  type EditMenuItemLabel
+} from "../EditMenu";
 import { useFlowStore } from "../../state/flowStore";
 
 const containerStyle: React.CSSProperties = {
@@ -49,46 +56,17 @@ const moduleDefaultSizes: Record<ModuleCategory, WindowSize> = {
   log: { width: 380, height: 360 },
   cache: { width: 320, height: 280 },
   divider: { width: 320, height: 260 },
-  interface: { width: 340, height: 300 }
+  interface: { width: 340, height: 300 },
+  memory: { width: 340, height: 300 },
+  tool: { width: 320, height: 280 }
 };
 
 const fallbackSize: WindowSize = { width: 320, height: 260 };
 
 const getDefaultSize = (category: ModuleCategory | null): WindowSize =>
   (category ? moduleDefaultSizes[category] : fallbackSize) ?? fallbackSize;
-
-const EDIT_MENU_ITEMS = ["Cut", "Copy", "Paste", "Delete"] as const;
-
-const MENU_WIDTH = 176;
-const MENU_HEIGHT = 192;
-
-const editMenuBaseStyle: React.CSSProperties = {
-  position: "fixed",
-  minWidth: MENU_WIDTH,
-  background: "#f9fafb",
-  border: "1px solid rgba(15, 23, 42, 0.15)",
-  borderRadius: 12,
-  boxShadow: "0 18px 36px rgba(15, 23, 42, 0.18)",
-  padding: 6,
-  display: "flex",
-  flexDirection: "column",
-  gap: 2,
-  zIndex: 160,
-  pointerEvents: "auto"
-};
-
-const editMenuItemStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 8,
-  border: "none",
-  background: "transparent",
-  color: "#111827",
-  fontWeight: 600,
-  fontSize: 13,
-  textAlign: "left" as const,
-  cursor: "pointer",
-  transition: "background 120ms ease, transform 120ms ease"
-};
+const POSITION_KEY = "__position";
+const EDIT_MENU_SELECTOR = `[${EDIT_MENU_DATA_ATTRIBUTE}]`;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -100,6 +78,9 @@ const deriveModuleCategory = (node: NodeDef): ModuleCategory | null => {
   const moduleKey = moduleKeyRaw.toLowerCase();
   const haystack = `${name} ${id} ${moduleKey}`;
 
+  if (moduleKey === "tool" || moduleKey === "toolcall" || moduleKey === "tool-call") {
+    return "tool";
+  }
   if (haystack.includes("prompt")) {
     return "prompt";
   }
@@ -112,8 +93,21 @@ const deriveModuleCategory = (node: NodeDef): ModuleCategory | null => {
   if (haystack.includes("cache") || haystack.includes("memo")) {
     return "cache";
   }
+  if (haystack.includes("memory") || haystack.includes("recall")) {
+    return "memory";
+  }
   if (haystack.includes("divert") || haystack.includes("divider") || haystack.includes("switch")) {
     return "divider";
+  }
+  if (
+    haystack.includes("tool call") ||
+    haystack.includes("tool-call") ||
+    haystack.includes("tool:") ||
+    haystack.includes("toolcall") ||
+    haystack.includes("tool ") ||
+    haystack.endsWith("tool")
+  ) {
+    return "tool";
   }
   if (haystack.includes("ui") || haystack.includes("interface")) {
     return "interface";
@@ -130,7 +124,7 @@ interface MenuState {
 export default function BasicNode({ data }: NodeProps<NodeDef>) {
   const inputs = data.in ?? [];
   const outputs = data.out ?? [];
-  const canvasRef = useCanvasBoundary();
+  const { overlayRef } = useCanvasBoundary();
   const moduleCategory = useMemo(() => deriveModuleCategory(data), [data]);
   const defaultSize = useMemo(() => getDefaultSize(moduleCategory), [moduleCategory]);
   const [menuState, setMenuState] = useState<MenuState>(() => ({
@@ -141,28 +135,42 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       size: { ...defaultSize }
     }
   }));
-  const [editMenu, setEditMenu] = useState<{ left: number; top: number } | null>(
-    null
-  );
+  const [editMenu, setEditMenu] = useState<
+    { left: number; top: number; pointer: { x: number; y: number } | null } | null
+  >(null);
 
-  const updateNodeParams = useFlowStore((state) => state.updateNodeParams);
+  const {
+    updateNodeParams,
+    copyNode,
+    cutNode,
+    deleteNode,
+    pasteClipboard,
+    clipboard
+  } = useFlowStore((state) => ({
+    updateNodeParams: state.updateNodeParams,
+    copyNode: state.copyNode,
+    cutNode: state.cutNode,
+    deleteNode: state.deleteNode,
+    pasteClipboard: state.pasteClipboard,
+    clipboard: state.clipboard
+  }));
 
   const clampWithCanvas = useCallback(
     (geometry: WindowGeometry): WindowGeometry => {
-      const rect = canvasRef?.current?.getBoundingClientRect();
+      const rect = overlayRef.current?.getBoundingClientRect();
       if (!rect) {
         return geometry;
       }
       return clampGeometry(geometry, { width: rect.width, height: rect.height });
     },
-    [canvasRef]
+    [overlayRef]
   );
 
   const openOptionsWindow = useCallback(
     (clientX?: number, clientY?: number) => {
       setEditMenu(null);
       setMenuState((previous) => {
-        const rect = canvasRef?.current?.getBoundingClientRect();
+        const rect = overlayRef.current?.getBoundingClientRect();
         if (!rect) {
           return { ...previous, open: true, minimized: false };
         }
@@ -194,7 +202,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         };
       });
     },
-    [canvasRef]
+    [overlayRef]
   );
 
   const handleContextMenu = useCallback(
@@ -204,9 +212,13 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
 
       setMenuState((previous) => ({ ...previous, open: false, minimized: false }));
 
-      const rect = canvasRef?.current?.getBoundingClientRect();
+      const rect = overlayRef.current?.getBoundingClientRect();
       if (!rect) {
-        setEditMenu({ left: event.clientX, top: event.clientY });
+        setEditMenu({
+          left: event.clientX,
+          top: event.clientY,
+          pointer: null
+        });
         return;
       }
 
@@ -217,7 +229,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         CONTEXT_WINDOW_PADDING,
         Math.max(
           CONTEXT_WINDOW_PADDING,
-          rect.width - MENU_WIDTH - CONTEXT_WINDOW_PADDING
+          rect.width - EDIT_MENU_WIDTH - CONTEXT_WINDOW_PADDING
         )
       );
       const clampedY = clamp(
@@ -225,16 +237,17 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         CONTEXT_WINDOW_PADDING,
         Math.max(
           CONTEXT_WINDOW_PADDING,
-          rect.height - MENU_HEIGHT - CONTEXT_WINDOW_PADDING
+          rect.height - EDIT_MENU_HEIGHT - CONTEXT_WINDOW_PADDING
         )
       );
 
       setEditMenu({
         left: rect.left + clampedX,
-        top: rect.top + clampedY
+        top: rect.top + clampedY,
+        pointer: { x: clampedX, y: clampedY }
       });
     },
-    [canvasRef]
+    [overlayRef]
   );
 
   const handleNodeClick = useCallback(
@@ -280,12 +293,69 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
 
   const handleParamsUpdate = useCallback(
     (updater: ParamsUpdater) => {
-      if (!updateNodeParams) {
-        return;
-      }
       updateNodeParams(data.id, updater);
     },
     [data.id, updateNodeParams]
+  );
+
+  const canPasteNode = clipboard?.kind === "node";
+
+  const handleEditMenuSelect = useCallback(
+    (label: EditMenuItemLabel) => {
+      const pointer = editMenu?.pointer ?? null;
+      setEditMenu(null);
+
+      switch (label) {
+        case "Copy":
+          copyNode(data.id);
+          break;
+        case "Cut":
+          cutNode(data.id);
+          break;
+        case "Delete":
+          deleteNode(data.id);
+          break;
+        case "Paste": {
+          if (!canPasteNode) {
+            break;
+          }
+          const pasted = pasteClipboard("node");
+          if (pasted && !("from" in pasted) && pointer) {
+            updateNodeParams(pasted.id, (previous) => {
+              const base =
+                previous && typeof previous === "object" ? previous : {};
+              return {
+                ...base,
+                [POSITION_KEY]: { x: pointer.x, y: pointer.y }
+              };
+            });
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    },
+    [
+      canPasteNode,
+      copyNode,
+      cutNode,
+      data.id,
+      deleteNode,
+      editMenu,
+      pasteClipboard,
+      updateNodeParams
+    ]
+  );
+
+  const editMenuItems = useMemo(
+    () =>
+      EDIT_MENU_ITEMS.map((label) => ({
+        label,
+        disabled: label === "Paste" && !canPasteNode,
+        onSelect: () => handleEditMenuSelect(label)
+      })),
+    [canPasteNode, handleEditMenuSelect]
   );
 
   useEffect(() => {
@@ -295,7 +365,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
 
     const handleDismiss = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest?.("[data-node-edit-menu]")) {
+      if (target?.closest?.(EDIT_MENU_SELECTOR)) {
         return;
       }
       setEditMenu(null);
@@ -395,33 +465,10 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       ) : null}
 
       {editMenu ? (
-        <div
-          data-node-edit-menu
-          style={{ ...editMenuBaseStyle, left: editMenu.left, top: editMenu.top }}
-        >
-          {EDIT_MENU_ITEMS.map((label) => (
-            <button
-              key={label}
-              type="button"
-              style={editMenuItemStyle}
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                setEditMenu(null);
-              }}
-              onMouseEnter={(event) => {
-                (event.currentTarget as HTMLButtonElement).style.background =
-                  "rgba(15, 23, 42, 0.08)";
-              }}
-              onMouseLeave={(event) => {
-                (event.currentTarget as HTMLButtonElement).style.background =
-                  "transparent";
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <EditMenu
+          position={{ left: editMenu.left, top: editMenu.top }}
+          items={editMenuItems}
+        />
       ) : null}
     </>
   );

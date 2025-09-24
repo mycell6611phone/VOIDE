@@ -89,7 +89,8 @@ export const mockLayoutFlow: FlowDef = {
       name: "Tool: Calculator",
       params: {
         __position: { x: 1200, y: 210 },
-        tool: "calculator"
+        tool: "calculator",
+        moduleKey: "tool"
       },
       in: [{ port: "query", types: text }],
       out: [{ port: "result", types: text }]
@@ -149,7 +150,8 @@ export const mockLayoutFlow: FlowDef = {
       name: "Memory",
       params: {
         __position: { x: 1920, y: 360 },
-        mode: "append"
+        mode: "append",
+        moduleKey: "memory"
       },
       in: [{ port: "write", types: text }],
       out: [{ port: "recall", types: text }]

@@ -69,8 +69,8 @@ const MODULES: ModuleConfig[] = [
     description: "Long-lived context"
   },
   {
-    key: "diverter",
-    label: "Divirter",
+    key: "divider",
+    label: "Divider",
     nodeType: "module",
     inputs: [{ port: "in", types: ["TEXT", "JSON"] }],
     outputs: [
@@ -78,6 +78,14 @@ const MODULES: ModuleConfig[] = [
       { port: "pathB", types: ["TEXT", "JSON"] }
     ],
     description: "Route outputs"
+  },
+  {
+    key: "tool",
+    label: "Tool Call",
+    nodeType: "module",
+    inputs: [{ port: "input", types: ["TEXT", "JSON"] }],
+    outputs: [{ port: "result", types: ["TEXT", "JSON"] }],
+    description: "Invoke registered tools"
   }
 ];
 

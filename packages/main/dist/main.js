@@ -89,10 +89,17 @@ async function createWindow() {
     });
     mainWindow.once('ready-to-show', () => mainWindow?.show());
     const devUrl = resolveRendererDevServerURL();
+    let loaded = false;
     if (devUrl) {
-        await mainWindow.loadURL(devUrl);
+        try {
+            await mainWindow.loadURL(devUrl);
+            loaded = true;
+        }
+        catch (error) {
+            console.warn(`Failed to load renderer dev server at ${devUrl}, falling back to bundled renderer.`, error);
+        }
     }
-    else {
+    if (!loaded) {
         await mainWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
     }
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -126,10 +133,17 @@ async function createChatWindow() {
     });
     chatWindow.once('ready-to-show', () => chatWindow?.show());
     const devUrl = resolveRendererDevServerURL();
+    let loaded = false;
     if (devUrl) {
-        await chatWindow.loadURL(`${devUrl}#/chat`);
+        try {
+            await chatWindow.loadURL(`${devUrl}#/chat`);
+            loaded = true;
+        }
+        catch (error) {
+            console.warn(`Failed to load renderer dev server at ${devUrl}#/chat, falling back to bundled renderer.`, error);
+        }
     }
-    else {
+    if (!loaded) {
         await chatWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'), { hash: 'chat' });
     }
     chatWindow.on('closed', () => {

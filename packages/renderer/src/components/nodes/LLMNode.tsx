@@ -138,6 +138,34 @@ const DEFAULT_WINDOW_HEIGHT = 380;
 const APPROX_THRESHOLD = 0.5;
 const MENU_WIDTH = EDIT_MENU_WIDTH;
 const MENU_HEIGHT = EDIT_MENU_HEIGHT;
+
+const editMenuBaseStyle: React.CSSProperties = {
+  position: "fixed",
+  minWidth: MENU_WIDTH,
+  background: "#fef2f2",
+  border: "1px solid rgba(220, 38, 38, 0.25)",
+  borderRadius: 12,
+  boxShadow: "0 18px 36px rgba(220, 38, 38, 0.22)",
+  padding: 6,
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+  zIndex: 170,
+  pointerEvents: "auto"
+};
+
+const editMenuItemStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: 8,
+  border: "none",
+  background: "transparent",
+  color: "#7f1d1d",
+  fontWeight: 600,
+  fontSize: 13,
+  textAlign: "left" as const,
+  cursor: "pointer",
+  transition: "background 120ms ease, transform 120ms ease"
+};
 const MIN_INPUT_TOKENS = 256;
 const MIN_RESPONSE_TOKENS = 16;
 
@@ -713,8 +741,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
         }
         return rectToGeometry(constrained);
       });
-      setIsWindowOpen(true);
-      setIsDocked(false);
+      setIsWindowOpen(false);
       setIsMinimized(false);
 
       const relativeX = event.clientX - canvasMetrics.left;

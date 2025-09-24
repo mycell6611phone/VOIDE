@@ -288,23 +288,6 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
     [data.id, updateNodeParams]
   );
 
-<<<<<<< ours
-  const handlePrimaryClick = useCallback(
-    (_event: React.MouseEvent<HTMLDivElement>) => {
-      if (moduleCategory !== "interface") {
-        return;
-      }
-      if (typeof window === "undefined") {
-        return;
-      }
-      const opener = window.voide?.openChatWindow;
-      if (typeof opener === "function") {
-        void opener();
-      }
-    },
-    [moduleCategory]
-  );
-=======
   useEffect(() => {
     if (!editMenu) {
       return;
@@ -334,22 +317,34 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       window.removeEventListener("keydown", handleKey);
     };
   }, [editMenu]);
->>>>>>> theirs
 
   const shouldRenderMenu = Boolean(moduleCategory);
   const enableChatShortcut = moduleCategory === "interface";
+
+  const handlePrimaryClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (enableChatShortcut) {
+        if (typeof window !== "undefined") {
+          const opener = window.voide?.openChatWindow;
+          if (typeof opener === "function") {
+            event.stopPropagation();
+            void opener();
+            return;
+          }
+        }
+      }
+
+      handleNodeClick(event);
+    },
+    [enableChatShortcut, handleNodeClick]
+  );
 
   return (
     <>
       <div
         style={containerStyle}
-<<<<<<< ours
-        onClick={enableChatShortcut ? handlePrimaryClick : undefined}
+        onClick={shouldRenderMenu ? handlePrimaryClick : undefined}
         onContextMenu={shouldRenderMenu ? handleContextMenu : undefined}
-=======
-        onClick={shouldRenderMenu ? handleNodeClick : undefined}
-        onContextMenu={handleContextMenu}
->>>>>>> theirs
       >
         {inputs.map((port, index) => (
           <Handle

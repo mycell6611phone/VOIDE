@@ -72,11 +72,19 @@ describe("LLMNode context window", () => {
 
       fireEvent.contextMenu(nodeContainer, { clientX: 640, clientY: 420 });
 
+      await waitFor(() => {
+        expect(document.querySelector("[data-node-edit-menu]")).not.toBeNull();
+      });
+      expect(screen.queryByTestId("context-window")).toBeNull();
+
+      fireEvent.click(nodeContainer);
+
       const contextWindow = await screen.findByTestId("context-window");
       expect(contextWindow).toBeTruthy();
-      expect(await screen.findByText("Quick Actions")).toBeTruthy();
+      expect(await screen.findByText("Model Selection")).toBeTruthy();
       expect(parseFloat(contextWindow.style.left)).toBeGreaterThan(0);
       expect(parseFloat(contextWindow.style.top)).toBeGreaterThan(0);
+      expect(document.querySelector("[data-node-edit-menu]")).toBeNull();
 
       const closeButton = await screen.findByRole("button", { name: "Close" });
       fireEvent.click(closeButton);

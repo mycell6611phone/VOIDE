@@ -7,6 +7,7 @@ import {
   appGetVersion,
   telemetryEvent,
   TelemetryPayload,
+  chatWindowOpen,
 } from "@voide/ipc";
 
 const api = {
@@ -16,6 +17,10 @@ const api = {
   getVersion: () => ipcRenderer.invoke(appGetVersion.name),
   onTelemetry: (cb: (ev: TelemetryPayload) => void) => {
     ipcRenderer.on(telemetryEvent.name, (_e, ev: TelemetryPayload) => cb(ev));
+  },
+  openChatWindow: async () => {
+    const result = await ipcRenderer.invoke(chatWindowOpen.name);
+    return chatWindowOpen.response.parse(result);
   },
 };
 

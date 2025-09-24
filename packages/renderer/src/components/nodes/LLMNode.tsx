@@ -8,6 +8,13 @@ import React, {
 import { Handle, Position, type NodeProps } from "reactflow";
 import type { NodeDef } from "@voide/shared";
 import ContextWindow from "../ContextWindow";
+import EditMenu, {
+  EDIT_MENU_DATA_ATTRIBUTE,
+  EDIT_MENU_HEIGHT,
+  EDIT_MENU_ITEMS,
+  EDIT_MENU_WIDTH,
+  type EditMenuItemLabel
+} from "../EditMenu";
 import {
   CanvasViewport,
   ContextWindowRect,
@@ -114,39 +121,23 @@ const summaryValueStyle: React.CSSProperties = {
   color: "#7f1d1d"
 };
 
-const editMenuBaseStyle: React.CSSProperties = {
-  position: "fixed",
-  minWidth: 176,
-  background: "#fff1f2",
-  border: "1px solid rgba(244, 63, 94, 0.38)",
-  borderRadius: 12,
-  boxShadow: "0 18px 36px rgba(190, 18, 60, 0.28)",
-  padding: 6,
-  display: "flex",
-  flexDirection: "column",
-  gap: 2,
-  zIndex: 160,
-  pointerEvents: "auto"
-};
-
-const editMenuItemStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 8,
-  border: "none",
-  background: "transparent",
-  color: "#7f1d1d",
-  fontWeight: 600,
-  fontSize: 13,
-  textAlign: "left" as const,
-  cursor: "pointer",
-  transition: "background 120ms ease, transform 120ms ease"
+const srOnlyStyle: React.CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0
 };
 
 const DEFAULT_WINDOW_WIDTH = 360;
 const DEFAULT_WINDOW_HEIGHT = 380;
 const APPROX_THRESHOLD = 0.5;
-const MENU_WIDTH = 176;
-const MENU_HEIGHT = 192;
+const MENU_WIDTH = EDIT_MENU_WIDTH;
+const MENU_HEIGHT = EDIT_MENU_HEIGHT;
 const MIN_INPUT_TOKENS = 256;
 const MIN_RESPONSE_TOKENS = 16;
 
@@ -164,6 +155,16 @@ type RelativeAnchor = {
 };
 
 type BackendOption = "llama.cpp" | "gpt4all" | "ollama";
+
+type EditMenuState = {
+  left: number;
+  top: number;
+  clientX: number;
+  clientY: number;
+  nodeId: string;
+};
+
+const EDIT_MENU_SELECTOR = `[${EDIT_MENU_DATA_ATTRIBUTE}]`;
 
 const BACKEND_OPTIONS: BackendOption[] = ["llama.cpp", "gpt4all", "ollama"];
 
@@ -321,8 +322,6 @@ const MODEL_OPTIONS: ModelOption[] = RAW_MODELS.map((model, index) => {
   return { id, label, model, profile };
 });
 
-const EDIT_MENU_ITEMS = ["Cut", "Copy", "Paste", "Delete"] as const;
-
 const toCanvasViewport = (rect: DOMRect): CanvasViewport => ({
   top: rect.top,
   left: rect.left,
@@ -442,11 +441,25 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
   const [windowGeometry, setWindowGeometry] = useState<WindowGeometry | null>(null);
   const [isWindowOpen, setIsWindowOpen] = useState(false);
   const [isDocked, setIsDocked] = useState(false);
-  const [editMenu, setEditMenu] = useState<{ left: number; top: number } | null>(null);
+  const [editMenu, setEditMenu] = useState<EditMenuState | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const anchorSnapshot = useRef<RelativeAnchor | null>(null);
 
-  const updateNodeParams = useFlowStore((state) => state.updateNodeParams);
+  const {
+    updateNodeParams,
+    copyNode,
+    cutNode,
+    deleteNode,
+    pasteClipboard,
+    clipboard: clipboardItem
+  } = useFlowStore((state) => ({
+    updateNodeParams: state.updateNodeParams,
+    copyNode: state.copyNode,
+    cutNode: state.cutNode,
+    deleteNode: state.deleteNode,
+    pasteClipboard: state.pasteClipboard,
+    clipboard: state.clipboard
+  }));
 
   const params = (data.params ?? {}) as Record<string, unknown>;
 
@@ -686,10 +699,23 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       const geometry = gatherGeometry();
       if (!geometry) return;
 
-      const { canvasMetrics } = geometry;
+      const { canvasMetrics, anchorBounds } = geometry;
       syncCanvasRect(canvasMetrics);
-      setIsWindowOpen(false);
+      anchorSnapshot.current = toRelativeAnchor(anchorBounds, canvasMetrics);
+
+      setWindowGeometry((previous) => {
+        const previousRect = previous ? geometryToRect(previous) : null;
+        const baseline =
+          previousRect ?? computeInitialWindowRect(anchorBounds, canvasMetrics);
+        const constrained = constrainRectToBounds(baseline, canvasMetrics);
+        if (previousRect && rectsApproximatelyEqual(previousRect, constrained)) {
+          return previous;
+        }
+        return rectToGeometry(constrained);
+      });
+      setIsWindowOpen(true);
       setIsDocked(false);
+      setIsMinimized(false);
 
       const relativeX = event.clientX - canvasMetrics.left;
       const relativeY = event.clientY - canvasMetrics.top;
@@ -711,18 +737,48 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       );
       setEditMenu({
         left: canvasMetrics.left + clampedX,
-        top: canvasMetrics.top + clampedY
+        top: canvasMetrics.top + clampedY,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        nodeId: data.id
       });
     },
-    [gatherGeometry, syncCanvasRect]
+    [data.id, gatherGeometry, syncCanvasRect]
   );
 
   const handleDockIconOpen = useCallback(() => {
     openWindow();
   }, [openWindow]);
 
+  const handleEditMenuSelect = useCallback(
+    (label: EditMenuItemLabel) => {
+      setEditMenu(null);
+      switch (label) {
+        case "Copy":
+          copyNode(data.id);
+          break;
+        case "Cut":
+          cutNode(data.id);
+          break;
+        case "Delete":
+          deleteNode(data.id);
+          break;
+        case "Paste":
+          pasteClipboard("node");
+          break;
+        default:
+          break;
+      }
+    },
+    [copyNode, cutNode, data.id, deleteNode, pasteClipboard]
+  );
+
   const handleNodeClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+
       const target = event.target as HTMLElement | null;
       if (target?.closest(".react-flow__handle")) return;
       event.stopPropagation();
@@ -835,7 +891,9 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
     if (!editMenu) return;
     const handleDismiss = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest?.("[data-llm-edit-menu]")) return;
+
+      if (target?.closest?.("[data-node-edit-menu]")) return;
+
       setEditMenu(null);
     };
     const handleKey = (event: KeyboardEvent) => {
@@ -931,8 +989,9 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       </div>
 
       {editMenu ? (
+
         <div
-          data-llm-edit-menu
+          data-node-edit-menu
           style={{ ...editMenuBaseStyle, left: editMenu.left, top: editMenu.top }}
         >
           {EDIT_MENU_ITEMS.map((label) => (
@@ -972,6 +1031,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
           onUpdate={handleGeometryUpdate}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <span style={srOnlyStyle}>Quick Actions</span>
             <div>
               <div style={sectionTitleStyle}>Model Selection</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

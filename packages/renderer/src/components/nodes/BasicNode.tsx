@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import type { NodeDef } from "@voide/shared";
 import ContextWindow from "../ContextWindow";
@@ -8,6 +8,7 @@ import ModuleOptionsContent, {
 } from "../ModuleOptionsContent";
 import { useCanvasBoundary } from "../CanvasBoundaryContext";
 import {
+  CONTEXT_WINDOW_PADDING,
   clampGeometry,
   type WindowGeometry,
   type WindowSize
@@ -55,6 +56,42 @@ const fallbackSize: WindowSize = { width: 320, height: 260 };
 
 const getDefaultSize = (category: ModuleCategory | null): WindowSize =>
   (category ? moduleDefaultSizes[category] : fallbackSize) ?? fallbackSize;
+
+const EDIT_MENU_ITEMS = ["Cut", "Copy", "Paste", "Delete"] as const;
+
+const MENU_WIDTH = 176;
+const MENU_HEIGHT = 192;
+
+const editMenuBaseStyle: React.CSSProperties = {
+  position: "fixed",
+  minWidth: MENU_WIDTH,
+  background: "#f9fafb",
+  border: "1px solid rgba(15, 23, 42, 0.15)",
+  borderRadius: 12,
+  boxShadow: "0 18px 36px rgba(15, 23, 42, 0.18)",
+  padding: 6,
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+  zIndex: 160,
+  pointerEvents: "auto"
+};
+
+const editMenuItemStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: 8,
+  border: "none",
+  background: "transparent",
+  color: "#111827",
+  fontWeight: 600,
+  fontSize: 13,
+  textAlign: "left" as const,
+  cursor: "pointer",
+  transition: "background 120ms ease, transform 120ms ease"
+};
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
 
 const deriveModuleCategory = (node: NodeDef): ModuleCategory | null => {
   const name = (node.name ?? "").toLowerCase();
@@ -104,6 +141,9 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       size: { ...defaultSize }
     }
   }));
+  const [editMenu, setEditMenu] = useState<{ left: number; top: number } | null>(
+    null
+  );
 
   const updateNodeParams = useFlowStore((state) => state.updateNodeParams);
 
@@ -118,14 +158,9 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
     [canvasRef]
   );
 
-  const handleContextMenu = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!moduleCategory) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-
+  const openOptionsWindow = useCallback(
+    (clientX?: number, clientY?: number) => {
+      setEditMenu(null);
       setMenuState((previous) => {
         const rect = canvasRef?.current?.getBoundingClientRect();
         if (!rect) {
@@ -134,8 +169,14 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
 
         const pointerGeometry: WindowGeometry = {
           position: {
-            x: event.clientX - rect.left + 12,
-            y: event.clientY - rect.top + 12
+            x:
+              typeof clientX === "number"
+                ? clientX - rect.left + 12
+                : previous.geometry.position.x,
+            y:
+              typeof clientY === "number"
+                ? clientY - rect.top + 12
+                : previous.geometry.position.y
           },
           size: previous.geometry.size
         };
@@ -153,7 +194,64 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         };
       });
     },
-    [canvasRef, moduleCategory]
+    [canvasRef]
+  );
+
+  const handleContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      setMenuState((previous) => ({ ...previous, open: false, minimized: false }));
+
+      const rect = canvasRef?.current?.getBoundingClientRect();
+      if (!rect) {
+        setEditMenu({ left: event.clientX, top: event.clientY });
+        return;
+      }
+
+      const relativeX = event.clientX - rect.left;
+      const relativeY = event.clientY - rect.top;
+      const clampedX = clamp(
+        relativeX,
+        CONTEXT_WINDOW_PADDING,
+        Math.max(
+          CONTEXT_WINDOW_PADDING,
+          rect.width - MENU_WIDTH - CONTEXT_WINDOW_PADDING
+        )
+      );
+      const clampedY = clamp(
+        relativeY,
+        CONTEXT_WINDOW_PADDING,
+        Math.max(
+          CONTEXT_WINDOW_PADDING,
+          rect.height - MENU_HEIGHT - CONTEXT_WINDOW_PADDING
+        )
+      );
+
+      setEditMenu({
+        left: rect.left + clampedX,
+        top: rect.top + clampedY
+      });
+    },
+    [canvasRef]
+  );
+
+  const handleNodeClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.(".react-flow__handle")) {
+        return;
+      }
+
+      event.stopPropagation();
+      openOptionsWindow(event.clientX, event.clientY);
+    },
+    [openOptionsWindow]
   );
 
   const handleClose = useCallback(
@@ -190,13 +288,68 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
     [data.id, updateNodeParams]
   );
 
+<<<<<<< ours
+  const handlePrimaryClick = useCallback(
+    (_event: React.MouseEvent<HTMLDivElement>) => {
+      if (moduleCategory !== "interface") {
+        return;
+      }
+      if (typeof window === "undefined") {
+        return;
+      }
+      const opener = window.voide?.openChatWindow;
+      if (typeof opener === "function") {
+        void opener();
+      }
+    },
+    [moduleCategory]
+  );
+=======
+  useEffect(() => {
+    if (!editMenu) {
+      return;
+    }
+
+    const handleDismiss = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.("[data-node-edit-menu]")) {
+        return;
+      }
+      setEditMenu(null);
+    };
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setEditMenu(null);
+      }
+    };
+
+    window.addEventListener("mousedown", handleDismiss);
+    window.addEventListener("contextmenu", handleDismiss);
+    window.addEventListener("keydown", handleKey);
+
+    return () => {
+      window.removeEventListener("mousedown", handleDismiss);
+      window.removeEventListener("contextmenu", handleDismiss);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [editMenu]);
+>>>>>>> theirs
+
   const shouldRenderMenu = Boolean(moduleCategory);
+  const enableChatShortcut = moduleCategory === "interface";
 
   return (
     <>
       <div
         style={containerStyle}
+<<<<<<< ours
+        onClick={enableChatShortcut ? handlePrimaryClick : undefined}
         onContextMenu={shouldRenderMenu ? handleContextMenu : undefined}
+=======
+        onClick={shouldRenderMenu ? handleNodeClick : undefined}
+        onContextMenu={handleContextMenu}
+>>>>>>> theirs
       >
         {inputs.map((port, index) => (
           <Handle
@@ -244,6 +397,36 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
             onUpdate={handleParamsUpdate}
           />
         </ContextWindow>
+      ) : null}
+
+      {editMenu ? (
+        <div
+          data-node-edit-menu
+          style={{ ...editMenuBaseStyle, left: editMenu.left, top: editMenu.top }}
+        >
+          {EDIT_MENU_ITEMS.map((label) => (
+            <button
+              key={label}
+              type="button"
+              style={editMenuItemStyle}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                setEditMenu(null);
+              }}
+              onMouseEnter={(event) => {
+                (event.currentTarget as HTMLButtonElement).style.background =
+                  "rgba(15, 23, 42, 0.08)";
+              }}
+              onMouseLeave={(event) => {
+                (event.currentTarget as HTMLButtonElement).style.background =
+                  "transparent";
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       ) : null}
     </>
   );

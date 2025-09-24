@@ -1,12 +1,12 @@
 import { ipcMain, app } from "electron";
-import { flowValidate, flowRun, modelEnsure, appGetVersion, } from "@voide/ipc";
+import { flowValidate, flowRun, modelEnsure, appGetVersion, chatWindowOpen, } from "@voide/ipc";
 import { validateFlow } from "../services/validate.js";
 import { runFlow } from "../orchestrator/engine.js";
 import { getModelRegistry } from "../services/models.js";
 function formatError(err) {
     return { error: String(err) };
 }
-export function registerHandlers() {
+export function registerHandlers(deps) {
     ipcMain.handle(flowValidate.name, async (_e, payload) => {
         const parsed = flowValidate.request.safeParse(payload);
         if (!parsed.success)
@@ -44,6 +44,15 @@ export function registerHandlers() {
         try {
             const v = app.getVersion();
             return appGetVersion.response.parse(v);
+        }
+        catch (err) {
+            return formatError(err);
+        }
+    });
+    ipcMain.handle(chatWindowOpen.name, async () => {
+        try {
+            await deps.openChatWindow();
+            return chatWindowOpen.response.parse({ ok: true });
         }
         catch (err) {
             return formatError(err);

@@ -139,3 +139,11 @@ export const appGetVersion = {
 
 export type AppGetVersionRes = z.infer<typeof appGetVersion.response>;
 
+export const chatWindowOpen = {
+  name: "chat:open",
+  request: z.undefined(),
+  response: z.object({ ok: z.boolean() })
+};
+
+export type ChatWindowOpenRes = z.infer<typeof chatWindowOpen.response>;
+

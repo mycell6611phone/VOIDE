@@ -4,6 +4,7 @@ import {
   flowRun,
   modelEnsure,
   appGetVersion,
+  chatWindowOpen,
 } from "@voide/ipc";
 import { validateFlow } from "../services/validate.js";
 import { runFlow } from "../orchestrator/engine.js";
@@ -13,7 +14,11 @@ function formatError(err: unknown) {
   return { error: String(err) };
 }
 
-export function registerHandlers() {
+type HandlerDeps = {
+  openChatWindow: () => Promise<unknown> | unknown;
+};
+
+export function registerHandlers(deps: HandlerDeps) {
   ipcMain.handle(flowValidate.name, async (_e, payload) => {
     const parsed = flowValidate.request.safeParse(payload);
     if (!parsed.success) return formatError(parsed.error.flatten());
@@ -49,6 +54,15 @@ export function registerHandlers() {
     try {
       const v = app.getVersion();
       return appGetVersion.response.parse(v);
+    } catch (err) {
+      return formatError(err);
+    }
+  });
+
+  ipcMain.handle(chatWindowOpen.name, async () => {
+    try {
+      await deps.openChatWindow();
+      return chatWindowOpen.response.parse({ ok: true });
     } catch (err) {
       return formatError(err);
     }

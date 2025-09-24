@@ -106,3 +106,8 @@ export const appGetVersion = {
     request: z.undefined(),
     response: z.string()
 };
+export const chatWindowOpen = {
+    name: "chat:open",
+    request: z.undefined(),
+    response: z.object({ ok: z.boolean() })
+};

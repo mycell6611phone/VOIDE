@@ -27,6 +27,13 @@ import ModuleNode from "./nodes/BasicNode";
 import LLMNode from "./nodes/LLMNode";
 import { CanvasBoundaryProvider } from "./CanvasBoundaryContext";
 import ContextWindow from "./ContextWindow";
+import EditMenu, {
+  EDIT_MENU_DATA_ATTRIBUTE,
+  EDIT_MENU_HEIGHT,
+  EDIT_MENU_ITEMS,
+  EDIT_MENU_WIDTH,
+  type EditMenuItemLabel
+} from "./EditMenu";
 import {
   clampGeometry,
   type WindowGeometry,
@@ -36,12 +43,19 @@ import {
 const POSITION_KEY = "__position";
 const CONTEXT_WINDOW_DEFAULT_SIZE: WindowSize = { width: 320, height: 260 };
 const CONTEXT_WINDOW_POINTER_OFFSET = 12;
+const EDIT_MENU_SELECTOR = `[${EDIT_MENU_DATA_ATTRIBUTE}]`;
 
 interface GraphContextWindowState {
   node: NodeDef;
   geometry: WindowGeometry;
   open: boolean;
   minimized: boolean;
+}
+
+interface EdgeContextMenuState {
+  edgeId: string;
+  left: number;
+  top: number;
 }
 
 const getPosition = (node: NodeDef) => {
@@ -70,10 +84,24 @@ const toReactFlowEdge = (edge: EdgeDef): Edge => ({
 });
 
 export default function GraphCanvas() {
-  const { flow, setFlow, activeTool } = useFlowStore((state) => ({
+  const {
+    flow,
+    setFlow,
+    activeTool,
+    copyEdge,
+    cutEdge,
+    deleteEdge,
+    pasteClipboard,
+    clipboard: clipboardItem
+  } = useFlowStore((state) => ({
     flow: state.flow,
     setFlow: state.setFlow,
-    activeTool: state.activeTool
+    activeTool: state.activeTool,
+    copyEdge: state.copyEdge,
+    cutEdge: state.cutEdge,
+    deleteEdge: state.deleteEdge,
+    pasteClipboard: state.pasteClipboard,
+    clipboard: state.clipboard
   }));
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -82,6 +110,7 @@ export default function GraphCanvas() {
   const [contextWindow, setContextWindow] = useState<
     GraphContextWindowState | null
   >(null);
+  const [edgeMenu, setEdgeMenu] = useState<EdgeContextMenuState | null>(null);
 
   const refreshBounds = useCallback(() => {
     if (!containerRef.current) {
@@ -234,6 +263,7 @@ export default function GraphCanvas() {
         y: event.clientY - rect.top + CONTEXT_WINDOW_POINTER_OFFSET
       };
 
+      setEdgeMenu(null);
       setContextWindow((previous) => {
         const previousSize =
           previous && previous.node.id === node.data.id
@@ -262,6 +292,7 @@ export default function GraphCanvas() {
   );
 
   const handlePaneClick = useCallback(() => {
+    setEdgeMenu(null);
     setContextWindow((previous) =>
       previous ? { ...previous, open: false, minimized: false } : null
     );
@@ -269,10 +300,123 @@ export default function GraphCanvas() {
 
   const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
+    setEdgeMenu(null);
     setContextWindow((previous) =>
       previous ? { ...previous, open: false, minimized: false } : null
     );
   }, []);
+
+  const handleEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: Edge<NodeDef>) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const overlay = overlayRef.current;
+      if (!overlay) {
+        return;
+      }
+
+      const rect = overlay.getBoundingClientRect();
+      const pointerX = event.clientX - rect.left;
+      const pointerY = event.clientY - rect.top;
+
+      const maxX = Math.max(
+        CONTEXT_WINDOW_POINTER_OFFSET,
+        rect.width - EDIT_MENU_WIDTH - CONTEXT_WINDOW_POINTER_OFFSET
+      );
+      const maxY = Math.max(
+        CONTEXT_WINDOW_POINTER_OFFSET,
+        rect.height - EDIT_MENU_HEIGHT - CONTEXT_WINDOW_POINTER_OFFSET
+      );
+
+      const clampedX = Math.min(
+        Math.max(pointerX, CONTEXT_WINDOW_POINTER_OFFSET),
+        maxX
+      );
+      const clampedY = Math.min(
+        Math.max(pointerY, CONTEXT_WINDOW_POINTER_OFFSET),
+        maxY
+      );
+
+      setContextWindow((previous) =>
+        previous ? { ...previous, open: false, minimized: false } : null
+      );
+      setEdgeMenu({
+        edgeId: edge.id,
+        left: rect.left + clampedX,
+        top: rect.top + clampedY
+      });
+    },
+    [setContextWindow, setEdgeMenu]
+  );
+
+  const handleEdgeMenuSelect = useCallback(
+    (label: EditMenuItemLabel) => {
+      if (!edgeMenu) {
+        return;
+      }
+      const targetEdgeId = edgeMenu.edgeId;
+      setEdgeMenu(null);
+      switch (label) {
+        case "Copy":
+          copyEdge(targetEdgeId);
+          break;
+        case "Cut":
+          cutEdge(targetEdgeId);
+          break;
+        case "Delete":
+          deleteEdge(targetEdgeId);
+          break;
+        case "Paste":
+          pasteClipboard("edge");
+          break;
+        default:
+          break;
+      }
+    },
+    [copyEdge, cutEdge, deleteEdge, edgeMenu, pasteClipboard]
+  );
+
+  useEffect(() => {
+    if (!edgeMenu) {
+      return;
+    }
+
+    const handleDismiss = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.(EDIT_MENU_SELECTOR)) {
+        return;
+      }
+      setEdgeMenu(null);
+    };
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setEdgeMenu(null);
+      }
+    };
+
+    window.addEventListener("mousedown", handleDismiss);
+    window.addEventListener("contextmenu", handleDismiss);
+    window.addEventListener("keydown", handleKey);
+
+    return () => {
+      window.removeEventListener("mousedown", handleDismiss);
+      window.removeEventListener("contextmenu", handleDismiss);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [edgeMenu]);
+
+  useEffect(() => {
+    if (!edgeMenu) {
+      return;
+    }
+
+    const exists = flow.edges.some((edge) => edge.id === edgeMenu.edgeId);
+    if (!exists) {
+      setEdgeMenu(null);
+    }
+  }, [edgeMenu, flow.edges]);
 
   const handleContextWindowUpdate = useCallback((geometry: WindowGeometry) => {
     setContextWindow((previous) =>
@@ -318,6 +462,7 @@ export default function GraphCanvas() {
           onConnect={onConnect}
           nodeTypes={nodeTypes}
           onNodeContextMenu={handleNodeContextMenu}
+          onEdgeContextMenu={handleEdgeContextMenu}
           onPaneClick={handlePaneClick}
           onPaneContextMenu={handlePaneContextMenu}
           fitView
@@ -339,6 +484,17 @@ export default function GraphCanvas() {
             pointerEvents: "none"
           }}
         />
+
+        {edgeMenu ? (
+          <EditMenu
+            position={{ left: edgeMenu.left, top: edgeMenu.top }}
+            items={EDIT_MENU_ITEMS.map((label) => ({
+              label,
+              disabled: label === "Paste" && clipboardItem?.kind !== "edge",
+              onSelect: () => handleEdgeMenuSelect(label)
+            }))}
+          />
+        ) : null}
 
         {contextWindow ? (
           <ContextWindow

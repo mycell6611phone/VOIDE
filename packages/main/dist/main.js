@@ -23,6 +23,8 @@ function resolveRendererDevServerURL() {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PRELOAD_BUNDLE_PATH = path.join(__dirname, '../../preload/dist/preload.js');
+let mainWindow = null;
+let chatWindow = null;
 if (!process.env.NODE_ENV) {
     process.env.NODE_ENV = app.isPackaged ? 'production' : 'development';
 }
@@ -71,7 +73,10 @@ function blockNetworkRequests() {
     });
 }
 async function createWindow() {
-    const win = new BrowserWindow({
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        return mainWindow;
+    }
+    mainWindow = new BrowserWindow({
         width: 1280,
         height: 800,
         show: false,
@@ -82,24 +87,61 @@ async function createWindow() {
             sandbox: true,
         },
     });
-    win.once('ready-to-show', () => win.show());
+    mainWindow.once('ready-to-show', () => mainWindow?.show());
     const devUrl = resolveRendererDevServerURL();
     if (devUrl) {
-        await win.loadURL(devUrl);
+        await mainWindow.loadURL(devUrl);
     }
     else {
-        await win.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
+        await mainWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
     }
-    win.webContents.setWindowOpenHandler(({ url }) => {
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
         shell.openExternal(url);
         return { action: 'deny' };
     });
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+    });
+    return mainWindow;
+}
+async function createChatWindow() {
+    if (chatWindow && !chatWindow.isDestroyed()) {
+        if (chatWindow.isMinimized())
+            chatWindow.restore();
+        chatWindow.focus();
+        return chatWindow;
+    }
+    chatWindow = new BrowserWindow({
+        width: 600,
+        height: 760,
+        minWidth: 420,
+        minHeight: 480,
+        title: 'VOIDE Chat',
+        webPreferences: {
+            preload: PRELOAD_BUNDLE_PATH,
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+        },
+    });
+    chatWindow.once('ready-to-show', () => chatWindow?.show());
+    const devUrl = resolveRendererDevServerURL();
+    if (devUrl) {
+        await chatWindow.loadURL(`${devUrl}#/chat`);
+    }
+    else {
+        await chatWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'), { hash: 'chat' });
+    }
+    chatWindow.on('closed', () => {
+        chatWindow = null;
+    });
+    return chatWindow;
 }
 app.whenReady().then(async () => {
     blockNetworkRequests();
     await initDB().catch(() => { }); // keep free-mode resilient
     setupIPC();
-    registerHandlers();
+    registerHandlers({ openChatWindow: createChatWindow });
     await createWindow();
     app.on('activate', async () => {
         if (BrowserWindow.getAllWindows().length === 0)

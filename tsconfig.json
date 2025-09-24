@@ -9,6 +9,11 @@
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true
-  }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "packages/shared/src/gen"
+  ]
 }
 

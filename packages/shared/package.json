@@ -17,7 +17,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "proto:gen": "node ./scripts/gen-flow-proto.mjs"
+    "proto:gen": "protoc --proto_path ../../proto --plugin=protoc-gen-ts=../../node_modules/.pnpm/node_modules/.bin/protoc-gen-ts_proto --ts_out src/gen --ts_opt generate_dependencies,importSuffix=.js,outputServices=generic-definitions,esModuleInterop=true ../../proto/flow.proto"
   },
   "engines": { "node": ">=20.11" },
   "dependencies": {

@@ -74,13 +74,13 @@ describe("GraphCanvas context menu", () => {
       value: () => rect
     });
 
-    const personaNode = await screen.findByText("Persona A");
+    const promptNode = await screen.findByText("Prompt");
 
-    fireEvent.contextMenu(personaNode, { clientX: 420, clientY: 360 });
+    fireEvent.contextMenu(promptNode, { clientX: 420, clientY: 360 });
 
     const windowEl = await screen.findByTestId("context-window");
     expect(windowEl).toBeTruthy();
-    expect(await screen.findByText("Persona A Context")).toBeTruthy();
+    expect(await screen.findByText("Prompt Context")).toBeTruthy();
 
     const left = parseFloat(windowEl.style.left);
     const top = parseFloat(windowEl.style.top);

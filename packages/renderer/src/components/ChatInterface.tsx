@@ -128,13 +128,13 @@ export default function ChatInterface() {
       {
         id: "user-question",
         author: "user",
-        content: "Let's recap the last persona response and prep the next follow-up.",
+        content: "Walk me through the UI → Prompt → LLM → Memory path so I know what's wired.",
         timestamp: "Today • 09:31"
       },
       {
         id: "assistant-reply",
         author: "assistant",
-        content: "Great! I'll summarize Persona A's notes and suggest three follow-up prompts.",
+        content: "Great! I'll capture the UI handoff, draft the prompt, run the LLM, and store the reply in memory.",
         timestamp: "Today • 09:31"
       }
     ],

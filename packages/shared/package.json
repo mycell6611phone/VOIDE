@@ -15,7 +15,16 @@
       "default": "./dist/types.js"
     }
   },
-  "scripts": { "build": "tsc -p tsconfig.json" },
-  "engines": { "node": ">=20.11" }
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "proto:gen": "node ./scripts/gen-flow-proto.mjs"
+  },
+  "engines": { "node": ">=20.11" },
+  "dependencies": {
+    "protobufjs": "^7.2.3"
+  },
+  "devDependencies": {
+    "ts-proto": "^1.169.0"
+  }
 }
 

@@ -203,7 +203,15 @@ importers:
 
   packages/schemas: {}
 
-  packages/shared: {}
+  packages/shared:
+    dependencies:
+      protobufjs:
+        specifier: ^7.2.3
+        version: 7.5.4
+    devDependencies:
+      ts-proto:
+        specifier: ^1.169.0
+        version: 1.181.2
 
   packages/workers: {}
 

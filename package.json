@@ -15,7 +15,7 @@
     "start": "electron --no-sandbox packages/main/dist/main.js",
     "pack:linux": "electron-builder --linux deb AppImage",
     "test": "pnpm --filter @voide/ipc test && pnpm --filter @voide/core test && pnpm --filter @voide/main test && pnpm voide validate flows/sample-basic.flow.json && pnpm voide pack flows/sample-basic.flow.json --out /tmp/sample.flow.pb",
-    "proto:gen": "pnpm --filter @voide/core proto:gen",
+    "proto:gen": "pnpm --filter @voide/core proto:gen && pnpm --filter @voide/shared proto:gen",
     "license:check": "pnpm -r --filter '!voide' exec license-checker-rseidelsohn --production --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC'"
   },
   "devDependencies": {

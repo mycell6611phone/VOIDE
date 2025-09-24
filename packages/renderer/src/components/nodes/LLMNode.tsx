@@ -14,8 +14,11 @@ import {
   CONTEXT_WINDOW_MIN_HEIGHT,
   CONTEXT_WINDOW_MIN_WIDTH,
   CONTEXT_WINDOW_PADDING,
-  constrainRectToBounds
+  constrainRectToBounds,
+  type WindowGeometry
 } from "../contextWindowUtils";
+import { useFlowStore } from "../../state/flowStore";
+import models from "./models.json";
 
 const containerStyle: React.CSSProperties = {
   width: 184,
@@ -51,17 +54,41 @@ const sectionTitleStyle: React.CSSProperties = {
   marginBottom: 8
 };
 
-const quickActionButtonStyle: React.CSSProperties = {
-  padding: "8px 12px",
+const fieldLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#b91c1c",
+  textTransform: "uppercase",
+  letterSpacing: 0.4
+};
+
+const inputStyle: React.CSSProperties = {
   borderRadius: 8,
   border: "1px solid rgba(244, 63, 94, 0.35)",
-  background: "linear-gradient(135deg, rgba(254, 205, 211, 0.7), rgba(254, 226, 226, 0.7))",
-  color: "#9f1239",
-  fontWeight: 600,
-  fontSize: 12,
-  cursor: "pointer",
-  transition: "transform 140ms ease, box-shadow 140ms ease",
-  boxShadow: "0 4px 12px rgba(244, 63, 94, 0.18)"
+  background: "#ffffff",
+  color: "#7f1d1d",
+  fontWeight: 500,
+  fontSize: 13,
+  padding: "8px 10px",
+  boxShadow: "0 1px 2px rgba(244, 63, 94, 0.12)",
+  outline: "none"
+};
+
+const helperTextStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: "#be123c"
+};
+
+const fieldGroupStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4
+};
+
+const gridRowStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 12,
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))"
 };
 
 const summaryRowStyle: React.CSSProperties = {
@@ -87,9 +114,47 @@ const summaryValueStyle: React.CSSProperties = {
   color: "#7f1d1d"
 };
 
-const DEFAULT_WINDOW_WIDTH = 320;
-const DEFAULT_WINDOW_HEIGHT = 260;
+const editMenuBaseStyle: React.CSSProperties = {
+  position: "fixed",
+  minWidth: 176,
+  background: "#fff1f2",
+  border: "1px solid rgba(244, 63, 94, 0.38)",
+  borderRadius: 12,
+  boxShadow: "0 18px 36px rgba(190, 18, 60, 0.28)",
+  padding: 6,
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+  zIndex: 160,
+  pointerEvents: "auto"
+};
+
+const editMenuItemStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderRadius: 8,
+  border: "none",
+  background: "transparent",
+  color: "#7f1d1d",
+  fontWeight: 600,
+  fontSize: 13,
+  textAlign: "left" as const,
+  cursor: "pointer",
+  transition: "background 120ms ease, transform 120ms ease"
+};
+
+const DEFAULT_WINDOW_WIDTH = 360;
+const DEFAULT_WINDOW_HEIGHT = 380;
 const APPROX_THRESHOLD = 0.5;
+const MENU_WIDTH = 176;
+const MENU_HEIGHT = 192;
+const MIN_INPUT_TOKENS = 256;
+const MIN_RESPONSE_TOKENS = 16;
+
+const computeOffset = (index: number, total: number) =>
+  `${((index + 1) / (total + 1)) * 100}%`;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
 
 type RelativeAnchor = {
   left: number;
@@ -98,8 +163,165 @@ type RelativeAnchor = {
   bottom: number;
 };
 
-const computeOffset = (index: number, total: number) =>
-  `${((index + 1) / (total + 1)) * 100}%`;
+type BackendOption = "llama.cpp" | "gpt4all" | "ollama";
+
+const BACKEND_OPTIONS: BackendOption[] = ["llama.cpp", "gpt4all", "ollama"];
+
+type ModelProfile = {
+  context: number;
+  backend: BackendOption;
+  temperature: number;
+  topP: number;
+  topK: number;
+  minP: number;
+};
+
+type ModelEntry = {
+  order?: string;
+  name?: string;
+  filename?: string;
+  type?: string;
+  parameters?: string;
+  ramrequired?: string;
+};
+
+type ModelOption = {
+  id: string;
+  label: string;
+  model: ModelEntry;
+  profile: ModelProfile;
+};
+
+const DEFAULT_PROFILE: ModelProfile = {
+  context: 4096,
+  backend: "llama.cpp",
+  temperature: 0.7,
+  topP: 0.95,
+  topK: 40,
+  minP: 0.1
+};
+
+const MODEL_TYPE_PROFILES: Record<string, ModelProfile> = {
+  qwen2: {
+    context: 32768,
+    backend: "llama.cpp",
+    temperature: 0.4,
+    topP: 0.9,
+    topK: 40,
+    minP: 0.05
+  },
+  llama3: {
+    context: 8192,
+    backend: "llama.cpp",
+    temperature: 0.7,
+    topP: 0.95,
+    topK: 45,
+    minP: 0.1
+  },
+  deepseek: {
+    context: 8192,
+    backend: "llama.cpp",
+    temperature: 0.3,
+    topP: 0.92,
+    topK: 40,
+    minP: 0.06
+  },
+  mistral: {
+    context: 8192,
+    backend: "llama.cpp",
+    temperature: 0.65,
+    topP: 0.92,
+    topK: 40,
+    minP: 0.08
+  },
+  falcon: {
+    context: 4096,
+    backend: "gpt4all",
+    temperature: 0.6,
+    topP: 0.9,
+    topK: 40,
+    minP: 0.08
+  },
+  llama2: {
+    context: 4096,
+    backend: "llama.cpp",
+    temperature: 0.7,
+    topP: 0.94,
+    topK: 40,
+    minP: 0.1
+  },
+  llama: {
+    context: 4096,
+    backend: "llama.cpp",
+    temperature: 0.7,
+    topP: 0.94,
+    topK: 40,
+    minP: 0.1
+  },
+  mpt: {
+    context: 8192,
+    backend: "gpt4all",
+    temperature: 0.65,
+    topP: 0.9,
+    topK: 38,
+    minP: 0.08
+  },
+  "phi-3": {
+    context: 8192,
+    backend: "ollama",
+    temperature: 0.55,
+    topP: 0.9,
+    topK: 32,
+    minP: 0.06
+  },
+  openllama: {
+    context: 4096,
+    backend: "llama.cpp",
+    temperature: 0.65,
+    topP: 0.92,
+    topK: 40,
+    minP: 0.08
+  },
+  replit: {
+    context: 4096,
+    backend: "gpt4all",
+    temperature: 0.75,
+    topP: 0.9,
+    topK: 40,
+    minP: 0.1
+  },
+  starcoder: {
+    context: 8192,
+    backend: "ollama",
+    temperature: 0.4,
+    topP: 0.95,
+    topK: 60,
+    minP: 0.05
+  },
+  bert: {
+    context: 512,
+    backend: "gpt4all",
+    temperature: 0.5,
+    topP: 0.9,
+    topK: 20,
+    minP: 0.05
+  }
+};
+
+const RAW_MODELS = models as ModelEntry[];
+
+const MODEL_OPTIONS: ModelOption[] = RAW_MODELS.map((model, index) => {
+  const baseId = model.filename ?? model.order ?? `model-${index}`;
+  const sanitized = (baseId ?? `model-${index}`).replace(/\s+/g, "-").toLowerCase();
+  const id = sanitized.startsWith("model:") ? sanitized : `model:${sanitized}`;
+  const label = model.name ?? baseId ?? id;
+  const typeKey = (model.type ?? "").toLowerCase();
+  const profileSource = MODEL_TYPE_PROFILES[typeKey] ?? DEFAULT_PROFILE;
+  const profile: ModelProfile = { ...profileSource };
+  return { id, label, model, profile };
+});
+
+const EDIT_MENU_ITEMS = ["Cut", "Copy", "Paste", "Delete"] as const;
 
 const toCanvasViewport = (rect: DOMRect): CanvasViewport => ({
   top: rect.top,
@@ -148,6 +370,27 @@ const viewportsApproximatelyEqual = (
   );
 };
 
+const rectToGeometry = (rect: ContextWindowRect): WindowGeometry => ({
+  position: { x: rect.left, y: rect.top },
+  size: { width: rect.width, height: rect.height }
+});
+
+const geometryToRect = (geometry: WindowGeometry): ContextWindowRect => ({
+  left: geometry.position.x,
+  top: geometry.position.y,
+  width: geometry.size.width,
+  height: geometry.size.height
+});
+
+const geometriesApproximatelyEqual = (
+  a: WindowGeometry | null,
+  b: WindowGeometry | null
+) =>
+  rectsApproximatelyEqual(
+    a ? geometryToRect(a) : null,
+    b ? geometryToRect(b) : null
+  );
+
 const computeInitialWindowRect = (
   anchorRect: DOMRect,
   canvasRect: CanvasViewport
@@ -188,10 +431,7 @@ const computeInitialWindowRect = (
     top = CONTEXT_WINDOW_PADDING;
   }
 
-  return constrainRectToBounds(
-    { left, top, width, height },
-    canvasRect
-  );
+  return constrainRectToBounds({ left, top, width, height }, canvasRect);
 };
 
 export default function LLMNode({ data }: NodeProps<NodeDef>) {
@@ -199,10 +439,108 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
   const outputs = data.out ?? [];
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const [canvasRect, setCanvasRect] = useState<CanvasViewport | null>(null);
-  const [windowRect, setWindowRect] = useState<ContextWindowRect | null>(null);
+  const [windowGeometry, setWindowGeometry] = useState<WindowGeometry | null>(null);
   const [isWindowOpen, setIsWindowOpen] = useState(false);
   const [isDocked, setIsDocked] = useState(false);
+  const [editMenu, setEditMenu] = useState<{ left: number; top: number } | null>(null);
+  const [isMinimized, setIsMinimized] = useState(false);
   const anchorSnapshot = useRef<RelativeAnchor | null>(null);
+
+  const updateNodeParams = useFlowStore((state) => state.updateNodeParams);
+
+  const params = (data.params ?? {}) as Record<string, unknown>;
+
+  const updateParams = useCallback(
+    (updates: Record<string, unknown>) => {
+      if (!updateNodeParams) return;
+      updateNodeParams(data.id, (previous) => ({
+        ...(previous ?? {}),
+        ...updates
+      }));
+    },
+    [data.id, updateNodeParams]
+  );
+
+  const selectedModelIdParam =
+    typeof params.modelId === "string" ? params.modelId : "";
+
+  const selectedModel = useMemo(() => {
+    if (selectedModelIdParam) {
+      const match = MODEL_OPTIONS.find((option) => option.id === selectedModelIdParam);
+      if (match) return match;
+    }
+    return MODEL_OPTIONS[0] ?? null;
+  }, [selectedModelIdParam]);
+
+  const resolvedModelId = selectedModel?.id ?? "";
+  const contextLimit = selectedModel?.profile.context ?? DEFAULT_PROFILE.context;
+
+  useEffect(() => {
+    if (typeof params.modelId === "string") return;
+    if (!selectedModel) return;
+    const profile = selectedModel.profile;
+    const maxResponse = Math.min(profile.context, 1024);
+    updateParams({
+      modelId: selectedModel.id,
+      adapter: profile.backend,
+      maxInputTokens: profile.context,
+      maxResponseTokens: maxResponse,
+      maxTokens: maxResponse,
+      temperature: profile.temperature,
+      topP: profile.topP,
+      topK: profile.topK,
+      minP: profile.minP
+    });
+  }, [params.modelId, selectedModel, updateParams]);
+
+  const adapterValue =
+    typeof params.adapter === "string"
+      ? params.adapter
+      : selectedModel?.profile.backend ?? DEFAULT_PROFILE.backend;
+
+  const storedMaxInput =
+    typeof params.maxInputTokens === "number"
+      ? params.maxInputTokens
+      : contextLimit;
+
+  const safeMaxInputTokens = clamp(
+    Math.round(storedMaxInput),
+    MIN_INPUT_TOKENS,
+    Math.max(MIN_INPUT_TOKENS, contextLimit)
+  );
+
+  const storedMaxTokens =
+    typeof params.maxResponseTokens === "number"
+      ? params.maxResponseTokens
+      : typeof params.maxTokens === "number"
+      ? params.maxTokens
+      : Math.min(contextLimit, 1024);
+
+  const safeMaxResponseTokens = clamp(
+    Math.round(storedMaxTokens),
+    MIN_RESPONSE_TOKENS,
+    safeMaxInputTokens
+  );
+
+  const temperatureValue =
+    typeof params.temperature === "number"
+      ? params.temperature
+      : selectedModel?.profile.temperature ?? DEFAULT_PROFILE.temperature;
+
+  const topPValue =
+    typeof params.topP === "number"
+      ? params.topP
+      : selectedModel?.profile.topP ?? DEFAULT_PROFILE.topP;
+
+  const topKValue =
+    typeof params.topK === "number"
+      ? params.topK
+      : selectedModel?.profile.topK ?? DEFAULT_PROFILE.topK;
+
+  const minPValue =
+    typeof params.minP === "number"
+      ? params.minP
+      : selectedModel?.profile.minP ?? DEFAULT_PROFILE.minP;
 
   const syncCanvasRect = useCallback((viewport: CanvasViewport) => {
     setCanvasRect((previous) =>
@@ -212,93 +550,221 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
 
   const gatherGeometry = useCallback(() => {
     const element = nodeRef.current;
-    if (!element) {
-      return null;
-    }
+    if (!element) return null;
     const canvasElement = element.closest(".react-flow") as HTMLElement | null;
-    if (!canvasElement) {
-      return null;
-    }
+    if (!canvasElement) return null;
     return {
       canvasMetrics: toCanvasViewport(canvasElement.getBoundingClientRect()),
       anchorBounds: element.getBoundingClientRect()
     };
   }, []);
 
+  const handleModelChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      const nextId = event.target.value;
+      const nextModel = MODEL_OPTIONS.find((option) => option.id === nextId);
+      if (!nextModel) {
+        updateParams({ modelId: nextId });
+        return;
+      }
+      const maxResponse = Math.min(nextModel.profile.context, 1024);
+      updateParams({
+        modelId: nextModel.id,
+        adapter: nextModel.profile.backend,
+        maxInputTokens: nextModel.profile.context,
+        maxResponseTokens: maxResponse,
+        maxTokens: maxResponse,
+        temperature: nextModel.profile.temperature,
+        topP: nextModel.profile.topP,
+        topK: nextModel.profile.topK,
+        minP: nextModel.profile.minP
+      });
+    },
+    [updateParams]
+  );
+
+  const handleBackendChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      updateParams({ adapter: event.target.value });
+    },
+    [updateParams]
+  );
+
+  const commitMaxInputTokens = useCallback(
+    (value: number) => {
+      const clampedValue = clamp(
+        value,
+        MIN_INPUT_TOKENS,
+        Math.max(MIN_INPUT_TOKENS, contextLimit)
+      );
+      const adjustedResponse = Math.min(safeMaxResponseTokens, clampedValue);
+      updateParams({
+        maxInputTokens: clampedValue,
+        maxResponseTokens: adjustedResponse,
+        maxTokens: adjustedResponse
+      });
+    },
+    [contextLimit, safeMaxResponseTokens, updateParams]
+  );
+
+  const commitMaxResponseTokens = useCallback(
+    (value: number) => {
+      const clampedValue = clamp(value, MIN_RESPONSE_TOKENS, safeMaxInputTokens);
+      updateParams({
+        maxResponseTokens: clampedValue,
+        maxTokens: clampedValue
+      });
+    },
+    [safeMaxInputTokens, updateParams]
+  );
+
+  const handleTemperatureChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const raw = Number(event.target.value);
+      if (Number.isNaN(raw)) return;
+      updateParams({ temperature: clamp(raw, 0, 2) });
+    },
+    [updateParams]
+  );
+
+  const handleTopPChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const raw = Number(event.target.value);
+      if (Number.isNaN(raw)) return;
+      updateParams({ topP: clamp(raw, 0, 1) });
+    },
+    [updateParams]
+  );
+
+  const handleTopKChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const raw = Number(event.target.value);
+      if (Number.isNaN(raw)) return;
+      updateParams({ topK: clamp(Math.round(raw), 0, 320) });
+    },
+    [updateParams]
+  );
+
+  const handleMinPChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const raw = Number(event.target.value);
+      if (Number.isNaN(raw)) return;
+      updateParams({ minP: clamp(raw, 0, 1) });
+    },
+    [updateParams]
+  );
+
   const openWindow = useCallback(() => {
     const geometry = gatherGeometry();
-    if (!geometry) {
-      return;
-    }
+    if (!geometry) return;
 
     const { canvasMetrics, anchorBounds } = geometry;
     syncCanvasRect(canvasMetrics);
     anchorSnapshot.current = toRelativeAnchor(anchorBounds, canvasMetrics);
 
-    setWindowRect((previous) => {
+    setWindowGeometry((previous) => {
+      const previousRect = previous ? geometryToRect(previous) : null;
       const baseline =
-        previous ?? computeInitialWindowRect(anchorBounds, canvasMetrics);
+        previousRect ?? computeInitialWindowRect(anchorBounds, canvasMetrics);
       const constrained = constrainRectToBounds(baseline, canvasMetrics);
-      if (previous && rectsApproximatelyEqual(previous, constrained)) {
+      if (previousRect && rectsApproximatelyEqual(previousRect, constrained)) {
         return previous;
       }
-      return constrained;
+      return rectToGeometry(constrained);
     });
 
     setIsWindowOpen(true);
     setIsDocked(false);
+    setEditMenu(null);
+    setIsMinimized(false);
   }, [gatherGeometry, syncCanvasRect]);
 
   const handleContextMenu = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       event.preventDefault();
       event.stopPropagation();
-      openWindow();
+      const geometry = gatherGeometry();
+      if (!geometry) return;
+
+      const { canvasMetrics } = geometry;
+      syncCanvasRect(canvasMetrics);
+      setIsWindowOpen(false);
+      setIsDocked(false);
+
+      const relativeX = event.clientX - canvasMetrics.left;
+      const relativeY = event.clientY - canvasMetrics.top;
+      const clampedX = clamp(
+        relativeX,
+        CONTEXT_WINDOW_PADDING,
+        Math.max(
+          CONTEXT_WINDOW_PADDING,
+          canvasMetrics.width - MENU_WIDTH - CONTEXT_WINDOW_PADDING
+        )
+      );
+      const clampedY = clamp(
+        relativeY,
+        CONTEXT_WINDOW_PADDING,
+        Math.max(
+          CONTEXT_WINDOW_PADDING,
+          canvasMetrics.height - MENU_HEIGHT - CONTEXT_WINDOW_PADDING
+        )
+      );
+      setEditMenu({
+        left: canvasMetrics.left + clampedX,
+        top: canvasMetrics.top + clampedY
+      });
     },
-    [openWindow]
+    [gatherGeometry, syncCanvasRect]
   );
 
   const handleDockIconOpen = useCallback(() => {
     openWindow();
   }, [openWindow]);
 
-  const handleRectChange = useCallback((next: ContextWindowRect) => {
-    setWindowRect((previous) =>
-      rectsApproximatelyEqual(previous, next) ? previous : next
-    );
-  }, []);
+  const handleNodeClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".react-flow__handle")) return;
+      event.stopPropagation();
+      openWindow();
+    },
+    [openWindow]
+  );
 
   const handleClose = useCallback(() => {
     setIsWindowOpen(false);
     setIsDocked(true);
+    setIsMinimized(false);
   }, []);
 
-  const handleMinimize = useCallback(() => {
-    setIsWindowOpen(false);
-    setIsDocked(true);
+  const handleToggleMinimize = useCallback(() => {
+    setIsWindowOpen(true);
+    setIsDocked(false);
+    setIsMinimized((previous) => !previous);
+  }, []);
+
+  const handleGeometryUpdate = useCallback((next: WindowGeometry) => {
+    setWindowGeometry((previous) =>
+      geometriesApproximatelyEqual(previous, next) ? previous : next
+    );
   }, []);
 
   useEffect(() => {
-    if (!(isWindowOpen || isDocked)) {
-      return;
-    }
+    if (!(isWindowOpen || isDocked)) return;
 
     const updateMetrics = () => {
       const geometry = gatherGeometry();
-      if (!geometry) {
-        return;
-      }
+      if (!geometry) return;
       const { canvasMetrics, anchorBounds } = geometry;
       syncCanvasRect(canvasMetrics);
       anchorSnapshot.current = toRelativeAnchor(anchorBounds, canvasMetrics);
-      setWindowRect((previous) => {
-        if (!previous) {
-          return previous;
-        }
-        const constrained = constrainRectToBounds(previous, canvasMetrics);
-        return rectsApproximatelyEqual(previous, constrained)
+      setWindowGeometry((previous) => {
+        if (!previous) return previous;
+        const previousRect = geometryToRect(previous);
+        const constrained = constrainRectToBounds(previousRect, canvasMetrics);
+        return rectsApproximatelyEqual(previousRect, constrained)
           ? previous
-          : constrained;
+          : rectToGeometry(constrained);
       });
     };
 
@@ -320,50 +786,39 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
   }, [gatherGeometry, isDocked, isWindowOpen, syncCanvasRect]);
 
   useEffect(() => {
-    if (!isWindowOpen) {
-      return;
-    }
+    if (!isWindowOpen) return;
 
     const element = nodeRef.current;
-    if (!element) {
-      return;
-    }
+    if (!element) return;
 
     const handleAnchorShift = () => {
       const geometry = gatherGeometry();
-      if (!geometry) {
-        return;
-      }
+      if (!geometry) return;
       const { canvasMetrics, anchorBounds } = geometry;
       syncCanvasRect(canvasMetrics);
       const nextAnchor = toRelativeAnchor(anchorBounds, canvasMetrics);
       const previousAnchor = anchorSnapshot.current;
       anchorSnapshot.current = nextAnchor;
 
-      if (!previousAnchor) {
-        return;
-      }
+      if (!previousAnchor) return;
 
       const deltaX = nextAnchor.left - previousAnchor.left;
       const deltaY = nextAnchor.top - previousAnchor.top;
 
-      if (Math.abs(deltaX) < 0.2 && Math.abs(deltaY) < 0.2) {
-        return;
-      }
+      if (Math.abs(deltaX) < 0.2 && Math.abs(deltaY) < 0.2) return;
 
-      setWindowRect((previous) => {
-        if (!previous) {
-          return previous;
-        }
+      setWindowGeometry((previous) => {
+        if (!previous) return previous;
+        const previousRect = geometryToRect(previous);
         const moved = {
-          ...previous,
-          left: previous.left + deltaX,
-          top: previous.top + deltaY
+          ...previousRect,
+          left: previousRect.left + deltaX,
+          top: previousRect.top + deltaY
         };
         const constrained = constrainRectToBounds(moved, canvasMetrics);
-        return rectsApproximatelyEqual(previous, constrained)
+        return rectsApproximatelyEqual(previousRect, constrained)
           ? previous
-          : constrained;
+          : rectToGeometry(constrained);
       });
     };
 
@@ -376,7 +831,27 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
     return () => observer.disconnect();
   }, [gatherGeometry, isWindowOpen, syncCanvasRect]);
 
-  const iconVisible = isDocked && !!windowRect;
+  useEffect(() => {
+    if (!editMenu) return;
+    const handleDismiss = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.("[data-llm-edit-menu]")) return;
+      setEditMenu(null);
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setEditMenu(null);
+    };
+    window.addEventListener("mousedown", handleDismiss);
+    window.addEventListener("contextmenu", handleDismiss);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("mousedown", handleDismiss);
+      window.removeEventListener("contextmenu", handleDismiss);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [editMenu]);
+
+  const iconVisible = isDocked && !!windowGeometry;
 
   const dockIconStyle = useMemo<React.CSSProperties>(
     () => ({
@@ -406,7 +881,12 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
 
   return (
     <>
-      <div ref={nodeRef} style={containerStyle} onContextMenu={handleContextMenu}>
+      <div
+        ref={nodeRef}
+        style={containerStyle}
+        onContextMenu={handleContextMenu}
+        onClick={handleNodeClick}
+      >
         {inputs.map((port, index) => (
           <Handle
             key={port.port}
@@ -450,47 +930,240 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
         </button>
       </div>
 
-      {canvasRect && windowRect && (
-        <ContextWindow
-          rect={windowRect}
-          canvasRect={canvasRect}
-          isVisible={isWindowOpen}
-          title={`${data.name} Options`}
-          onRequestClose={handleClose}
-          onRequestMinimize={handleMinimize}
-          onRectChange={handleRectChange}
+      {editMenu ? (
+        <div
+          data-llm-edit-menu
+          style={{ ...editMenuBaseStyle, left: editMenu.left, top: editMenu.top }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {EDIT_MENU_ITEMS.map((label) => (
+            <button
+              key={label}
+              type="button"
+              style={editMenuItemStyle}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                setEditMenu(null);
+              }}
+              onMouseEnter={(event) => {
+                (event.currentTarget as HTMLButtonElement).style.background =
+                  "rgba(248, 113, 113, 0.18)";
+              }}
+              onMouseLeave={(event) => {
+                (event.currentTarget as HTMLButtonElement).style.background =
+                  "transparent";
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {canvasRect && windowGeometry && (
+        <ContextWindow
+          title={`${data.name} Options`}
+          open={isWindowOpen}
+          position={windowGeometry.position}
+          size={windowGeometry.size}
+          minimized={isMinimized}
+          onRequestClose={handleClose}
+          onToggleMinimize={handleToggleMinimize}
+          onUpdate={handleGeometryUpdate}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <div>
-              <div style={sectionTitleStyle}>Quick Actions</div>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <button type="button" style={quickActionButtonStyle}>
-                  Preview Prompt
-                </button>
-                <button type="button" style={quickActionButtonStyle}>
-                  Inspect Responses
-                </button>
-                <button type="button" style={quickActionButtonStyle}>
-                  Manage Variants
-                </button>
+              <div style={sectionTitleStyle}>Model Selection</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={fieldGroupStyle}>
+                  <label style={fieldLabelStyle} htmlFor={`${data.id}-model`}>
+                    LLM Model
+                  </label>
+                  <select
+                    id={`${data.id}-model`}
+                    value={resolvedModelId}
+                    onChange={handleModelChange}
+                    style={inputStyle}
+                  >
+                    {MODEL_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={fieldGroupStyle}>
+                  <label style={fieldLabelStyle} htmlFor={`${data.id}-backend`}>
+                    Backend
+                  </label>
+                  <select
+                    id={`${data.id}-backend`}
+                    value={adapterValue}
+                    onChange={handleBackendChange}
+                    style={inputStyle}
+                  >
+                    {BACKEND_OPTIONS.map((backend) => (
+                      <option key={backend} value={backend}>
+                        {backend}
+                      </option>
+                    ))}
+                  </select>
+                  <span style={helperTextStyle}>
+                    Runtime adapter used to communicate with this module.
+                  </span>
+                </div>
               </div>
             </div>
 
             <div>
-              <div style={sectionTitleStyle}>Current Summary</div>
-              <div style={{ display: "grid", gap: 10 }}>
-                <div style={summaryRowStyle}>
-                  <span style={summaryLabelStyle}>Model</span>
-                  <span style={summaryValueStyle}>LLM Core (offline)</span>
+              <div style={sectionTitleStyle}>Token Limits</div>
+              <div style={gridRowStyle}>
+                <div style={fieldGroupStyle}>
+                  <label style={fieldLabelStyle} htmlFor={`${data.id}-input-tokens`}>
+                    Max Input Tokens
+                  </label>
+                  <input
+                    id={`${data.id}-input-tokens`}
+                    type="number"
+                    min={MIN_INPUT_TOKENS}
+                    max={Math.max(MIN_INPUT_TOKENS, contextLimit)}
+                    step={128}
+                    value={safeMaxInputTokens}
+                    onChange={(event) => {
+                      const raw = Number(event.target.value);
+                      if (Number.isNaN(raw)) return;
+                      commitMaxInputTokens(raw);
+                    }}
+                    style={inputStyle}
+                  />
+                  <span style={helperTextStyle}>
+                    Up to {contextLimit.toLocaleString()} tokens based on the model.
+                  </span>
                 </div>
-                <div style={summaryRowStyle}>
-                  <span style={summaryLabelStyle}>Context</span>
-                  <span style={summaryValueStyle}>
-                    Listening to upstream prompt and tools. Right-click to reopen if you
-                    minimize.
+                <div style={fieldGroupStyle}>
+                  <label style={fieldLabelStyle} htmlFor={`${data.id}-response-tokens`}>
+                    Max Response Length
+                  </label>
+                  <input
+                    id={`${data.id}-response-tokens`}
+                    type="number"
+                    min={MIN_RESPONSE_TOKENS}
+                    max={safeMaxInputTokens}
+                    step={32}
+                    value={safeMaxResponseTokens}
+                    onChange={(event) => {
+                      const raw = Number(event.target.value);
+                      if (Number.isNaN(raw)) return;
+                      commitMaxResponseTokens(raw);
+                    }}
+                    style={inputStyle}
+                  />
+                  <span style={helperTextStyle}>
+                    Cannot exceed max input tokens for this module.
                   </span>
                 </div>
               </div>
+            </div>
+
+            <div>
+              <div style={sectionTitleStyle}>Sampling Controls</div>
+              <div style={gridRowStyle}>
+                <div style={fieldGroupStyle}>
+                  <label style={fieldLabelStyle} htmlFor={`${data.id}-temperature`}>
+                    Temperature
+                  </label>
+                  <input
+                    id={`${data.id}-temperature`}
+                    type="number"
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    value={Number(temperatureValue.toFixed(2))}
+                    onChange={handleTemperatureChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={fieldGroupStyle}>
+                  <label style={fieldLabelStyle} htmlFor={`${data.id}-top-p`}>
+                    Top P
+                  </label>
+                  <input
+                    id={`${data.id}-top-p`}
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={Number(topPValue.toFixed(2))}
+                    onChange={handleTopPChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={fieldGroupStyle}>
+                  <label style={fieldLabelStyle} htmlFor={`${data.id}-top-k`}>
+                    Top K
+                  </label>
+                  <input
+                    id={`${data.id}-top-k`}
+                    type="number"
+                    min={0}
+                    max={320}
+                    step={1}
+                    value={Math.round(topKValue)}
+                    onChange={handleTopKChange}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={fieldGroupStyle}>
+                  <label style={fieldLabelStyle} htmlFor={`${data.id}-min-p`}>
+                    Min P
+                  </label>
+                  <input
+                    id={`${data.id}-min-p`}
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={Number(minPValue.toFixed(2))}
+                    onChange={handleMinPChange}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div style={sectionTitleStyle}>Model Summary</div>
+              {selectedModel ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div style={summaryRowStyle}>
+                    <span style={summaryLabelStyle}>Model</span>
+                    <span style={summaryValueStyle}>{selectedModel.label}</span>
+                  </div>
+                  {selectedModel.model.parameters ? (
+                    <div style={summaryRowStyle}>
+                      <span style={summaryLabelStyle}>Parameters</span>
+                      <span style={summaryValueStyle}>
+                        {selectedModel.model.parameters}
+                      </span>
+                    </div>
+                  ) : null}
+                  {selectedModel.model.ramrequired ? (
+                    <div style={summaryRowStyle}>
+                      <span style={summaryLabelStyle}>Suggested RAM</span>
+                      <span style={summaryValueStyle}>
+                        {selectedModel.model.ramrequired} GB
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div style={summaryRowStyle}>
+                  <span style={summaryLabelStyle}>No model selected</span>
+                  <span style={summaryValueStyle}>
+                    Choose a model to configure backend and sampling parameters.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </ContextWindow>
@@ -498,3 +1171,4 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
     </>
   );
 }
+

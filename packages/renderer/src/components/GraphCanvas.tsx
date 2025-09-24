@@ -27,8 +27,22 @@ import ModuleNode from "./nodes/BasicNode";
 import LLMNode from "./nodes/LLMNode";
 import { CanvasBoundaryProvider } from "./CanvasBoundaryContext";
 import ContextWindow from "./ContextWindow";
+import {
+  clampGeometry,
+  type WindowGeometry,
+  type WindowSize
+} from "./contextWindowUtils";
 
 const POSITION_KEY = "__position";
+const CONTEXT_WINDOW_DEFAULT_SIZE: WindowSize = { width: 320, height: 260 };
+const CONTEXT_WINDOW_POINTER_OFFSET = 12;
+
+interface GraphContextWindowState {
+  node: NodeDef;
+  geometry: WindowGeometry;
+  open: boolean;
+  minimized: boolean;
+}
 
 const getPosition = (node: NodeDef) => {
   const params = node.params as Record<string, unknown> | undefined;
@@ -66,11 +80,7 @@ export default function GraphCanvas() {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const [bounds, setBounds] = useState<DOMRectReadOnly | null>(null);
   const [contextWindow, setContextWindow] = useState<
-    | null
-    | {
-        node: NodeDef;
-        anchor: { x: number; y: number };
-      }
+    GraphContextWindowState | null
   >(null);
 
   const refreshBounds = useCallback(() => {
@@ -211,30 +221,77 @@ export default function GraphCanvas() {
   const handleNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node<NodeDef>) => {
       event.preventDefault();
+      event.stopPropagation();
+
       const overlay = overlayRef.current;
       if (!overlay) {
         return;
       }
+
       const rect = overlay.getBoundingClientRect();
-      setContextWindow({
-        node: node.data,
-        anchor: {
-          x: event.clientX - rect.left,
-          y: event.clientY - rect.top
-        }
+      const pointerPosition = {
+        x: event.clientX - rect.left + CONTEXT_WINDOW_POINTER_OFFSET,
+        y: event.clientY - rect.top + CONTEXT_WINDOW_POINTER_OFFSET
+      };
+
+      setContextWindow((previous) => {
+        const previousSize =
+          previous && previous.node.id === node.data.id
+            ? previous.geometry.size
+            : CONTEXT_WINDOW_DEFAULT_SIZE;
+
+        const nextGeometry = clampGeometry(
+          {
+            position: pointerPosition,
+            size: previousSize
+          },
+          { width: rect.width, height: rect.height }
+        );
+
+        return {
+          node: node.data,
+          geometry: nextGeometry,
+          open: true,
+          minimized: false
+        };
       });
+
       refreshBounds();
     },
-    [refreshBounds]
+    [overlayRef, refreshBounds]
   );
 
   const handlePaneClick = useCallback(() => {
-    setContextWindow(null);
+    setContextWindow((previous) =>
+      previous ? { ...previous, open: false, minimized: false } : null
+    );
   }, []);
 
   const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
-    setContextWindow(null);
+    setContextWindow((previous) =>
+      previous ? { ...previous, open: false, minimized: false } : null
+    );
+  }, []);
+
+  const handleContextWindowUpdate = useCallback((geometry: WindowGeometry) => {
+    setContextWindow((previous) =>
+      previous ? { ...previous, geometry } : previous
+    );
+  }, []);
+
+  const handleContextWindowClose = useCallback(() => {
+    setContextWindow((previous) =>
+      previous ? { ...previous, open: false, minimized: false } : null
+    );
+  }, []);
+
+  const handleContextWindowToggleMinimize = useCallback(() => {
+    setContextWindow((previous) =>
+      previous
+        ? { ...previous, minimized: !previous.minimized, open: true }
+        : previous
+    );
   }, []);
 
   const boundaryValue = useMemo(
@@ -283,13 +340,36 @@ export default function GraphCanvas() {
           }}
         />
 
-        {contextWindow && (
+        {contextWindow ? (
           <ContextWindow
-            node={contextWindow.node}
-            anchor={contextWindow.anchor}
-            onClose={() => setContextWindow(null)}
-          />
-        )}
+            title={`${contextWindow.node.name ?? contextWindow.node.id ?? "Node"} Context`}
+            open={contextWindow.open}
+            position={contextWindow.geometry.position}
+            size={contextWindow.geometry.size}
+            minimized={contextWindow.minimized}
+            onUpdate={handleContextWindowUpdate}
+            onRequestClose={handleContextWindowClose}
+            onToggleMinimize={handleContextWindowToggleMinimize}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>
+                {contextWindow.node.name ?? contextWindow.node.id ?? "Node"}
+              </div>
+              <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.4 }}>
+                Right-click menus for the graph will appear here. Select a node to
+                inspect its details and shortcuts.
+              </div>
+              <div style={{ fontSize: 12 }}>
+                <strong>ID:</strong> {contextWindow.node.id}
+              </div>
+              {contextWindow.node.type ? (
+                <div style={{ fontSize: 12 }}>
+                  <strong>Type:</strong> {contextWindow.node.type}
+                </div>
+              ) : null}
+            </div>
+          </ContextWindow>
+        ) : null}
       </div>
     </CanvasBoundaryProvider>
   );

@@ -7,9 +7,14 @@ const rootDir = fileURLToPath(new URL("./", import.meta.url));
 export default defineConfig({
   root: rootDir,
   test: {
-    environment: "node",
+    environment: "jsdom",
     globals: false,
-    include: ["src/**/*.test.ts", "src/**/*.spec.ts"],
+    include: [
+      "src/**/*.test.ts",
+      "src/**/*.spec.ts",
+      "src/**/*.test.tsx",
+      "src/**/*.spec.tsx"
+    ],
     coverage: {
       reporter: ["text", "lcov"],
       enabled: false

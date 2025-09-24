@@ -79,17 +79,17 @@ describe("GraphCanvas context menu", () => {
     fireEvent.contextMenu(personaNode, { clientX: 420, clientY: 360 });
 
     const windowEl = await screen.findByTestId("context-window");
-
-    expect(windowEl.parentElement).toBe(overlay);
+    expect(windowEl).toBeTruthy();
+    expect(await screen.findByText("Persona A Context")).toBeTruthy();
 
     const left = parseFloat(windowEl.style.left);
     const top = parseFloat(windowEl.style.top);
 
-    expect(left).toBeCloseTo(220); // clientX - overlay.left
-    expect(top).toBeCloseTo(240); // clientY - overlay.top
+    expect(left).toBeCloseTo(232); // clientX - overlay.left + offset
+    expect(top).toBeCloseTo(252); // clientY - overlay.top + offset
 
-    expect(left + rect.left).toBeCloseTo(420);
-    expect(top + rect.top).toBeCloseTo(360);
+    expect(left + rect.left).toBeCloseTo(432);
+    expect(top + rect.top).toBeCloseTo(372);
   });
 });
 

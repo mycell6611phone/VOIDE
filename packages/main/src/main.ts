@@ -26,6 +26,7 @@ function resolveRendererDevServerURL(): string | undefined {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
+const PRELOAD_BUNDLE_PATH = path.join(__dirname, '../../preload/dist/preload.js');
 
 // Free-mode defaults
 if (!process.env.VOIDE_FREE) process.env.VOIDE_FREE = '1';
@@ -76,7 +77,7 @@ async function createWindow() {
     height: 800,
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: PRELOAD_BUNDLE_PATH,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

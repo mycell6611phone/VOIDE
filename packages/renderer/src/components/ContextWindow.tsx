@@ -343,7 +343,11 @@ export default function ContextWindow({
   }
 
   return (
-    <div style={wrapperStyle} onContextMenu={(e) => e.preventDefault()}>
+    <div
+      data-testid="context-window"
+      style={wrapperStyle}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <div
         style={headerStyle}
         onMouseDown={beginDrag}

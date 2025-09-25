@@ -24,7 +24,7 @@ import {
   constrainRectToBounds,
   type WindowGeometry
 } from "../contextWindowUtils";
-import { useFlowStore } from "../../state/flowStore";
+import { deriveLLMDisplayName, useFlowStore } from "../../state/flowStore";
 import models from "./models.json";
 
 const containerStyle: React.CSSProperties = {
@@ -502,27 +502,60 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
     [data.id, updateNodeParams]
   );
 
-  const selectedModelIdParam =
-    typeof params.modelId === "string" ? params.modelId : "";
+  const selectedModelIdParam = useMemo(() => {
+    const candidates = [
+      typeof params.modelId === "string" ? params.modelId : "",
+      typeof params.model_id === "string" ? params.model_id : ""
+    ];
+    for (const candidate of candidates) {
+      const trimmed = candidate.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+    return "";
+  }, [params.modelId, params.model_id]);
 
   const selectedModel = useMemo(() => {
-    if (selectedModelIdParam) {
-      const match = MODEL_OPTIONS.find((option) => option.id === selectedModelIdParam);
-      if (match) return match;
+    if (!selectedModelIdParam) {
+      return null;
     }
-    return MODEL_OPTIONS[0] ?? null;
+    const match = MODEL_OPTIONS.find((option) => option.id === selectedModelIdParam);
+    return match ?? null;
   }, [selectedModelIdParam]);
 
-  const resolvedModelId = selectedModel?.id ?? "";
+  const resolvedModelId = selectedModelIdParam;
   const contextLimit = selectedModel?.profile.context ?? DEFAULT_PROFILE.context;
 
+  const nodeTitle = useMemo(() => {
+    const enrichedParams: Record<string, unknown> = {
+      ...params
+    };
+    if (selectedModelIdParam) {
+      enrichedParams.modelId = selectedModelIdParam;
+      enrichedParams["model_id"] = selectedModelIdParam;
+    }
+    const derived = deriveLLMDisplayName(enrichedParams, MODEL_OPTIONS);
+    if (derived) {
+      return derived;
+    }
+    if (selectedModelIdParam) {
+      const fallback = selectedModelIdParam.replace(/^model:/i, "").trim();
+      if (fallback) {
+        return fallback;
+      }
+    }
+    return "LLM";
+  }, [params, selectedModelIdParam]);
+
   useEffect(() => {
-    if (typeof params.modelId === "string") return;
+    if (typeof params.modelId === "string" || typeof params.model_id === "string") return;
     if (!selectedModel) return;
     const profile = selectedModel.profile;
     const maxResponse = Math.min(profile.context, 1024);
     updateParams({
       modelId: selectedModel.id,
+      model_id: selectedModel.id,
       adapter: profile.backend,
       maxInputTokens: profile.context,
       maxResponseTokens: maxResponse,
@@ -532,7 +565,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       topK: profile.topK,
       minP: profile.minP
     });
-  }, [params.modelId, selectedModel, updateParams]);
+  }, [params.modelId, params.model_id, selectedModel, updateParams]);
 
   const adapterValue =
     typeof params.adapter === "string"
@@ -602,15 +635,32 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
 
   const handleModelChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const nextId = event.target.value;
+      const nextId = event.target.value.trim();
+      if (!nextId) {
+        const defaultMax = Math.min(DEFAULT_PROFILE.context, 1024);
+        updateParams({
+          modelId: "",
+          model_id: "",
+          adapter: DEFAULT_PROFILE.backend,
+          maxInputTokens: DEFAULT_PROFILE.context,
+          maxResponseTokens: defaultMax,
+          maxTokens: defaultMax,
+          temperature: DEFAULT_PROFILE.temperature,
+          topP: DEFAULT_PROFILE.topP,
+          topK: DEFAULT_PROFILE.topK,
+          minP: DEFAULT_PROFILE.minP
+        });
+        return;
+      }
       const nextModel = MODEL_OPTIONS.find((option) => option.id === nextId);
       if (!nextModel) {
-        updateParams({ modelId: nextId });
+        updateParams({ modelId: nextId, model_id: nextId });
         return;
       }
       const maxResponse = Math.min(nextModel.profile.context, 1024);
       updateParams({
         modelId: nextModel.id,
+        model_id: nextModel.id,
         adapter: nextModel.profile.backend,
         maxInputTokens: nextModel.profile.context,
         maxResponseTokens: maxResponse,
@@ -985,7 +1035,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
           />
         ))}
 
-        <span>{data.name}</span>
+        <span>{nodeTitle}</span>
 
         {outputs.map((port, index) => (
           <Handle
@@ -1048,7 +1098,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
 
       {canvasRect && windowGeometry && (
         <ContextWindow
-          title={`${data.name} Options`}
+          title={`${nodeTitle} Options`}
           open={isWindowOpen}
           position={windowGeometry.position}
           size={windowGeometry.size}
@@ -1072,6 +1122,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
                     onChange={handleModelChange}
                     style={inputStyle}
                   >
+                    <option value="">Select a model</option>
                     {MODEL_OPTIONS.map((option) => (
                       <option key={option.id} value={option.id}>
                         {option.label}

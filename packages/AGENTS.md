@@ -1,4 +1,9 @@
 # /packages — Electron Workspace Monorepo
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 This folder contains all workspace packages consumed by the Electron app.
 Everything uses pnpm workspaces with TypeScript + ESM.

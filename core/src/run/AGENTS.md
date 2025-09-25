@@ -1,4 +1,9 @@
 # /core/src/run — CLI-Oriented Runner
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 Entry points for executing flows from the CLI.
 

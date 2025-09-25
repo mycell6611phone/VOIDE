@@ -74,8 +74,12 @@ const findModelNameInCatalog = (
     }
 
     const record = entry as Record<string, unknown>;
-    const entryId = record.id;
-    if (isNonEmptyString(entryId) && entryId === modelId) {
+    const entryId = pickFirstString(
+      record.id,
+      record.modelId,
+      record.model_id
+    );
+    if (entryId && entryId === modelId) {
       const label = pickFirstString(record.name, record.label, record.title);
       if (label) {
         return label;
@@ -93,7 +97,7 @@ const findModelNameInCatalog = (
   return null;
 };
 
-const deriveLLMDisplayName = (
+export const deriveLLMDisplayName = (
   params: Record<string, unknown>,
   catalog: unknown
 ): string | null => {
@@ -119,22 +123,27 @@ const deriveLLMDisplayName = (
     if (nestedDirect) {
       return nestedDirect;
     }
-    const nestedId = record.id;
-    if (isNonEmptyString(nestedId)) {
-      const fromCatalog = findModelNameInCatalog(catalog, nestedId.trim());
+    const nestedId = pickFirstString(
+      record.id,
+      record.modelId,
+      record.model_id
+    );
+    if (nestedId) {
+      const trimmedNestedId = nestedId.trim();
+      const fromCatalog = findModelNameInCatalog(catalog, trimmedNestedId);
       if (fromCatalog) {
         return fromCatalog;
       }
-      const fallback = nestedId.replace(/^model:/i, "").trim();
+      const fallback = trimmedNestedId.replace(/^model:/i, "").trim();
       if (fallback) {
         return fallback;
       }
     }
   }
 
-  const modelIdRaw = params.modelId;
-  if (isNonEmptyString(modelIdRaw)) {
-    const modelId = modelIdRaw.trim();
+  const modelIdCandidate = pickFirstString(params.modelId, params.model_id);
+  if (modelIdCandidate) {
+    const modelId = modelIdCandidate.trim();
     const fromCatalog = findModelNameInCatalog(catalog, modelId);
     if (fromCatalog) {
       return fromCatalog;

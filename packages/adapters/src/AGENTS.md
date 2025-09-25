@@ -1,4 +1,9 @@
 # /packages/adapters/src — Adapter Implementations
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 Contains adapter wrappers for different backends:
 - `mock.ts` — Deterministic mock LLM/tool adapter (default offline path).

@@ -1,4 +1,9 @@
 # /core — Runtime & CLI Hub
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 **Purpose.** Houses the TypeScript runtime, flow compiler, and CLI that back the
 Electron app. Everything here is ESM and must obey the free/offline guardrails

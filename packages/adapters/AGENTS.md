@@ -1,4 +1,9 @@
 # /packages/adapters — Local Module Adapters
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 **Role**
 Contains pluggable adapters for LLMs/tools (e.g., GPT4All). Must function fully

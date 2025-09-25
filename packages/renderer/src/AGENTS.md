@@ -1,4 +1,9 @@
 # /packages/renderer/src — Renderer Source Map
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 **Top-level files**
 - `App.tsx`, `main.tsx` — Entry + bootstrap for the Electron renderer.

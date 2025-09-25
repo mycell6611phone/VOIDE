@@ -1,4 +1,9 @@
 # /core/src/modules — Runtime Modules
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 This folder contains the runtime contracts and executors for built-in modules.
 Each file exports strongly-typed port definitions that must mirror the UI

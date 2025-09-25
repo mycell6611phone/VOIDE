@@ -96,6 +96,14 @@ describe("flowStore.updateNodeParams", () => {
     expect(getNodeName("llm-node")).toBe("custom-variant");
   });
 
+  it("derives names when only model_id is provided", () => {
+    useFlowStore.getState().updateNodeParams("llm-node", () => ({
+      model_id: "model:deepseek-r1"
+    }));
+
+    expect(getNodeName("llm-node")).toBe("DeepSeek R1");
+  });
+
   it("leaves non-LLM node names unchanged", () => {
     useFlowStore.getState().updateNodeParams("module-node", () => ({
       modelLabel: "Should Not Apply"

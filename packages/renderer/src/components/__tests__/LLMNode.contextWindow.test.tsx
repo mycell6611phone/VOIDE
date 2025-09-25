@@ -62,7 +62,7 @@ describe("LLMNode context window", () => {
         value: () => canvasRect
       });
 
-      const nodeLabel = await screen.findByText("LLM Persona");
+      const nodeLabel = await screen.findByText("LLM");
       const nodeContainer = nodeLabel.closest("div") as HTMLDivElement;
 
       Object.defineProperty(nodeContainer, "getBoundingClientRect", {

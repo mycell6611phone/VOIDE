@@ -1,4 +1,9 @@
 # /flows — Sample Flows & Schema
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 **Contents**
 - `sample-basic.flow.json`, `sample-self-debate.flow.json` — Reference graphs used

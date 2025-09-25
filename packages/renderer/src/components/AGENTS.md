@@ -1,4 +1,9 @@
 # /packages/renderer/src/components — Renderer Components
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 React components composing the Electron renderer UI.
 

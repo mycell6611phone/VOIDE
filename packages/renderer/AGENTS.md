@@ -1,4 +1,9 @@
 # /packages/renderer — Electron Renderer Bundle
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 **Role**
 The production renderer shipped inside Electron. Shares many concepts with the

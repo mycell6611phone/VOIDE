@@ -1,4 +1,9 @@
 # /core/src/build — Flow Build Pipeline
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 Implements the canonical graph compiler that turns authored flows into runtime
 artifacts.

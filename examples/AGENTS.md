@@ -1,4 +1,9 @@
 # /examples — Canvas Snapshots
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 Contains saved canvas JSON files that illustrate VOIDE flows. Useful for UI
 demos and regression testing.

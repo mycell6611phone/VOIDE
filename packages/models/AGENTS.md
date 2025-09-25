@@ -1,4 +1,9 @@
 # /packages/models — Local Model Manager
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 **Contents**
 - `src/modelManager.ts` — Utilities for discovering/installing offline models.

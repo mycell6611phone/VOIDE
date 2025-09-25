@@ -1,4 +1,9 @@
 # /packages/preload — Typed Preload Bridge
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 
 **Purpose**
 Defines the preload script that exposes a constrained API to the renderer via

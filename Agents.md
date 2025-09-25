@@ -1,4 +1,9 @@
 Guardrails for Agents
+> **File Modification Guardrails**
+> - Do not create, modify, or delete anything under any `dist/` directory.
+> - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
+> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+
 1. Stage Awareness
 
 Always ask: “Is this needed at this stage of development?”
@@ -91,4 +96,3 @@ has its own `AGENTS.md` with deeper notes.
 - `/examples` — Saved canvas layouts. See `examples/AGENTS.md`.
 - `/models` — Offline model manifest. Notes in `models/AGENTS.md`.
 - `/scripts` — Shell helpers for dev/build. Start at `scripts/AGENTS.md`.
-

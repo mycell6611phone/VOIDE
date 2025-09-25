@@ -1,10 +1,16 @@
 import React from "react";
 
-export const EDIT_MENU_ITEMS = ["Cut", "Copy", "Paste", "Delete"] as const;
+export const EDIT_MENU_ITEMS = [
+  "Cut",
+  "Copy",
+  "Paste",
+  "Reverse Inputs",
+  "Delete"
+] as const;
 export type EditMenuItemLabel = (typeof EDIT_MENU_ITEMS)[number];
 
 export const EDIT_MENU_WIDTH = 176;
-export const EDIT_MENU_HEIGHT = 192;
+export const EDIT_MENU_HEIGHT = 232;
 export const EDIT_MENU_DATA_ATTRIBUTE = "data-voide-edit-menu";
 
 const baseStyle: React.CSSProperties = {

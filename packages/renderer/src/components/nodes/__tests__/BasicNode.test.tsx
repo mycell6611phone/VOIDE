@@ -1,6 +1,6 @@
 import React, { type MutableRefObject } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { Position, type NodeProps } from "reactflow";
+import { Position, ReactFlowProvider, type NodeProps } from "reactflow";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import * as matchers from "@testing-library/jest-dom/matchers";
 import type { NodeDef } from "@voide/shared";
@@ -43,8 +43,23 @@ const createPromptNode = (): NodeDef => ({
   out: []
 });
 
-const renderNode = (node: NodeDef) => {
-  const providerValue = createOverlayContext();
+const createSwitchableNode = (): NodeDef => ({
+  id: "switchable-node",
+  type: "module",
+  name: "Switchable Module",
+  params: { moduleKey: "prompt" },
+  in: [{ port: "input" }],
+  out: [{ port: "output" }]
+});
+
+const TestNode = ({ nodeId }: { nodeId: string }) => {
+  const node = useFlowStore((state) =>
+    state.flow.nodes.find((entry) => entry.id === nodeId)
+  );
+
+  if (!node) {
+    throw new Error(`Node ${nodeId} not found in store`);
+  }
 
   const props = {
     id: node.id,
@@ -65,9 +80,17 @@ const renderNode = (node: NodeDef) => {
     sourcePosition: Position.Right
   } as unknown as NodeProps<NodeDef>;
 
+  return <BasicNode {...props} />;
+};
+
+const renderNode = (node: NodeDef) => {
+  const providerValue = createOverlayContext();
+
   return render(
     <CanvasBoundaryProvider value={providerValue}>
-      <BasicNode {...props} />
+      <ReactFlowProvider>
+        <TestNode nodeId={node.id} />
+      </ReactFlowProvider>
     </CanvasBoundaryProvider>
   );
 };
@@ -190,6 +213,65 @@ describe("BasicNode edit menu", () => {
       x: pointer.x,
       y: pointer.y
     });
+  });
+
+  it("toggles input orientation through the edit menu", async () => {
+    const node = createSwitchableNode();
+
+    useFlowStore.setState((state) => ({
+      ...state,
+      flow: {
+        id: "flow:test-orientation",
+        version: "1.0.0",
+        nodes: [node],
+        edges: []
+      }
+    }));
+
+    renderNode(node);
+
+    const getNodeContainer = () =>
+      screen
+        .getByText("Switchable Module")
+        .closest("[data-voide-io-orientation]") as HTMLElement;
+
+    expect(getNodeContainer().dataset.voideIoOrientation).toBe("default");
+
+    fireEvent.contextMenu(screen.getByText("Switchable Module"), {
+      clientX: 240,
+      clientY: 200
+    });
+
+    const reverseButton = screen.getByRole("button", { name: "Reverse Inputs" });
+    expect(reverseButton).toBeEnabled();
+
+    fireEvent.click(reverseButton);
+
+    await waitFor(() => {
+      expect(getNodeContainer().dataset.voideIoOrientation).toBe("reversed");
+    });
+
+    let storedNode = useFlowStore.getState().flow.nodes[0];
+    expect(
+      (storedNode.params as Record<string, unknown>)?.__ioOrientation
+    ).toBe("reversed");
+
+    fireEvent.contextMenu(screen.getByText("Switchable Module"), {
+      clientX: 240,
+      clientY: 200
+    });
+
+    const reverseAgain = screen.getByRole("button", { name: "Reverse Inputs" });
+    fireEvent.click(reverseAgain);
+
+    await waitFor(() => {
+      expect(getNodeContainer().dataset.voideIoOrientation).toBe("default");
+    });
+
+    storedNode = useFlowStore.getState().flow.nodes[0];
+    expect(
+      (storedNode.params as Record<string, unknown>)?.__ioOrientation
+    ).toBeUndefined();
   });
 });
 

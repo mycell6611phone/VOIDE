@@ -21,6 +21,10 @@ import EditMenu, {
   type EditMenuItemLabel
 } from "../EditMenu";
 import { useFlowStore } from "../../state/flowStore";
+import {
+  readNodeOrientation,
+  toggleNodeOrientationParams
+} from "./orientation";
 
 const containerStyle: React.CSSProperties = {
   width: 156,
@@ -125,6 +129,14 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
   const inputs = data.in ?? [];
   const outputs = data.out ?? [];
   const { overlayRef } = useCanvasBoundary();
+  const orientation = useMemo(
+    () => readNodeOrientation(data.params),
+    [data.params]
+  );
+  const inputHandlePosition =
+    orientation === "reversed" ? Position.Right : Position.Left;
+  const outputHandlePosition =
+    orientation === "reversed" ? Position.Left : Position.Right;
   const moduleCategory = useMemo(() => deriveModuleCategory(data), [data]);
   const defaultSize = useMemo(() => getDefaultSize(moduleCategory), [moduleCategory]);
   const [menuState, setMenuState] = useState<MenuState>(() => ({
@@ -222,29 +234,47 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         return;
       }
 
-      const relativeX = event.clientX - rect.left;
-      const relativeY = event.clientY - rect.top;
-      const clampedX = clamp(
-        relativeX,
+      const maxX = Math.max(
         CONTEXT_WINDOW_PADDING,
-        Math.max(
-          CONTEXT_WINDOW_PADDING,
-          rect.width - EDIT_MENU_WIDTH - CONTEXT_WINDOW_PADDING
-        )
+        rect.width - EDIT_MENU_WIDTH - CONTEXT_WINDOW_PADDING
       );
-      const clampedY = clamp(
-        relativeY,
+      const maxY = Math.max(
         CONTEXT_WINDOW_PADDING,
-        Math.max(
-          CONTEXT_WINDOW_PADDING,
-          rect.height - EDIT_MENU_HEIGHT - CONTEXT_WINDOW_PADDING
-        )
+        rect.height - EDIT_MENU_HEIGHT - CONTEXT_WINDOW_PADDING
+      );
+      const clickX = clamp(
+        event.clientX - rect.left,
+        CONTEXT_WINDOW_PADDING,
+        maxX
+      );
+      const clickY = clamp(
+        event.clientY - rect.top,
+        CONTEXT_WINDOW_PADDING,
+        maxY
       );
 
+      const nodeRect = event.currentTarget.getBoundingClientRect();
+      const nodeLeft = nodeRect.left - rect.left;
+      const nodeRight = nodeLeft + nodeRect.width;
+      const nodeTop = nodeRect.top - rect.top;
+      const nodeCenterY = nodeTop + nodeRect.height / 2;
+      const spaceRight = rect.width - nodeRight - CONTEXT_WINDOW_PADDING;
+      const spaceLeft = nodeLeft - CONTEXT_WINDOW_PADDING;
+      const sideOffset = 12;
+
+      let menuX =
+        spaceRight >= spaceLeft
+          ? nodeRight + sideOffset
+          : nodeLeft - EDIT_MENU_WIDTH - sideOffset;
+      menuX = clamp(menuX, CONTEXT_WINDOW_PADDING, maxX);
+
+      let menuY = nodeCenterY - EDIT_MENU_HEIGHT / 2;
+      menuY = clamp(menuY, CONTEXT_WINDOW_PADDING, maxY);
+
       setEditMenu({
-        left: rect.left + clampedX,
-        top: rect.top + clampedY,
-        pointer: { x: clampedX, y: clampedY }
+        left: rect.left + menuX,
+        top: rect.top + menuY,
+        pointer: { x: clickX, y: clickY }
       });
     },
     [overlayRef]
@@ -299,6 +329,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
   );
 
   const canPasteNode = clipboard?.kind === "node";
+  const canToggleOrientation = inputs.length > 0 || outputs.length > 0;
 
   const handleEditMenuSelect = useCallback(
     (label: EditMenuItemLabel) => {
@@ -332,6 +363,12 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
           }
           break;
         }
+        case "Reverse Inputs": {
+          updateNodeParams(data.id, (previous) =>
+            toggleNodeOrientationParams(previous)
+          );
+          break;
+        }
         default:
           break;
       }
@@ -350,12 +387,20 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
 
   const editMenuItems = useMemo(
     () =>
-      EDIT_MENU_ITEMS.map((label) => ({
-        label,
-        disabled: label === "Paste" && !canPasteNode,
-        onSelect: () => handleEditMenuSelect(label)
-      })),
-    [canPasteNode, handleEditMenuSelect]
+      EDIT_MENU_ITEMS.map((label) => {
+        const disabled =
+          label === "Paste"
+            ? !canPasteNode
+            : label === "Reverse Inputs"
+              ? !canToggleOrientation
+              : false;
+        return {
+          label,
+          disabled,
+          onSelect: () => handleEditMenuSelect(label)
+        };
+      }),
+    [canPasteNode, canToggleOrientation, handleEditMenuSelect]
   );
 
   useEffect(() => {
@@ -413,6 +458,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
     <>
       <div
         style={containerStyle}
+        data-voide-io-orientation={orientation}
         onClick={shouldRenderMenu ? handlePrimaryClick : undefined}
         onContextMenu={shouldRenderMenu ? handleContextMenu : undefined}
       >
@@ -420,7 +466,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
           <Handle
             key={port.port}
             type="target"
-            position={Position.Left}
+            position={inputHandlePosition}
             id={`${data.id}:${port.port}`}
             style={{
               ...handleStyle,
@@ -435,7 +481,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
           <Handle
             key={port.port}
             type="source"
-            position={Position.Right}
+            position={outputHandlePosition}
             id={`${data.id}:${port.port}`}
             style={{
               ...handleStyle,

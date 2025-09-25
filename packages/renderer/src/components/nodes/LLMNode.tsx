@@ -26,6 +26,10 @@ import {
 } from "../contextWindowUtils";
 import { deriveLLMDisplayName, useFlowStore } from "../../state/flowStore";
 import models from "./models.json";
+import {
+  readNodeOrientation,
+  toggleNodeOrientationParams
+} from "./orientation";
 
 const containerStyle: React.CSSProperties = {
   width: 184,
@@ -165,6 +169,11 @@ const editMenuItemStyle: React.CSSProperties = {
   textAlign: "left" as const,
   cursor: "pointer",
   transition: "background 120ms ease, transform 120ms ease"
+};
+const disabledEditMenuItemStyle: React.CSSProperties = {
+  ...editMenuItemStyle,
+  color: "rgba(127, 29, 29, 0.4)",
+  cursor: "not-allowed"
 };
 const MIN_INPUT_TOKENS = 256;
 const MIN_RESPONSE_TOKENS = 16;
@@ -464,6 +473,14 @@ const computeInitialWindowRect = (
 export default function LLMNode({ data }: NodeProps<NodeDef>) {
   const inputs = data.in ?? [];
   const outputs = data.out ?? [];
+  const orientation = useMemo(
+    () => readNodeOrientation(data.params),
+    [data.params]
+  );
+  const inputHandlePosition =
+    orientation === "reversed" ? Position.Right : Position.Left;
+  const outputHandlePosition =
+    orientation === "reversed" ? Position.Left : Position.Right;
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const [canvasRect, setCanvasRect] = useState<CanvasViewport | null>(null);
   const [windowGeometry, setWindowGeometry] = useState<WindowGeometry | null>(null);
@@ -490,6 +507,22 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
   }));
 
   const params = (data.params ?? {}) as Record<string, unknown>;
+  const canPasteNode = clipboardItem?.kind === "node";
+  const canToggleOrientation = inputs.length > 0 || outputs.length > 0;
+
+  const editMenuItems = useMemo(
+    () =>
+      EDIT_MENU_ITEMS.map((label) => ({
+        label,
+        disabled:
+          label === "Paste"
+            ? !canPasteNode
+            : label === "Reverse Inputs"
+              ? !canToggleOrientation
+              : false
+      })),
+    [canPasteNode, canToggleOrientation]
+  );
 
   const updateParams = useCallback(
     (updates: Record<string, unknown>) => {
@@ -794,27 +827,46 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       setIsWindowOpen(false);
       setIsMinimized(false);
 
-      const relativeX = event.clientX - canvasMetrics.left;
-      const relativeY = event.clientY - canvasMetrics.top;
-      const clampedX = clamp(
-        relativeX,
+      const maxX = Math.max(
         CONTEXT_WINDOW_PADDING,
-        Math.max(
-          CONTEXT_WINDOW_PADDING,
-          canvasMetrics.width - MENU_WIDTH - CONTEXT_WINDOW_PADDING
-        )
+        canvasMetrics.width - MENU_WIDTH - CONTEXT_WINDOW_PADDING
       );
-      const clampedY = clamp(
-        relativeY,
+      const maxY = Math.max(
         CONTEXT_WINDOW_PADDING,
-        Math.max(
-          CONTEXT_WINDOW_PADDING,
-          canvasMetrics.height - MENU_HEIGHT - CONTEXT_WINDOW_PADDING
-        )
+        canvasMetrics.height - MENU_HEIGHT - CONTEXT_WINDOW_PADDING
       );
+      const clickX = clamp(
+        event.clientX - canvasMetrics.left,
+        CONTEXT_WINDOW_PADDING,
+        maxX
+      );
+      const clickY = clamp(
+        event.clientY - canvasMetrics.top,
+        CONTEXT_WINDOW_PADDING,
+        maxY
+      );
+
+      const nodeLeft = anchorBounds.left - canvasMetrics.left;
+      const nodeRight = nodeLeft + anchorBounds.width;
+      const nodeTop = anchorBounds.top - canvasMetrics.top;
+      const nodeCenterY = nodeTop + anchorBounds.height / 2;
+      const spaceRight =
+        canvasMetrics.width - nodeRight - CONTEXT_WINDOW_PADDING;
+      const spaceLeft = nodeLeft - CONTEXT_WINDOW_PADDING;
+      const sideOffset = 12;
+
+      let menuX =
+        spaceRight >= spaceLeft
+          ? nodeRight + sideOffset
+          : nodeLeft - MENU_WIDTH - sideOffset;
+      menuX = clamp(menuX, CONTEXT_WINDOW_PADDING, maxX);
+
+      let menuY = nodeCenterY - MENU_HEIGHT / 2;
+      menuY = clamp(menuY, CONTEXT_WINDOW_PADDING, maxY);
+
       setEditMenu({
-        left: canvasMetrics.left + clampedX,
-        top: canvasMetrics.top + clampedY,
+        left: canvasMetrics.left + menuX,
+        top: canvasMetrics.top + menuY,
         clientX: event.clientX,
         clientY: event.clientY,
         nodeId: data.id
@@ -841,13 +893,28 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
           deleteNode(data.id);
           break;
         case "Paste":
-          pasteClipboard("node");
+          if (canPasteNode) {
+            pasteClipboard("node");
+          }
+          break;
+        case "Reverse Inputs":
+          updateNodeParams?.(data.id, (previous) =>
+            toggleNodeOrientationParams(previous)
+          );
           break;
         default:
           break;
       }
     },
-    [copyNode, cutNode, data.id, deleteNode, pasteClipboard]
+    [
+      canPasteNode,
+      copyNode,
+      cutNode,
+      data.id,
+      deleteNode,
+      pasteClipboard,
+      updateNodeParams
+    ]
   );
 
   const handleNodeClick = useCallback(
@@ -1019,6 +1086,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       <div
         ref={nodeRef}
         style={containerStyle}
+        data-voide-io-orientation={orientation}
         onContextMenu={handleContextMenu}
         onClick={handleNodeClick}
       >
@@ -1026,7 +1094,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
           <Handle
             key={port.port}
             type="target"
-            position={Position.Left}
+            position={inputHandlePosition}
             id={`${data.id}:${port.port}`}
             style={{
               ...handleStyle,
@@ -1041,7 +1109,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
           <Handle
             key={port.port}
             type="source"
-            position={Position.Right}
+            position={outputHandlePosition}
             id={`${data.id}:${port.port}`}
             style={{
               ...handleStyle,
@@ -1066,22 +1134,30 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       </div>
 
       {editMenu ? (
-
         <div
           data-node-edit-menu
           style={{ ...editMenuBaseStyle, left: editMenu.left, top: editMenu.top }}
         >
-          {EDIT_MENU_ITEMS.map((label) => (
+          {editMenuItems.map(({ label, disabled }) => (
             <button
               key={label}
               type="button"
-              style={editMenuItemStyle}
+              disabled={disabled}
+              style={
+                disabled ? disabledEditMenuItemStyle : editMenuItemStyle
+              }
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation();
-                setEditMenu(null);
+                if (disabled) {
+                  return;
+                }
+                handleEditMenuSelect(label);
               }}
               onMouseEnter={(event) => {
+                if (disabled) {
+                  return;
+                }
                 (event.currentTarget as HTMLButtonElement).style.background =
                   "rgba(248, 113, 113, 0.18)";
               }}

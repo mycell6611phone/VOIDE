@@ -181,7 +181,7 @@ export default function Palette() {
   return (
     <aside
       style={{
-        width: 240,
+        width: 192,
         borderRight: "1px solid #e2e8f0",
         background: "#f8fafc",
         padding: "16px 14px",

@@ -39,6 +39,7 @@ import {
   type WindowGeometry,
   type WindowSize
 } from "./contextWindowUtils";
+import ChatWindow from "./ChatWindow";
 
 const POSITION_KEY = "__position";
 const CONTEXT_WINDOW_DEFAULT_SIZE: WindowSize = { width: 320, height: 260 };
@@ -484,6 +485,8 @@ export default function GraphCanvas() {
             pointerEvents: "none"
           }}
         />
+
+        <ChatWindow />
 
         {edgeMenu ? (
           <EditMenu

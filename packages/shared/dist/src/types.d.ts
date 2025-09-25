@@ -1,8 +1,10 @@
 export type Role = 'system' | 'user' | 'assistant';
-export type PayloadT = {
+export interface TextPayload {
     kind: 'text';
     text: string;
-} | {
+    rawInput?: string;
+}
+export type PayloadT = TextPayload | {
     kind: 'json';
     value: unknown;
 } | {
@@ -60,6 +62,7 @@ export interface LLMParams {
     temperature: number;
     maxTokens: number;
     runtime: RuntimeProfile;
+    includeRawInput?: boolean;
 }
 export interface LoopParams {
     maxIters: number;

@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import GraphCanvas from "./components/GraphCanvas";
 import RunControls from "./components/RunControls";
 import Palette from "./components/Palette";
 import ChatInterface from "./components/ChatInterface";
 import { useFlowStore } from "./state/flowStore";
 import { ipcClient } from "./lib/ipcClient";
+import { useChatStore } from "./state/chatStore";
 
 const appShellStyle: React.CSSProperties = {
   display: "flex",
@@ -36,13 +37,19 @@ function getCurrentRoute(): string {
 
 function MainWorkspace() {
   const flow = useFlowStore((state) => state.flow);
+  const handleRun = useCallback(async () => {
+    const { sendActiveDraft, hasOpenChat } = useChatStore.getState();
+    const drafted = sendActiveDraft();
+    if (hasOpenChat() && !drafted) {
+      return;
+    }
+    await ipcClient.runFlow(flow);
+  }, [flow]);
 
   return (
     <div style={appShellStyle}>
       <RunControls
-        onRun={async () => {
-          await ipcClient.runFlow(flow);
-        }}
+        onRun={handleRun}
       />
       <div style={workspaceRowStyle}>
         <Palette />

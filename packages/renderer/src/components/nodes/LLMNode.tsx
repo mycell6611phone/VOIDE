@@ -96,6 +96,23 @@ const fieldGroupStyle: React.CSSProperties = {
   gap: 4
 };
 
+const checkboxWrapperStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 12,
+  fontWeight: 500,
+  color: "#7f1d1d",
+  cursor: "pointer"
+};
+
+const checkboxInputStyle: React.CSSProperties = {
+  width: 16,
+  height: 16,
+  accentColor: "#dc2626",
+  cursor: "pointer"
+};
+
 const gridRowStyle: React.CSSProperties = {
   display: "grid",
   gap: 12,
@@ -604,6 +621,9 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
     typeof params.adapter === "string"
       ? params.adapter
       : selectedModel?.profile.backend ?? DEFAULT_PROFILE.backend;
+
+  const includeRawInput =
+    typeof params.includeRawInput === "boolean" ? params.includeRawInput : false;
 
   const storedMaxInput =
     typeof params.maxInputTokens === "number"
@@ -1222,8 +1242,27 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
                       </option>
                     ))}
                   </select>
+                  <label
+                    style={checkboxWrapperStyle}
+                    htmlFor={`${data.id}-include-raw-input`}
+                  >
+                    <input
+                      id={`${data.id}-include-raw-input`}
+                      type="checkbox"
+                      checked={includeRawInput}
+                      onChange={(event) =>
+                        updateParams({ includeRawInput: event.target.checked })
+                      }
+                      style={checkboxInputStyle}
+                    />
+                    Forward input with response
+                  </label>
                   <span style={helperTextStyle}>
                     Runtime adapter used to communicate with this module.
+                  </span>
+                  <span style={helperTextStyle}>
+                    When enabled, downstream nodes receive the full prompt
+                    alongside the model output.
                   </span>
                 </div>
               </div>

@@ -1,7 +1,13 @@
 export type Role = 'system' | 'user' | 'assistant';
 
+export interface TextPayload {
+  kind: 'text';
+  text: string;
+  rawInput?: string;
+}
+
 export type PayloadT =
-  | { kind: 'text'; text: string }
+  | TextPayload
   | { kind: 'json'; value: unknown }
   | { kind: 'messages'; messages: { role: Role; content: string }[] }
   | { kind: 'vector'; values: number[] }
@@ -37,6 +43,7 @@ export interface LLMParams {
   temperature: number;
   maxTokens: number;
   runtime: RuntimeProfile;
+  includeRawInput?: boolean;
 }
 
 export interface LoopParams {

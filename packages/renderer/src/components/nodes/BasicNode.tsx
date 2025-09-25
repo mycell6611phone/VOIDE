@@ -22,6 +22,10 @@ import EditMenu, {
 } from "../EditMenu";
 import { useFlowStore } from "../../state/flowStore";
 import {
+  DEFAULT_CHAT_WINDOW_SIZE,
+  useChatStore
+} from "../../state/chatStore";
+import {
   readNodeOrientation,
   toggleNodeOrientationParams
 } from "./orientation";
@@ -150,6 +154,9 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
   const [editMenu, setEditMenu] = useState<
     { left: number; top: number; pointer: { x: number; y: number } | null } | null
   >(null);
+
+  const openChat = useChatStore((state) => state.openChat);
+  const getThread = useChatStore((state) => state.getThread);
 
   const {
     updateNodeParams,
@@ -439,19 +446,71 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
   const handlePrimaryClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (enableChatShortcut) {
-        if (typeof window !== "undefined") {
-          const opener = window.voide?.openChatWindow;
-          if (typeof opener === "function") {
-            event.stopPropagation();
-            void opener();
-            return;
+        event.stopPropagation();
+
+        const overlayRect = overlayRef.current?.getBoundingClientRect();
+        const nodeRect = event.currentTarget.getBoundingClientRect();
+        const existing = getThread(data.id);
+        const size = existing?.geometry?.size ?? { ...DEFAULT_CHAT_WINDOW_SIZE };
+
+        let geometry: WindowGeometry = existing?.geometry ?? {
+          position: { x: 0, y: 0 },
+          size: { ...size }
+        };
+
+        if (overlayRect) {
+          const relativeLeft = nodeRect.left - overlayRect.left;
+          const relativeRight = nodeRect.right - overlayRect.left;
+          const relativeTop = nodeRect.top - overlayRect.top;
+          const centerY = relativeTop + nodeRect.height / 2;
+          const offset = 20;
+          const canvasWidth = overlayRect.width;
+          const canvasHeight = overlayRect.height;
+
+          let x = relativeRight + offset;
+          if (x + size.width > canvasWidth) {
+            x = relativeLeft - offset - size.width;
           }
+          if (x < 0) {
+            x = Math.max(0, Math.min(relativeLeft, canvasWidth - size.width));
+          }
+
+          let y = centerY - size.height / 2;
+          if (y + size.height > canvasHeight) {
+            y = canvasHeight - size.height;
+          }
+          if (y < 0) {
+            y = 0;
+          }
+
+          geometry = clampGeometry(
+            {
+              position: { x, y },
+              size
+            },
+            { width: canvasWidth, height: canvasHeight }
+          );
         }
+
+        openChat({
+          nodeId: data.id,
+          nodeLabel: data.name ?? data.id ?? "Interface",
+          geometry
+        });
+        return;
       }
 
       handleNodeClick(event);
     },
-    [enableChatShortcut, handleNodeClick]
+    [
+      data.id,
+      data.name,
+      enableChatShortcut,
+      getThread,
+      handleNodeClick,
+      openChat,
+      overlayRef
+    ]
   );
 
   return (

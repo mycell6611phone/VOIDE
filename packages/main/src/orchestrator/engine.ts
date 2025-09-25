@@ -2,7 +2,7 @@ import Piscina from "piscina";
 import path from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
-import type { FlowDef, NodeDef, LLMParams, LoopParams, PayloadT } from "@voide/shared";
+import type { FlowDef, NodeDef, LLMParams, LoopParams, PayloadT, TextPayload } from "@voide/shared";
 import { topoOrder, Frontier, downstream } from "./scheduler.js";
 import { getModelRegistry } from "../services/models.js";
 import { recordRunLog, createRun, updateRunStatus, savePayload, getPayloadsForRun } from "../services/db.js";
@@ -121,6 +121,11 @@ async function executeNode(st: RunState, node: NodeDef): Promise<Array<[string, 
       prompt,
       modelFile: model?.file ?? ""
     });
+    const includeRawInput = Boolean((params as LLMParams).includeRawInput);
+    const payload: TextPayload = { kind: "text", text: result.text };
+    if (includeRawInput) {
+      payload.rawInput = prompt;
+    }
     await recordRunLog({
       type: "operation_progress",
       runId: st.runId,
@@ -129,7 +134,7 @@ async function executeNode(st: RunState, node: NodeDef): Promise<Array<[string, 
       latencyMs: result.latencyMs,
       status: "ok",
     });
-    return [[node.type === "critic" ? "notes" : "completion", { kind: "text", text: result.text }]];
+    return [[node.type === "critic" ? "notes" : "completion", payload]];
   }
   if (node.type === "embedding") {
     const txt = incomingText(st, node.id).join("\n");

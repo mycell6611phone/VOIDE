@@ -107,6 +107,11 @@ async function executeNode(st, node) {
             prompt,
             modelFile: model?.file ?? ""
         });
+        const includeRawInput = Boolean(params.includeRawInput);
+        const payload = { kind: "text", text: result.text };
+        if (includeRawInput) {
+            payload.rawInput = prompt;
+        }
         await recordRunLog({
             type: "operation_progress",
             runId: st.runId,
@@ -115,7 +120,7 @@ async function executeNode(st, node) {
             latencyMs: result.latencyMs,
             status: "ok",
         });
-        return [[node.type === "critic" ? "notes" : "completion", { kind: "text", text: result.text }]];
+        return [[node.type === "critic" ? "notes" : "completion", payload]];
     }
     if (node.type === "embedding") {
         const txt = incomingText(st, node.id).join("\n");

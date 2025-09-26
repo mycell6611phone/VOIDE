@@ -1,4 +1,5 @@
 # VOIDE (Visual Orchestration IDE) — MVP
+<img width="1909" height="893" alt="image" src="https://github.com/user-attachments/assets/940e1fee-665d-4ea5-b71c-2a14654af78b" />
 
 ## Prereqs
 - Linux (Pop!_OS). Node 20+, PNPM 9+, Python 3.11+, Docker or Podman.

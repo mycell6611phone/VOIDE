@@ -1,4 +1,5 @@
 # VOIDE is an interactive visual IDE. A user drags modules onto a canvas, wires them into a directed acyclic graph (like a breadboard), presses Build to validate and compile the graph into a Flow v1 protobuf, then presses Run to execute it. Execution is deterministic and versioned. The core purpose is to give non-programmers and technical builders alike a way to assemble complex LLM/data pipelines visually without hand-coding orchestration logic.
+<img width="1909" height="893" alt="image" src="https://github.com/user-attachments/assets/5c799fd2-1933-489f-9135-f0940dc78d19" />
 
 What the app should do in practice:
 

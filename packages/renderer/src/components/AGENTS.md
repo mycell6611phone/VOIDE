@@ -29,6 +29,7 @@ React components composing the Electron renderer UI.
   - Pass a `ParamsUpdater` that merges the existing `NodeDef.params` object; never mutate params in-place.
   - Add new module option groups here so the context menu remains the single integration surface for module settings.
   - When wiring new modules that need contextual menus, set `params.moduleKey` (palette nodes already do this) so `BasicNode` can detect the module category.
+  - **LLM node windows** must fall back to overlapping the node when there isn't enough lateral canvas space. Keep the initial geometry aligned with the module before relying on `constrainRectToBounds` so the menu never spawns off-screen.
 
 ## Canvas Edit Menus
 
@@ -39,3 +40,4 @@ React components composing the Electron renderer UI.
 - Node components (e.g., `LLMNode.tsx`) consume the same menu. They call the node helpers (`copyNode`, `cutNode`, `deleteNode`, `pasteClipboard("node")`) from the flow store.
 - The flow store clipboard keeps the last copied entity and its baseline position. Repeated pastes offset by `+48,+48` from that snapshot.
 - Use the exported `EDIT_MENU_DATA_ATTRIBUTE` for outside-click detection; both nodes and edges listen for `[data-voide-edit-menu]` before dismissing the menu.
+  - The LLM node variant mirrors this behavior; if there is no clean space to the left or right, position the menu so it overlaps the node instead of snapping to a distant edge.

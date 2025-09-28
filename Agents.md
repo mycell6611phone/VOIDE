@@ -96,3 +96,7 @@ has its own `AGENTS.md` with deeper notes.
 - `/examples` — Saved canvas layouts. See `examples/AGENTS.md`.
 - `/models` — Offline model manifest. Notes in `models/AGENTS.md`.
 - `/scripts` — Shell helpers for dev/build. Start at `scripts/AGENTS.md`.
+
+## Immutable Product Snapshot
+
+- The VOIDE canvas lets users drag modules onto the workspace, wire them together to design complex data flows, and watch live activation lights for debugging stalled modules or stuck loops.

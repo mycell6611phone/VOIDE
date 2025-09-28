@@ -16,6 +16,7 @@ import ReactFlow, {
   EdgeChange,
   Node,
   NodeChange,
+  ReactFlowInstance,
   addEdge,
   useEdgesState,
   useNodesState
@@ -58,6 +59,14 @@ interface EdgeContextMenuState {
   left: number;
   top: number;
 }
+
+const computeLayoutSignature = (nodes: Node[]): string =>
+  nodes
+    .map((node) =>
+      `${node.id}:${Math.round(node.position.x)}:${Math.round(node.position.y)}`
+    )
+    .sort()
+    .join("|");
 
 const getPosition = (node: NodeDef) => {
   const params = node.params as Record<string, unknown> | undefined;
@@ -107,11 +116,86 @@ export default function GraphCanvas() {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
+  const layoutSignatureRef = useRef<string | null>(null);
   const [bounds, setBounds] = useState<DOMRectReadOnly | null>(null);
   const [contextWindow, setContextWindow] = useState<
     GraphContextWindowState | null
   >(null);
   const [edgeMenu, setEdgeMenu] = useState<EdgeContextMenuState | null>(null);
+
+  const preserveFocusWhile = useCallback((operation: () => void) => {
+    if (typeof document === "undefined") {
+      operation();
+      return;
+    }
+
+    const activeElement = document.activeElement as (HTMLElement & {
+      selectionStart?: number | null;
+      selectionEnd?: number | null;
+      setSelectionRange?: (start: number, end: number) => void;
+      isContentEditable?: boolean;
+    }) | null;
+
+    let textSelection: { start: number | null; end: number | null } | null = null;
+    let contentEditableRange: Range | null = null;
+
+    if (
+      activeElement instanceof HTMLInputElement ||
+      activeElement instanceof HTMLTextAreaElement
+    ) {
+      textSelection = {
+        start: activeElement.selectionStart ?? null,
+        end: activeElement.selectionEnd ?? null
+      };
+    } else if (activeElement?.isContentEditable && typeof window !== "undefined") {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        try {
+          contentEditableRange = selection.getRangeAt(0).cloneRange();
+        } catch {
+          contentEditableRange = null;
+        }
+      }
+    }
+
+    operation();
+
+    if (!activeElement || typeof activeElement.focus !== "function") {
+      return;
+    }
+
+    if (document.activeElement === activeElement) {
+      return;
+    }
+
+    activeElement.focus({ preventScroll: true });
+
+    if (
+      textSelection &&
+      textSelection.start !== null &&
+      textSelection.end !== null &&
+      typeof activeElement.setSelectionRange === "function"
+    ) {
+      try {
+        activeElement.setSelectionRange(textSelection.start, textSelection.end);
+      } catch {
+        // Ignore selection restoration failures (e.g., element type mismatch).
+      }
+      return;
+    }
+
+    if (
+      contentEditableRange &&
+      typeof window !== "undefined"
+    ) {
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(contentEditableRange);
+      }
+    }
+  }, []);
 
   const refreshBounds = useCallback(() => {
     if (!containerRef.current) {
@@ -168,6 +252,36 @@ export default function GraphCanvas() {
   useEffect(() => {
     setEdges(flow.edges.map(toReactFlowEdge));
   }, [flow.edges, setEdges]);
+
+  const handleReactFlowInit = useCallback((instance: ReactFlowInstance) => {
+    reactFlowInstanceRef.current = instance;
+    layoutSignatureRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const instance = reactFlowInstanceRef.current;
+    if (!instance || nodes.length === 0) {
+      if (nodes.length === 0) {
+        layoutSignatureRef.current = "";
+      }
+      return;
+    }
+
+    const nextSignature = computeLayoutSignature(nodes);
+    if (layoutSignatureRef.current === nextSignature) {
+      return;
+    }
+
+    layoutSignatureRef.current = nextSignature;
+
+    preserveFocusWhile(() => {
+      try {
+        instance.fitView({ padding: 0.18 });
+      } catch {
+        // Ignore fitView errors (e.g., when ReactFlow instance is mid-teardown).
+      }
+    });
+  }, [nodes, preserveFocusWhile]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -466,7 +580,7 @@ export default function GraphCanvas() {
           onEdgeContextMenu={handleEdgeContextMenu}
           onPaneClick={handlePaneClick}
           onPaneContextMenu={handlePaneContextMenu}
-          fitView
+          onInit={handleReactFlowInit}
           proOptions={{ hideAttribution: true }}
           style={{
             background: "#ffffff",

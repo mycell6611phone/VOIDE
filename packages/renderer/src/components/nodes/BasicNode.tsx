@@ -186,7 +186,8 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
   );
 
   const openOptionsWindow = useCallback(
-    (clientX?: number, clientY?: number) => {
+    (options?: { clientX?: number; clientY?: number; anchorRect?: DOMRect | null }) => {
+      const { clientX, clientY, anchorRect } = options ?? {};
       setEditMenu(null);
       setMenuState((previous) => {
         const rect = overlayRef.current?.getBoundingClientRect();
@@ -194,16 +195,28 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
           return { ...previous, open: true, minimized: false };
         }
 
+        const { width, height } = previous.geometry.size;
+        let targetX = previous.geometry.position.x;
+        let targetY = previous.geometry.position.y;
+
+        if (anchorRect) {
+          const anchorLeft = anchorRect.left - rect.left;
+          const anchorTop = anchorRect.top - rect.top;
+          const anchorCenterX = anchorLeft + anchorRect.width / 2;
+          const anchorCenterY = anchorTop + anchorRect.height / 2;
+          targetX = anchorCenterX - width / 2;
+          targetY = anchorCenterY - height / 2;
+        } else if (typeof clientX === "number" && typeof clientY === "number") {
+          const pointerX = clientX - rect.left;
+          const pointerY = clientY - rect.top;
+          targetX = pointerX - width / 2;
+          targetY = pointerY - height / 2;
+        }
+
         const pointerGeometry: WindowGeometry = {
           position: {
-            x:
-              typeof clientX === "number"
-                ? clientX - rect.left + 12
-                : previous.geometry.position.x,
-            y:
-              typeof clientY === "number"
-                ? clientY - rect.top + 12
-                : previous.geometry.position.y
+            x: targetX,
+            y: targetY
           },
           size: previous.geometry.size
         };
@@ -234,8 +247,8 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       const rect = overlayRef.current?.getBoundingClientRect();
       if (!rect) {
         setEditMenu({
-          left: event.clientX,
-          top: event.clientY,
+          left: event.clientX - EDIT_MENU_WIDTH / 2,
+          top: event.clientY - EDIT_MENU_HEIGHT / 2,
           pointer: null
         });
         return;
@@ -249,39 +262,28 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         CONTEXT_WINDOW_PADDING,
         rect.height - EDIT_MENU_HEIGHT - CONTEXT_WINDOW_PADDING
       );
-      const clickX = clamp(
+
+      const pointerX = clamp(
         event.clientX - rect.left,
         CONTEXT_WINDOW_PADDING,
         maxX
       );
-      const clickY = clamp(
+      const pointerY = clamp(
         event.clientY - rect.top,
         CONTEXT_WINDOW_PADDING,
         maxY
       );
 
-      const nodeRect = event.currentTarget.getBoundingClientRect();
-      const nodeLeft = nodeRect.left - rect.left;
-      const nodeRight = nodeLeft + nodeRect.width;
-      const nodeTop = nodeRect.top - rect.top;
-      const nodeCenterY = nodeTop + nodeRect.height / 2;
-      const spaceRight = rect.width - nodeRight - CONTEXT_WINDOW_PADDING;
-      const spaceLeft = nodeLeft - CONTEXT_WINDOW_PADDING;
-      const sideOffset = 12;
+      const targetX = pointerX - EDIT_MENU_WIDTH / 2;
+      const targetY = pointerY - EDIT_MENU_HEIGHT / 2;
 
-      let menuX =
-        spaceRight >= spaceLeft
-          ? nodeRight + sideOffset
-          : nodeLeft - EDIT_MENU_WIDTH - sideOffset;
-      menuX = clamp(menuX, CONTEXT_WINDOW_PADDING, maxX);
-
-      let menuY = nodeCenterY - EDIT_MENU_HEIGHT / 2;
-      menuY = clamp(menuY, CONTEXT_WINDOW_PADDING, maxY);
+      const menuX = clamp(targetX, CONTEXT_WINDOW_PADDING, maxX);
+      const menuY = clamp(targetY, CONTEXT_WINDOW_PADDING, maxY);
 
       setEditMenu({
         left: rect.left + menuX,
         top: rect.top + menuY,
-        pointer: { x: clickX, y: clickY }
+        pointer: { x: pointerX, y: pointerY }
       });
     },
     [overlayRef]
@@ -299,7 +301,11 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       }
 
       event.stopPropagation();
-      openOptionsWindow(event.clientX, event.clientY);
+      openOptionsWindow({
+        clientX: event.clientX,
+        clientY: event.clientY,
+        anchorRect: event.currentTarget.getBoundingClientRect()
+      });
     },
     [openOptionsWindow]
   );

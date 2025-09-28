@@ -159,39 +159,6 @@ const DEFAULT_WINDOW_HEIGHT = 380;
 const APPROX_THRESHOLD = 0.5;
 const MENU_WIDTH = EDIT_MENU_WIDTH;
 const MENU_HEIGHT = EDIT_MENU_HEIGHT;
-
-const editMenuBaseStyle: React.CSSProperties = {
-  position: "fixed",
-  minWidth: MENU_WIDTH,
-  background: "#fef2f2",
-  border: "1px solid rgba(220, 38, 38, 0.25)",
-  borderRadius: 12,
-  boxShadow: "0 18px 36px rgba(220, 38, 38, 0.22)",
-  padding: 6,
-  display: "flex",
-  flexDirection: "column",
-  gap: 2,
-  zIndex: 170,
-  pointerEvents: "auto"
-};
-
-const editMenuItemStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 8,
-  border: "none",
-  background: "transparent",
-  color: "#7f1d1d",
-  fontWeight: 600,
-  fontSize: 13,
-  textAlign: "left" as const,
-  cursor: "pointer",
-  transition: "background 120ms ease, transform 120ms ease"
-};
-const disabledEditMenuItemStyle: React.CSSProperties = {
-  ...editMenuItemStyle,
-  color: "rgba(127, 29, 29, 0.4)",
-  cursor: "not-allowed"
-};
 const MIN_INPUT_TOKENS = 256;
 const MIN_RESPONSE_TOKENS = 16;
 
@@ -200,6 +167,17 @@ const computeOffset = (index: number, total: number) =>
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
+
+const alignOverAnchor = (
+  anchorStart: number,
+  anchorEnd: number,
+  size: number
+) => {
+  const centerAligned = anchorStart + (anchorEnd - anchorStart) / 2 - size / 2;
+  const min = Math.min(anchorEnd - size, anchorStart);
+  const max = Math.max(anchorEnd - size, anchorStart);
+  return clamp(centerAligned, min, max);
+};
 
 type RelativeAnchor = {
   left: number;
@@ -213,8 +191,6 @@ type BackendOption = "llama.cpp" | "gpt4all" | "ollama";
 type EditMenuState = {
   left: number;
   top: number;
-  clientX: number;
-  clientY: number;
   nodeId: string;
 };
 
@@ -468,20 +444,33 @@ const computeInitialWindowRect = (
   const anchorTop = anchorRect.top - canvasRect.top;
   const anchorBottom = anchorRect.bottom - canvasRect.top;
 
-  let left = anchorRight + CONTEXT_WINDOW_PADDING;
-  if (left + width > canvasRect.width - CONTEXT_WINDOW_PADDING) {
+  const canPlaceRight =
+    anchorRight + CONTEXT_WINDOW_PADDING + width <=
+    canvasRect.width - CONTEXT_WINDOW_PADDING;
+  const canPlaceLeft =
+    anchorLeft - CONTEXT_WINDOW_PADDING - width >= CONTEXT_WINDOW_PADDING;
+
+  let left: number;
+  if (canPlaceRight) {
+    left = anchorRight + CONTEXT_WINDOW_PADDING;
+  } else if (canPlaceLeft) {
     left = anchorLeft - width - CONTEXT_WINDOW_PADDING;
-  }
-  if (left < CONTEXT_WINDOW_PADDING) {
-    left = CONTEXT_WINDOW_PADDING;
+  } else {
+    left = alignOverAnchor(anchorLeft, anchorRight, width);
   }
 
-  let top = anchorTop;
-  if (top + height > canvasRect.height - CONTEXT_WINDOW_PADDING) {
-    top = Math.max(CONTEXT_WINDOW_PADDING, anchorBottom - height);
-  }
-  if (top < CONTEXT_WINDOW_PADDING) {
-    top = CONTEXT_WINDOW_PADDING;
+  const canAlignTop =
+    anchorTop + height <= canvasRect.height - CONTEXT_WINDOW_PADDING;
+  const canAlignBottom =
+    anchorBottom - height >= CONTEXT_WINDOW_PADDING;
+
+  let top: number;
+  if (canAlignTop) {
+    top = Math.max(anchorTop, CONTEXT_WINDOW_PADDING);
+  } else if (canAlignBottom) {
+    top = anchorBottom - height;
+  } else {
+    top = alignOverAnchor(anchorTop, anchorBottom, height);
   }
 
   return constrainRectToBounds({ left, top, width, height }, canvasRect);
@@ -526,20 +515,6 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
   const params = (data.params ?? {}) as Record<string, unknown>;
   const canPasteNode = clipboardItem?.kind === "node";
   const canToggleOrientation = inputs.length > 0 || outputs.length > 0;
-
-  const editMenuItems = useMemo(
-    () =>
-      EDIT_MENU_ITEMS.map((label) => ({
-        label,
-        disabled:
-          label === "Paste"
-            ? !canPasteNode
-            : label === "Reverse Inputs"
-              ? !canToggleOrientation
-              : false
-      })),
-    [canPasteNode, canToggleOrientation]
-  );
 
   const updateParams = useCallback(
     (updates: Record<string, unknown>) => {
@@ -875,20 +850,40 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       const spaceLeft = nodeLeft - CONTEXT_WINDOW_PADDING;
       const sideOffset = 12;
 
-      let menuX =
-        spaceRight >= spaceLeft
-          ? nodeRight + sideOffset
-          : nodeLeft - MENU_WIDTH - sideOffset;
+      const canFitRight = spaceRight >= MENU_WIDTH + sideOffset;
+      const canFitLeft = spaceLeft >= MENU_WIDTH + sideOffset;
+
+      let menuX: number;
+      if (canFitRight && (!canFitLeft || spaceRight >= spaceLeft)) {
+        menuX = nodeRight + sideOffset;
+      } else if (canFitLeft) {
+        menuX = nodeLeft - MENU_WIDTH - sideOffset;
+      } else {
+        const overlapMin = nodeRight - MENU_WIDTH;
+        const overlapMax = nodeLeft;
+        const centered = nodeLeft + (anchorBounds.width - MENU_WIDTH) / 2;
+        menuX = clamp(
+          centered,
+          Math.min(overlapMin, overlapMax),
+          Math.max(overlapMin, overlapMax)
+        );
+      }
       menuX = clamp(menuX, CONTEXT_WINDOW_PADDING, maxX);
 
-      let menuY = nodeCenterY - MENU_HEIGHT / 2;
+      const nodeBottom = nodeTop + anchorBounds.height;
+      const overlapMinY = nodeBottom - MENU_HEIGHT;
+      const overlapMaxY = nodeTop;
+      const centeredY = nodeCenterY - MENU_HEIGHT / 2;
+      let menuY = clamp(
+        centeredY,
+        Math.min(overlapMinY, overlapMaxY),
+        Math.max(overlapMinY, overlapMaxY)
+      );
       menuY = clamp(menuY, CONTEXT_WINDOW_PADDING, maxY);
 
       setEditMenu({
         left: canvasMetrics.left + menuX,
         top: canvasMetrics.top + menuY,
-        clientX: event.clientX,
-        clientY: event.clientY,
         nodeId: data.id
       });
     },
@@ -935,6 +930,24 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       pasteClipboard,
       updateNodeParams
     ]
+  );
+
+  const editMenuItems = useMemo(
+    () =>
+      EDIT_MENU_ITEMS.map((label) => {
+        const disabled =
+          label === "Paste"
+            ? !canPasteNode
+            : label === "Reverse Inputs"
+              ? !canToggleOrientation
+              : false;
+        return {
+          label,
+          disabled,
+          onSelect: () => handleEditMenuSelect(label)
+        };
+      }),
+    [canPasteNode, canToggleOrientation, handleEditMenuSelect]
   );
 
   const handleNodeClick = useCallback(
@@ -1056,7 +1069,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
     const handleDismiss = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
 
-      if (target?.closest?.("[data-node-edit-menu]")) return;
+      if (target?.closest?.(EDIT_MENU_SELECTOR)) return;
 
       setEditMenu(null);
     };
@@ -1154,42 +1167,10 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       </div>
 
       {editMenu ? (
-        <div
-          data-node-edit-menu
-          style={{ ...editMenuBaseStyle, left: editMenu.left, top: editMenu.top }}
-        >
-          {editMenuItems.map(({ label, disabled }) => (
-            <button
-              key={label}
-              type="button"
-              disabled={disabled}
-              style={
-                disabled ? disabledEditMenuItemStyle : editMenuItemStyle
-              }
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (disabled) {
-                  return;
-                }
-                handleEditMenuSelect(label);
-              }}
-              onMouseEnter={(event) => {
-                if (disabled) {
-                  return;
-                }
-                (event.currentTarget as HTMLButtonElement).style.background =
-                  "rgba(248, 113, 113, 0.18)";
-              }}
-              onMouseLeave={(event) => {
-                (event.currentTarget as HTMLButtonElement).style.background =
-                  "transparent";
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <EditMenu
+          position={{ left: editMenu.left, top: editMenu.top }}
+          items={editMenuItems}
+        />
       ) : null}
 
       {canvasRect && windowGeometry && (

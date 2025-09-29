@@ -1,59 +1,47 @@
 {
-  "$schema": "../spec/graph.schema.json",
-  "id": "flow:smoke",
   "version": "1.0.0",
   "nodes": [
     {
-      "id": "input",
-      "type": "InputNode",
-      "name": "Input",
-      "params": {},
-      "in": [],
-      "out": [
-        { "port": "text", "types": ["UserText"] }
-      ]
+      "id": "ui_1",
+      "type": "orchestrator",
+      "label": "UI",
+      "position": { "x": 120, "y": 240 }
     },
     {
-      "id": "prompt",
-      "type": "PromptNode",
-      "name": "Prompt",
-      "params": {},
-      "in": [
-        { "port": "text", "types": ["UserText"] }
-      ],
-      "out": [
-        { "port": "prompt", "types": ["PromptText"] }
-      ]
+      "id": "llm_1",
+      "type": "llm.generic",
+      "label": "LLM",
+      "position": { "x": 360, "y": 240 }
     },
     {
-      "id": "llm",
-      "type": "LLMNode",
-      "name": "LLM",
-      "params": { "model": "stub" },
-      "in": [
-        { "port": "prompt", "types": ["PromptText"] }
-      ],
-      "out": [
-        { "port": "text", "types": ["LLMText"] }
-      ]
-    },
-    {
-      "id": "output",
-      "type": "OutputNode",
-      "name": "Output",
-      "params": {},
-      "in": [
-        { "port": "text", "types": ["LLMText"] }
-      ],
-      "out": []
+      "id": "div_1",
+      "type": "diviter",
+      "label": "Diviter",
+      "position": { "x": 600, "y": 240 }
     }
   ],
   "edges": [
-    { "id": "e1", "from": ["input", "text"], "to": ["prompt", "text"] },
-    { "id": "e2", "from": ["prompt", "prompt"], "to": ["llm", "prompt"] },
-    { "id": "e3", "from": ["llm", "text"], "to": ["output", "text"] }
-  ],
-  "prompts": {},
-  "models": {},
-  "profiles": {}
+    {
+      "id": "edge_ui_out_to_llm",
+      "from": { "node": "ui_1", "port": "out" },
+      "to": { "node": "llm_1", "port": "prompt" }
+    },
+    {
+      "id": "edge_llm_out_to_div",
+      "from": { "node": "llm_1", "port": "completion" },
+      "to": { "node": "div_1", "port": "in" }
+    },
+    {
+      "id": "edge_div_pass_to_ui",
+      "from": { "node": "div_1", "port": "pass" },
+      "to": { "node": "ui_1", "port": "in" },
+      "label": "PASS"
+    },
+    {
+      "id": "edge_div_div_to_ui",
+      "from": { "node": "div_1", "port": "div" },
+      "to": { "node": "ui_1", "port": "in" },
+      "label": "DIV"
+    }
+  ]
 }

@@ -1,24 +1,88 @@
 version: 1
-summary: VOIDE runtime smoke coverage
-scenarios:
-  - name: CLI validates smoke flow
-    steps:
-      - run: pnpm voide validate flows/smoke.flow.json
-        expect:
-          exit_code: 0
-  - name: CLI packs and runs smoke flow with stub provider
-    steps:
-      - run: pnpm voide pack flows/smoke.flow.json --out /tmp/smoke.flow.pb
-        expect:
-          exit_code: 0
-      - run: pnpm voide run /tmp/smoke.flow.pb --provider stub --input input="Hello from smoke"
-        expect:
-          exit_code: 0
-          stdout_contains:
-            - DONE
-            - '"output"'
-  - name: Core unit tests stay green
-    steps:
-      - run: pnpm --filter @voide/core test
-        expect:
-          exit_code: 0
+summary: VOIDE runtime acceptance coverage
+tests:
+  - name: build_valid_graph
+    given:
+      - A clean workspace with dependencies installed via `pnpm install`.
+      - The example flow definition at `flows/smoke.flow.json`.
+    when:
+      - The developer runs `pnpm voide validate flows/smoke.flow.json`.
+    then:
+      - The command exits with status code 0.
+      - Validation output reports "OK" with no schema or wiring errors.
+
+  - name: diviter_routing_pass
+    given:
+      - The packed smoke flow where the diviter module receives an LLM completion with tag `PASS`.
+      - Runtime tracing of module emissions is enabled.
+    when:
+      - The flow is started via `pnpm voide run /tmp/smoke.flow.pb --provider stub --input input="route=PASS"`.
+    then:
+      - The diviter emits a token on its `pass` port.
+      - The orchestrator node `UI` receives the token on `UI.IN` and renders the completion payload.
+      - No emission occurs on the `div` port during this execution.
+
+  - name: diviter_routing_fail
+    given:
+      - The packed smoke flow where the diviter module receives an LLM completion with tag `DIV`.
+      - Runtime tracing of module emissions is enabled.
+    when:
+      - The flow is started via `pnpm voide run /tmp/smoke.flow.pb --provider stub --input input="route=DIV"`.
+    then:
+      - The diviter emits a token on its `div` port.
+      - The orchestrator node `UI` receives the token on `UI.IN` and renders the fallback payload.
+      - No emission occurs on the `pass` port during this execution.
+
+  - name: pause_behavior
+    given:
+      - A running flow with queued tokens awaiting execution.
+      - Control channel access to send runtime lifecycle commands.
+    when:
+      - A `pause` command is issued to the runtime.
+    then:
+      - No new module start events are recorded within 50ms of the pause acknowledgment.
+      - In-flight modules finish gracefully, and their completions remain queued.
+
+  - name: stop_behavior
+    given:
+      - A running flow with multiple pending tokens queued behind active modules.
+    when:
+      - A `stop` command is issued while work remains queued.
+    then:
+      - The runtime cancels all queued work items.
+      - No additional module executions begin after the stop command.
+      - The run reports a final status of `stopped`.
+
+  - name: memory_io_shape
+    given:
+      - A flow containing the `memory.io` module wired with `save` and `retrieve` operations.
+      - Telemetry hooks listening to module emissions.
+    when:
+      - An input token is saved through the `save` port and later retrieved via the `retrieve` port.
+    then:
+      - The `save` operation persists the payload without emitting downstream tokens.
+      - The `retrieve` operation emits the stored payload after applying configured transforms.
+      - Retrieved payload structure matches the schema advertised on the output port.
+
+  - name: ui_sink_end
+    given:
+      - Any flow whose terminal edge enters the `UI.IN` port.
+    when:
+      - A token reaches `UI.IN` during execution.
+    then:
+      - The runtime marks the run as complete.
+      - No additional downstream edges are evaluated after `UI.IN` receives the token.
+
+  - name: wire_telemetry_light
+    given:
+      - A flow executed with telemetry collection enabled for wiring events.
+    when:
+      - A module emits N tokens across a wired edge.
+    then:
+      - Exactly N `edge:tx` telemetry events are recorded for that edge.
+      - No duplicate or missing `edge:tx` events appear in the telemetry stream.
+
+todos:
+  - TODO: Add acceptance coverage for `llm.generic` error propagation and retry behavior.
+  - TODO: Verify orchestrator resume semantics after a paused run is resumed.
+  - TODO: Cover streaming token delivery across multi-hop edges with backpressure scenarios.

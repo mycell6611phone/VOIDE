@@ -2,6 +2,11 @@
 Voide Modular LLM Workflow System: Build Blueprint
 1. Core Philosophy
 
+User drags and drops modules to the canvas, left click options menu for configuration. 
+wiring tool to connect modules together with data flow. build button builds the run able
+design on the canvas. play button exicutes the flow, pause button pauses and stop button
+kills any stuck prosses and clears the data out of the data flow
+
 Always Connect:
 Modules always connect as wired, never blocking due to schema mismatches.
 
@@ -31,15 +36,13 @@ Module labels always visible, stating type (LLM, Prompt, Memory, etc.) and confi
 
 Color is used for module type (not status) but is never the only indicator.
 
-Ports: Each module displays one input dot (left) and one output dot (right) by default.
 
-Wire labels (optional): User can annotate connections (“critique”, “score”, etc.).
 
 2.2 Control Panel
 
-Build / Play / Pause / Stop buttons at the top (standard simulation/workflow UI).
+ Play / Pause / Stop buttons at the top center, Build button far right top menu bar 
 
-Context menu (right-click) on modules opens options/config (provider selection, parameters, etc.).
+Context menu (right-click) on modules opens edit menu (left click) opens options menu for the selected module
 
 Validation on build: System checks for unsatisfied inputs; if outputs don’t match expected schema, will coerce as plain text and warn the user (never blocks).
 
@@ -75,7 +78,7 @@ Example Manifest (Protobuf/JSON/YAML):
     "metadata": {"type": "dict", "required": false}
   },
   "options_schema": {
-    "provider": ["openai", "ollama", "gemini"],
+    "provider": ["llama.cpp", "ollama", "gpt4all".],
     "temperature": {"type": "float", "default": 1.0}
   },
   "version": "1.0.0",
@@ -83,13 +86,13 @@ Example Manifest (Protobuf/JSON/YAML):
 }
 
 ```
-[INPUT: Choose your canonical schema language: Protobuf/JSON/YAML/etc.]
+[INPUT: canonical schema language: Protobuf/JSON/YAML/etc.]
 
 3.2 Pinout Connection Formula
 
 A module can connect to another if its output schema covers all the required fields of the next module’s input schema.
 
-If not, data is coerced to plain text (str or JSON string), and a warning is shown (optional).
+If not, data is coerced to plain text (str or JSON string), and a warning is shown.
 
 No connections are blocked; user can always wire any module to any other.
 
@@ -105,7 +108,7 @@ process(input_data: dict) -> output_data: dict or str
 
 3.4 Options UI
 
-Right-click a module → options menu pops up
+Left-click a module → options menu pops up
 
 Fields shown are from options_schema
 
@@ -125,9 +128,9 @@ User can attach a Log module anywhere to capture data passing through.
 
 5. Accessibility
 
-Labels, icons, and lights are always present (never color only).
+Labels, icons, and lights are always present .
 
-Port dots: Show clear on/off status, not just color.
+Port dots: Show clear current on/off status.
 
 Optional: Shape or icon variation for different module types (e.g., LLM = rounded, Tool = rectangle).
 
@@ -139,15 +142,15 @@ Palette of default modules: [LLM, Prompt, Debate/Loop, Cache, Log, Memory, Divid
 
 Plugin system: Users can author and register new modules with their manifest and code.
 
-Community sharing: [INPUT: Define if/when you want a public registry or flow sharing.]
+
 
 7. Example Flow (Usage)
 
-User drags LLM, Prompt, and Debate modules to the canvas.
+User drags UI, LLM, Prompt, and Debate modules to the canvas.
 
-Wires connect Prompt → LLM → Debate.
+Wires connect UI to  Prompt → LLM → Debate.
 
-User right-clicks LLM, picks “GPT-4O”.
+User left-clicks LLM, picks “GPT-4O”.
 
 Hits Build: system validates, injects any missing fields as blank or plain text, no blocks.
 
@@ -162,7 +165,6 @@ If something breaks, user sees where (input light on, output off), attaches Log 
 [INPUT: Programming languages for module authoring? Python , 
 
 [INPUT: Storage for central state/logs: to be determand
-[INPUT: Do you want user accounts/collaboration/sharing?]yes
 
 [INPUT: Initial list of included modules, with descriptions. LLM, debate, log, cache, memory, divider, prompt, 
 
@@ -172,21 +174,17 @@ If something breaks, user sees where (input light on, output off), attaches Log 
 
 9. Development Milestones
 
+Visual canvas:
+
+Drag/drop, wiring, port dots/lights, build/run controls
+
 Core engine:
 
 Module manifest spec and validation engine
 
 Pinout connection logic
 
-Visual canvas:
-
-Drag/drop, wiring, port dots/lights, build/run controls
-
 Module authoring:
-
-Standard interface for process/input/output:   interface module
-
-Options UI
 
 Runtime and debugging:
 
@@ -206,11 +204,9 @@ High-contrast, shape-coding, screen reader support (if needed)
 
 10. Future / Optional Features
 
-Community module/flow sharing
+Outside API calls (GPT, Gemini, etc.)
 
-Live data previews (hover wires/lights)
-
-Timeline/scrubber for debugging
+Cloud infostructure 
 
 Collaboration (multi-user, comments, etc.)
 

@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://voide.app/spec/graph.schema.json",
-  "title": "VOIDE Canvas Graph",
+  "title": "VOIDE Flow Graph",
+  "description": "Authoring schema for VOIDE canvas graphs exchanged between the renderer and runtime layers.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "nodes", "edges"],
@@ -27,38 +28,40 @@
   "$defs": {
     "Node": {
       "type": "object",
+      "description": "Graph node representing a configured module instance on the canvas.",
       "additionalProperties": false,
       "required": ["id", "type", "position"],
       "properties": {
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Stable node identifier."
+          "description": "Stable node identifier that is unique within the flow."
         },
         "type": {
           "$ref": "#/$defs/NodeType",
-          "description": "Module type identifier drawn from the VOIDE palette."
+          "description": "Module type identifier recognised by the VOIDE runtime."
         },
         "label": {
           "type": "string",
           "minLength": 1,
-          "description": "Optional human readable label rendered on the node."
+          "description": "Optional human-readable label rendered on the node."
         },
         "position": {
           "$ref": "#/$defs/Position",
-          "description": "Canvas coordinates for the node anchor point."
+          "description": "Canvas coordinates for the node anchor point in pixels."
         },
         "options": {
           "type": "object",
-          "description": "Arbitrary module configuration payload.",
+          "description": "Arbitrary module configuration payload persisted alongside the node.",
           "default": {},
           "additionalProperties": true
         }
       },
-      "$comment": "Memory nodes must expose exactly two inbound ports (save, retrieve) and one outbound port (applied). Validate this contract in application logic when instantiating ports."
+      "$comment": "Memory nodes must expose exactly two inbound ports (save, retrieve) and one outbound port (applied)."
     },
     "Edge": {
       "type": "object",
+      "description": "Directed connection from an output port to an input port.",
       "additionalProperties": false,
       "required": ["id", "from", "to"],
       "properties": {
@@ -78,13 +81,68 @@
         "label": {
           "type": "string",
           "minLength": 1,
-          "description": "Optional label rendered on the edge."
+          "description": "Optional label rendered on the edge for operator guidance."
         }
       },
-      "$comment": "When the resolved source node has type 'diviter', restrict edge labels to the enum defined at #/$defs/DiviterEdgeLabel. This relationship is enforced at runtime because JSON Schema cannot cross-reference node type data."
+      "allOf": [
+        {
+          "$comment": "Diviter outputs must advertise deterministic labels so downstream tooling can branch reliably.",
+          "if": {
+            "properties": {
+              "from": {
+                "type": "object",
+                "properties": {
+                  "port": { "enum": ["pass", "div"] }
+                },
+                "required": ["port"]
+              }
+            },
+            "required": ["from"]
+          },
+          "then": {
+            "properties": {
+              "label": { "$ref": "#/$defs/DiviterEdgeLabel" }
+            },
+            "required": ["label"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "from": {
+                "properties": { "port": { "const": "pass" } },
+                "required": ["port"]
+              }
+            },
+            "required": ["from"]
+          },
+          "then": {
+            "properties": {
+              "label": { "const": "PASS" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "from": {
+                "properties": { "port": { "const": "div" } },
+                "required": ["port"]
+              }
+            },
+            "required": ["from"]
+          },
+          "then": {
+            "properties": {
+              "label": { "const": "DIV" }
+            }
+          }
+        }
+      ]
     },
     "PortEndpoint": {
       "type": "object",
+      "description": "Reference to a concrete node port in the flow graph.",
       "additionalProperties": false,
       "required": ["node", "port"],
       "properties": {
@@ -102,6 +160,7 @@
     },
     "Position": {
       "type": "object",
+      "description": "Canvas position expressed in pixels from the top-left origin.",
       "additionalProperties": false,
       "required": ["x", "y"],
       "properties": {
@@ -118,102 +177,193 @@
     "NodeType": {
       "type": "string",
       "enum": [
-        "interface",
-        "llm",
-        "prompt",
-        "debate",
-        "cache",
-        "log",
+        "InputNode",
+        "PromptNode",
+        "LLMNode",
+        "BranchNode",
+        "RouterDividerNode",
+        "BulletListNormalizerNode",
+        "LogNode",
+        "OutputNode",
+        "orchestrator",
+        "critic",
+        "llm.generic",
+        "system.prompt",
+        "embedding",
+        "retriever",
+        "vector.store",
+        "loop",
+        "output",
         "memory",
         "divider",
-        "diviter",
-        "tool"
+        "diviter"
       ],
-      "description": "Supported module types available on the VOIDE canvas. 'diviter' is accepted as an alias for legacy divider modules."
+      "description": "Supported module types detected in the flow serialization code base. Include legacy and runtime node identifiers."
     },
     "DiviterEdgeLabel": {
       "type": "string",
       "enum": ["PASS", "DIV"],
-      "description": "Allowed labels for edges emitted by a diviter node."
+      "description": "Allowed labels for edges emitted by a Diviter output port."
     },
     "portsByType": {
-      "$comment": "Canonical port definitions by node type. Use this map when materialising ports for a node instance.",
+      "$comment": "Canonical port definitions by node type. Use this map when materialising menus or validating port wiring.",
       "const": {
-        "interface": {
+        "InputNode": {
           "inputs": [],
           "outputs": [
-            { "id": "conversation", "kinds": ["TEXT"] }
+            { "id": "text", "kinds": ["UserText"] }
           ]
         },
-        "llm": {
+        "PromptNode": {
           "inputs": [
-            { "id": "prompt", "kinds": ["TEXT"] }
+            { "id": "text", "kinds": ["UserText"] }
           ],
           "outputs": [
-            { "id": "response", "kinds": ["TEXT"] }
+            { "id": "prompt", "kinds": ["PromptText"] }
           ]
         },
-        "prompt": {
+        "LLMNode": {
+          "inputs": [
+            { "id": "prompt", "kinds": ["PromptText"] }
+          ],
+          "outputs": [
+            { "id": "text", "kinds": ["LLMText"] }
+          ]
+        },
+        "BranchNode": {
+          "inputs": [
+            { "id": "text", "kinds": ["LLMText"] }
+          ],
+          "outputs": [
+            { "id": "pass", "kinds": ["LLMText"] },
+            { "id": "fail", "kinds": ["LLMText"] }
+          ]
+        },
+        "RouterDividerNode": {
+          "inputs": [
+            { "id": "text", "kinds": ["UserText"] }
+          ],
+          "outputs": [
+            { "id": "valid", "kinds": ["LLMText"] },
+            { "id": "invalid", "kinds": ["LLMText"] }
+          ]
+        },
+        "BulletListNormalizerNode": {
+          "inputs": [
+            { "id": "text", "kinds": ["LLMText"] }
+          ],
+          "outputs": [
+            { "id": "text", "kinds": ["LLMText"] }
+          ]
+        },
+        "LogNode": {
+          "inputs": [
+            { "id": "value", "kinds": ["AnyBlob"] }
+          ],
+          "outputs": [
+            { "id": "value", "kinds": ["AnyBlob"] }
+          ]
+        },
+        "OutputNode": {
+          "inputs": [
+            { "id": "text", "kinds": ["LLMText"] }
+          ],
+          "outputs": []
+        },
+        "orchestrator": {
+          "inputs": [
+            { "id": "in", "kinds": ["text", "json", "messages"] }
+          ],
+          "outputs": [
+            { "id": "out", "kinds": ["text", "json", "messages"] }
+          ]
+        },
+        "critic": {
+          "inputs": [
+            { "id": "text", "kinds": ["text"] }
+          ],
+          "outputs": [
+            { "id": "notes", "kinds": ["text"] }
+          ]
+        },
+        "llm.generic": {
+          "inputs": [
+            { "id": "prompt", "kinds": ["text"] }
+          ],
+          "outputs": [
+            { "id": "completion", "kinds": ["text"] }
+          ]
+        },
+        "system.prompt": {
           "inputs": [],
           "outputs": [
-            { "id": "prompt", "kinds": ["TEXT"] }
+            { "id": "out", "kinds": ["text"] }
           ]
         },
-        "debate": {
+        "embedding": {
           "inputs": [
-            { "id": "input", "kinds": ["TEXT"] }
+            { "id": "text", "kinds": ["text"] }
           ],
           "outputs": [
-            { "id": "result", "kinds": ["TEXT"] }
+            { "id": "vec", "kinds": ["vector"] }
           ]
         },
-        "cache": {
+        "retriever": {
           "inputs": [
-            { "id": "in", "kinds": ["TEXT", "JSON"] }
+            { "id": "vec", "kinds": ["vector"] }
           ],
           "outputs": [
-            { "id": "out", "kinds": ["TEXT", "JSON"] }
+            { "id": "docs", "kinds": ["json"] }
           ]
         },
-        "log": {
+        "vector.store": {
           "inputs": [
-            { "id": "entry", "kinds": ["TEXT", "JSON"] }
+            { "id": "upsert", "kinds": ["json", "vector"] }
+          ],
+          "outputs": [
+            { "id": "ok", "kinds": ["json"] }
+          ]
+        },
+        "loop": {
+          "inputs": [
+            { "id": "in", "kinds": ["text"] }
+          ],
+          "outputs": [
+            { "id": "body", "kinds": ["text"] },
+            { "id": "out", "kinds": ["text"] }
+          ]
+        },
+        "output": {
+          "inputs": [
+            { "id": "in", "kinds": ["text", "json"] }
           ],
           "outputs": []
         },
         "memory": {
           "inputs": [
-            { "id": "save", "kinds": ["TEXT", "JSON"] },
-            { "id": "retrieve", "kinds": ["TEXT", "JSON"] }
+            { "id": "save", "kinds": ["text", "json"] },
+            { "id": "retrieve", "kinds": ["text", "json"] }
           ],
           "outputs": [
-            { "id": "applied", "kinds": ["TEXT", "JSON"] }
+            { "id": "applied", "kinds": ["text", "json"] }
           ]
         },
         "divider": {
           "inputs": [
-            { "id": "in", "kinds": ["TEXT", "JSON"] }
+            { "id": "in", "kinds": ["text", "json"] }
           ],
           "outputs": [
-            { "id": "pass", "kinds": ["TEXT", "JSON"] },
-            { "id": "div", "kinds": ["TEXT", "JSON"] }
+            { "id": "pass", "kinds": ["text", "json"] },
+            { "id": "div", "kinds": ["text", "json"] }
           ]
         },
         "diviter": {
           "inputs": [
-            { "id": "in", "kinds": ["TEXT", "JSON"] }
+            { "id": "in", "kinds": ["text", "json"] }
           ],
           "outputs": [
-            { "id": "pass", "kinds": ["TEXT", "JSON"] },
-            { "id": "div", "kinds": ["TEXT", "JSON"] }
-          ]
-        },
-        "tool": {
-          "inputs": [
-            { "id": "input", "kinds": ["TEXT", "JSON"] }
-          ],
-          "outputs": [
-            { "id": "result", "kinds": ["TEXT", "JSON"] }
+            { "id": "pass", "kinds": ["text", "json"] },
+            { "id": "div", "kinds": ["text", "json"] }
           ]
         }
       }

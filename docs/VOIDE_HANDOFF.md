@@ -1,95 +1,86 @@
-# VOIDE Backend Handoff
+# VOIDE Project Handoff
 
-## Monorepo at a glance
-- **Workspace manager:** pnpm with Node.js ≥ 20.11 (`package.json` sets the engine and lists Turbo-based scripts).
-- **Top-level workspaces:** `packages/*` and `core` (runtime + CLI) as declared in `package.json`.
-- **Front-end shims:** Lightweight module manifests live in `src/modules` to keep canvas experiments unblocked.
-- **Reference assets:** JSON flow fixtures live in `flows/`, while `packages/shared` exposes TypeScript types used by both renderer and runtime.
+- Target commit: `a5cffa3f9614eba9331256e55ef36ee2893c3e39`
 
-## Root package scripts
-| Script | Description |
-| --- | --- |
-| `pnpm build` | Runs `turbo run build` across the workspace. |
-| `pnpm dev` | Builds once, then runs all package `dev` scripts in parallel alongside Electron (`wait-on` ensures main/preload bundles exist). |
-| `pnpm lint` | Delegates to `turbo run lint`. |
-| `pnpm start` | Boots Electron against the built main bundle. |
-| `pnpm pack:linux` | Builds Linux `deb` and `AppImage` artefacts through `electron-builder`. |
-| `pnpm test` | Aggregates IPC, core, and main package tests, then exercises the CLI `validate` and `pack` flows against `flows/sample-basic.flow.json`. |
-| `pnpm proto:gen` | Regenerates protobuf TypeScript bindings (`ts-proto`) from `proto/flow.proto`. |
-| `pnpm license:check` | Audits workspace dependencies for approved licenses. |
+## Build & Run
 
-## Key packages
-- **`core`** – houses flow parsing (`core/src/flow/schema.ts`), validation (`core/src/build/validate.ts`), compilation to protobuf (`core/src/build/compiler.ts`), and the CLI/runtime (`core/src/cli.ts`, `core/src/run`).
-- **`packages/renderer`** – ReactFlow-based canvas (`components/GraphCanvas.tsx`) backed by Zustand state stores (`state/flowStore.ts`, `state/chatStore.ts`).
-- **`packages/shared`** – shared Flow/Node/Edge TypeScript contracts (`src/types.ts`) and generated protobuf bindings.
-- **`packages/main`, `packages/preload`, `packages/ipc`** – Electron process layers and typed IPC bridges (see respective `AGENTS.md` for scope when extending).
+- **Node toolchain**: Repo targets Node.js ≥20.11 and pnpm 9; install dependencies with `pnpm install` at the workspace root.【F:package.json†L7-L38】
+- **Turbo/pnpm scripts**:
+  - `pnpm build` ⇒ `turbo run build` for all packages.【F:package.json†L11-L19】
+  - `pnpm dev` ⇒ prebuild + parallel dev servers + Electron shell; requires renderer bundle readiness via `wait-on`.【F:package.json†L11-L19】
+  - `pnpm test` runs IPC/core/main unit suites then exercises CLI `validate` + `pack` flows.【F:package.json†L11-L19】
+  - Package-specific tasks: `pnpm --filter @voide/renderer dev` (canvas) and similar filters per package.【F:packages/renderer/AGENTS.md†L13-L18】【F:packages/AGENTS.md†L18-L24】
+- **Core runtime workflows**:
+  - `pnpm --filter @voide/core build|test|proto:gen` manage compiler/runtime builds and protobuf bindings.【F:core/AGENTS.md†L24-L27】
+  - Root `proto:gen` script wraps `protoc` to refresh `packages/shared/src/gen` from `proto/flow.proto`; run after editing protobufs.【F:package.json†L18-L19】
+- **CLI usage**:
+  - `pnpm voide validate <flow.json>` parses JSON via `parseFlow` (zod schema).【F:core/src/cli.ts†L73-L102】【F:core/src/flow/schema.ts†L1-L34】
+  - `pnpm voide pack <flow.json> -o <out>` compiles to `pb.Flow` binary using `compile` and writes `.flow.pb`.【F:core/src/cli.ts†L79-L115】【F:core/src/build/compiler.ts†L10-L57】
+  - `pnpm voide run <flow.pb>` streams telemetry while executing `runFlow` atop the registered built-in nodes.【F:core/src/cli.ts†L29-L70】【F:core/src/run/index.ts†L1-L20】【F:core/src/nodes/builtins.ts†L55-L169】
+- **Environment variables in use**:
+  - Renderer bootstrap toggles `VITE_DEV_SERVER_URL`, `VITE_RENDERER_PORT`, `NODE_ENV`, `VOIDE_FREE`, `VOIDE_ENABLE_CUDA` and disables GPU when CUDA is off.【F:packages/main/src/main.ts†L12-L55】
+  - SQLite and model directories resolve via `HOME`/`USERPROFILE`; secrets/db paths land under `~/.voide`.【F:packages/main/src/services/db.ts†L11-L14】【F:packages/main/src/services/models.ts†L34-L41】
+  - Model tooling and adapters also rely on `HOME`/`USERPROFILE` and optional `LLAMA_BIN` overrides for llama.cpp runners.【F:packages/models/src/modelManager.ts†L26-L29】【F:packages/adapters/src/llamaCpp.ts†L15-L28】
 
-## Flow graph data model
-- **Canonical types:** `packages/shared/src/types.ts` defines `FlowDef`, `NodeDef`, `EdgeDef`, and `PortDef` for renderer/runtime parity.
-- **Parser:** `core/src/flow/schema.ts` uses Zod to parse JSON into a `FlowEnvelope` (fields `id`, `version`, `nodes`, `edges`, optional `name`, default-empty arrays for ports, passthrough for custom params).
-- **Compiler:** `core/src/build/compiler.ts` enforces topology (via `validateCanvas`) and emits the protobuf payload expected by the runtime. Edge types are inferred by intersecting the source/target port `types` arrays.
-- **Runtime types:** `core/src/runtime/types.ts` registers codecs for `UserText`, `PromptText`, `LLMText`, and `AnyBlob` plus any `ext:` prefixed blobs.
-- **Sample flows:** `flows/sample-basic.flow.json` mirrors the minimal Input→Prompt→LLM→Output pipeline; `flows/sample-self-debate.flow.json` demonstrates richer metadata blocks (`prompts`, `models`, `profiles`).
+## UI ↔ Engine Integration Points
 
-## Module inventory
-### Runtime node handlers (`core/src/nodes/builtins.ts`)
-| Kind | Inputs | Outputs | Notes |
-| --- | --- | --- | --- |
-| `InputNode` | — | `text: UserText` | Reads `context.inputs[config.id]`; config id defaults to the node id. |
-| `PromptNode` | `text: UserText` | `prompt: PromptText` | Renders a hard-coded `"{{text}}"` template and HTML-escapes dangerous characters. |
-| `LLMNode` | `prompt: PromptText` | `text: LLMText` | Delegates to the provider keyed by `config.model`; missing providers throw.
-| `BranchNode` | `text: LLMText` | `pass: LLMText`, `fail: LLMText` | Routes by substring match (`config.condition`). |
-| `RouterDividerNode` | `text: UserText` | `valid: LLMText`, `invalid: LLMText` | Uses an FTS5-backed schema check to gate bullet-prefixed strings. |
-| `BulletListNormalizerNode` | `text: LLMText` | `text: LLMText` | Normalizes arbitrary lines into `- ` bullet items. |
-| `LogNode` | `value: AnyBlob` | `value: AnyBlob` | Forwards data after invoking `context.log`. |
-| `OutputNode` | `text: LLMText` | — | Stores `context.outputs[config.name]` for CLI retrieval. |
+- `ipcClient.validateFlow(flow)` validates the current canvas envelope against IPC `flowValidate` before build/run.【F:packages/renderer/src/lib/ipcClient.ts†L43-L45】
+- `ipcClient.runFlow(flow)` forwards the assembled flow to the executor channel exposed by the preload bridge.【F:packages/renderer/src/lib/ipcClient.ts†L43-L46】
+- `ipcClient.onTelemetry(cb)` subscribes renderer listeners to runtime telemetry frames.【F:packages/renderer/src/lib/ipcClient.ts†L47-L53】
+- `MainWorkspace.handleRun` (exported via `App.tsx`) wires the Run button to `ipcClient.runFlow` after optional chat drafting.【F:packages/renderer/src/App.tsx†L38-L47】
+- `PropertiesPanel` exposes a `Validate` button that dispatches `ipcClient.validateFlow` and surfaces the result.【F:packages/renderer/src/components/PropertiesPanel.tsx†L6-L26】
+- TODO: Build trigger currently logs to the console instead of calling a compiler IPC endpoint.【F:packages/renderer/src/components/RunControls.tsx†L72-L115】
 
-### Front-end module definitions (`src/modules`)
-- **LLM module (`src/modules/llm/index.ts`)** – Declares one `prompt` input (type `PromptMsg`) and one `completion` output (`string`). `getLabel` maps `config.model_id` → display label or falls back to `LLM`.
-- **Prompt module (`src/modules/prompt`)** – `PromptModuleNode.tsx` renders a single in/out node with contextual menu. Config bytes encode `{ text, to }` JSON; `promptConfigFromBytes` defaults gracefully and allows passthrough extras.
-- **Debate module (`src/modules/debate`)** – Proto-compatible config serializer (`debateConfigToBytes`) plus `executeDebate` runtime helper that sequences `llmRequest` calls depending on `DebateFormat`. Iterative loops set `meta.next_module` and increment `meta.round` to guide downstream modules.
+## Module Palette
 
-These UI modules are registered via `registerPromptModule`, `registerDebateModule`, etc., letting experiments hook into the canvas without full runtime integration yet.
+- **UI** — in: `feedback` (TEXT); out: `conversation` (TEXT).【F:packages/renderer/src/components/Palette.tsx†L22-L30】
+- **LLM** — in: `prompt` (TEXT); out: `response` (TEXT).【F:packages/renderer/src/components/Palette.tsx†L31-L38】
+- **Prompt** — in: —; out: `prompt` (TEXT).【F:packages/renderer/src/components/Palette.tsx†L39-L45】
+- **Debate/Loop** — in: `input` (TEXT); out: `result` (TEXT).【F:packages/renderer/src/components/Palette.tsx†L47-L53】
+- **Cache** — in: `in` (TEXT/JSON); out: `out` (TEXT/JSON).【F:packages/renderer/src/components/Palette.tsx†L55-L61】
+- **Log** — in: `entry` (TEXT/JSON); out: —.【F:packages/renderer/src/components/Palette.tsx†L63-L69】
+- **Memory** — in: `store` (TEXT/JSON); out: `recall` (TEXT/JSON).【F:packages/renderer/src/components/Palette.tsx†L71-L77】
+- **Divider** — in: `in` (TEXT/JSON); out: `pathA`, `pathB` (TEXT/JSON).【F:packages/renderer/src/components/Palette.tsx†L79-L88】
+- **Tool Call** — in: `input` (TEXT/JSON); out: `result` (TEXT/JSON).【F:packages/renderer/src/components/Palette.tsx†L90-L96】
+- **Tooling** — Wiring tool toggles canvas connection mode.【F:packages/renderer/src/components/Palette.tsx†L100-L105】
 
-## Canvas integration points
-- **GraphCanvas (`packages/renderer/src/components/GraphCanvas.tsx`)** wires ReactFlow to `FlowDef` data. It:
-  - Translates `NodeDef`/`EdgeDef` records into ReactFlow nodes/edges, preserving stored positions under the `__position` param key.
-  - Tracks context window state for node menus and clamps geometry using `CanvasBoundaryProvider` helpers.
-  - Owns edge and node edit menus, delegating clipboard operations to the flow store.
-- **BasicNode (`components/nodes/BasicNode.tsx`)** renders generic modules: it deduces module category from `params.moduleKey`/labels, spawns the contextual options window (`ModuleOptionsContent`), and exposes orientation toggles via `__ioOrientation`.
-- **LLMNode (`components/nodes/LLMNode.tsx`)** provides the pill-shaped LLM renderer, embeds the same edit menu contract, aligns configuration overlays with the canvas bounds, and resolves labels through `deriveLLMDisplayName` against `models.json`.
-- **ModuleOptionsContent** centralizes contextual option UIs for prompt/debate/log/cache/interface/memory/tool categories, emitting immutable `ParamsUpdater` callbacks consumed by BasicNode.
-- **Flow store (`state/flowStore.ts`)** persists the working graph, node positions, clipboard state, and catalog metadata. Helpers handle copy/cut/paste offsets, auto-sync LLM node names with model metadata, and expose `setFlow`/`updateNodeParams` used throughout the renderer.
+## Protobuf Workflow
 
-## Validation & build pipeline
-- **Validation guards (`core/src/build/validate.ts`):**
-  - `validateMenus` ensures nodes declare `in`/`out` arrays.
-  - `validateDangling` verifies every edge endpoint references an existing node/port.
-  - `validateTypes` enforces at least one compatible type across each connected port pair.
-  - `validateAcyclic` performs DFS-based cycle detection.
-  - `validateReachableOutputs` ensures non-sink outputs are consumed somewhere in the graph.
-- **Compiler (`core/src/build/compiler.ts`):** converts a validated `FlowEnvelope` into `pb.Flow`, injecting `paramsJson` payloads and annotating edges with resolved type identifiers.
-- **Schema alignment:** `flows/schema/flow.schema.json` remains the JSON source of truth for flow documents and should stay in sync with the Zod schema and `spec/graph.schema.json` in this handoff.
+- Schemas live in `proto/flow.proto`, defining canonical payloads (`Text`, `Json`, `Embedding`) and the `FlowDef` structure exchanged across build/run stages.【F:proto/flow.proto†L1-L38】
+- Renderer serializes the canvas into a `FlowEnvelope`; `compile` validates port compatibility then emits a deterministic `pb.Flow` binary (`Flow.encode(...).finish()`).【F:core/src/flow/schema.ts†L1-L34】【F:core/src/build/compiler.ts†L10-L57】
+- CLI `pack` consumes human-edited `.flow.json`, calls `compile`, and saves `.flow.pb`; the Electron main process should mirror this to keep “protobuf-only” runtime parity.【F:core/src/cli.ts†L79-L115】【F:core/AGENTS.md†L12-L15】
+- Execution uses `runFlow` to load the compiled protobuf, register built-in nodes, and orchestrate telemetry-driven async execution, matching both CLI and renderer expectations.【F:core/src/run/index.ts†L1-L20】【F:core/src/nodes/builtins.ts†L55-L169】
 
-## Runtime executor contract (overview)
-- **Entry point:** `runFlow` (`core/src/run/index.ts`) registers builtin nodes, instantiates a `Scheduler`, and delegates to `orchestrate` with a fresh `runId`.
-- **Event stream:** `orchestrate` (`core/src/run/orchestrator.ts`) yields `TelemetryEvent`s (`node_state`, `edge_transfer`, `normalize`, `error`) while executing nodes in topological order. Edge mailboxes buffer payloads until all downstream ports have data.
-- **Config hydration:** `nodeConfig` currently hydrates builtin nodes from static defaults (e.g., `InputNode` config id := node id, `OutputNode` name := node id). Runtime inputs come from `RunnerContext.inputs`, populated via CLI `--input key=value` flags.
-- **Execution guards:** Each node `execute` call is wrapped with a 5s timeout (`withTimeout`) and zero retry budget; failures emit both `node_state:error` and `error` telemetry before surfacing the thrown exception.
-- **Outputs:** When traversal completes, `orchestrate` returns `{ outputs: ctx.outputs }`, which the CLI prints after a `DONE` banner.
+## Non-negotiables
 
-## CLI & testing
-- **CLI commands (`core/src/cli.ts`):**
-  - `voide validate <flow>` – parses JSON via Zod and echoes the normalized structure.
-  - `voide pack <flow> --out <file>` – compiles to protobuf (`.flow.pb`).
-  - `voide run <compiled> [--input id=value] [--provider stub]` – streams telemetry while executing a compiled flow with registered providers (default `StubProvider`).
-- **Stub provider (`StubProvider`)** echoes prompts or renders bullet lists when asked, enabling deterministic smoke tests without external LLMs.
-- **Unit tests:** `core/test/*.spec.ts` cover flow parsing, validation, module behavior, compilation, and runtime scheduling. Add new runtime functionality alongside matching Vitest coverage.
+- Canvas must stay fully accessible: modules always visible, labels persistent, activation lights indicate flow without relying solely on color.【F:Description.txt†L14-L36】【F:Description.txt†L120-L133】
+- Build may warn but never blocks wiring—schemas coerce rather than reject; user creativity takes priority.【F:Description.txt†L5-L13】【F:Description.txt†L88-L95】
+- Control bar requires Build/Play/Pause/Stop affordances for the GUI stage.【F:Description.txt†L38-L44】
+- Runtime must remain offline-first with protobuf artifacts as the single source for execution (no ad-hoc JSON at run time).【F:core/AGENTS.md†L12-L15】【F:Agents.md†L3-L34】
 
-## Reference assets & smoke test
-- **Renderer mock layout:** `packages/renderer/src/constants/mockLayout.ts` seeds new canvases with a UI→Prompt→LLM→Memory loop and populates `params.__position` for layout persistence.
-- **New smoke flow:** `flows/smoke.flow.json` (see below) mirrors the core builtin pipeline and is suitable for CLI validation/pack/run acceptance checks.
+## Current State Snapshot
 
-## Next steps / flags
-- Debate module runtime (`src/modules/debate/runtime.ts`) still relies on a pluggable `llmRequest`; wire it to the shared provider surface during backend integration.
-- Input/Output runtime configs derive from node ids today; consider hydrating them from graph `params` once schema stabilizes.
+- **UI module** — Canvas node stubbed in mock layout; no runtime handler yet ⇒ *in-progress*.【F:packages/renderer/src/components/Palette.tsx†L22-L30】【F:packages/renderer/src/constants/mockLayout.ts†L5-L20】
+- **LLM module** — Palette + dynamic labeling and runtime executor exist (stub provider only) ⇒ *in-progress*.【F:packages/renderer/src/components/Palette.tsx†L31-L38】【F:src/modules/llm/index.ts†L19-L38】【F:core/src/nodes/builtins.ts†L55-L76】
+- **Prompt module** — UI node, context menu, and runtime prompt injection wired ⇒ *done*.【F:packages/renderer/src/components/Palette.tsx†L39-L45】【F:src/modules/prompt/index.ts†L1-L13】【F:core/src/nodes/builtins.ts†L34-L45】
+- **Debate module** — Palette + runtime skeleton awaiting LLM hook (`llmRequest` placeholder) ⇒ *in-progress*.【F:packages/renderer/src/components/Palette.tsx†L47-L53】【F:src/modules/debate/runtime.ts†L12-L84】
+- **Cache module** — Palette entry only; no registered runtime node ⇒ *blocked (TODO runtime)*.【F:packages/renderer/src/components/Palette.tsx†L55-L61】【F:core/src/nodes/builtins.ts†L161-L169】
+- **Log module** — Palette entry with active runtime pass-through logger ⇒ *done*.【F:packages/renderer/src/components/Palette.tsx†L63-L69】【F:core/src/nodes/builtins.ts†L139-L147】
+- **Memory module** — Palette entry plus storage helper (`MemoryDB`) but no node registration ⇒ *in-progress*.【F:packages/renderer/src/components/Palette.tsx†L71-L77】【F:core/src/modules/memory.ts†L1-L23】【F:core/src/nodes/builtins.ts†L161-L169】
+- **Divider module** — Palette entry backed by `RouterDividerNode` validator ⇒ *done*.【F:packages/renderer/src/components/Palette.tsx†L79-L88】【F:core/src/nodes/builtins.ts†L96-L114】
+- **Tool Call module** — Palette entry plus parser/handler helpers, integration TBD ⇒ *in-progress*.【F:packages/renderer/src/components/Palette.tsx†L90-L96】【F:core/src/modules/toolcall.ts†L1-L28】
+- **Wiring tool** — Palette toggle works for connection mode; additional tools pending ⇒ *done for basic linking*.【F:packages/renderer/src/components/Palette.tsx†L100-L105】
+
+## Glossary
+
+- **UI module** — Chat entry/exit shim representing user interface touchpoints on the canvas.【F:packages/renderer/src/components/Palette.tsx†L22-L30】
+- **LLM module** — Large-language-model node turning prompts into completions, labeled by selected model.【F:packages/renderer/src/components/Palette.tsx†L31-L38】【F:src/modules/llm/index.ts†L19-L38】
+- **Prompt module** — Injects prepared instruction text into downstream LLM inputs.【F:packages/renderer/src/components/Palette.tsx†L39-L45】【F:core/src/nodes/builtins.ts†L34-L45】
+- **Debate/Loop module** — Runs configurable multi-pass critique loops using LLM calls and optional iteration metadata.【F:packages/renderer/src/components/Palette.tsx†L47-L53】【F:src/modules/debate/runtime.ts†L42-L84】
+- **Cache module** — Intended to reuse previous outputs by keying TEXT/JSON payloads (runtime TBD).【F:packages/renderer/src/components/Palette.tsx†L55-L61】
+- **Log module** — Copies payloads to telemetry/log sinks without mutating the stream.【F:packages/renderer/src/components/Palette.tsx†L63-L69】【F:core/src/nodes/builtins.ts†L139-L147】
+- **Memory module** — Persists and retrieves conversation context across runs via local SQLite/FTS backing.【F:packages/renderer/src/components/Palette.tsx†L71-L77】【F:core/src/modules/memory.ts†L1-L23】
+- **Divider module** — Routes inputs into labelled branches for conditional flows.【F:packages/renderer/src/components/Palette.tsx†L79-L88】【F:core/src/nodes/builtins.ts†L96-L114】
+- **Tool Call module** — Parses tool-call directives and dispatches to registered handlers for structured side effects.【F:packages/renderer/src/components/Palette.tsx†L90-L96】【F:core/src/modules/toolcall.ts†L11-L24】
+- **Wiring tool** — Canvas mode that enables drawing edges between module ports.【F:packages/renderer/src/components/Palette.tsx†L100-L105】
+

@@ -21,6 +21,14 @@ const POSITION_KEY = "__position";
 
 const MODULES: ModuleConfig[] = [
   {
+    key: "interface",
+    label: "UI",
+    nodeType: "module",
+    inputs: [{ port: "feedback", types: ["TEXT"] }],
+    outputs: [{ port: "conversation", types: ["TEXT"] }],
+    description: "Chat entry point"
+  },
+  {
     key: "llm",
     label: "LLM",
     nodeType: "llm",

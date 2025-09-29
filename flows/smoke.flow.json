@@ -1,0 +1,59 @@
+{
+  "$schema": "../spec/graph.schema.json",
+  "id": "flow:smoke",
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "id": "input",
+      "type": "InputNode",
+      "name": "Input",
+      "params": {},
+      "in": [],
+      "out": [
+        { "port": "text", "types": ["UserText"] }
+      ]
+    },
+    {
+      "id": "prompt",
+      "type": "PromptNode",
+      "name": "Prompt",
+      "params": {},
+      "in": [
+        { "port": "text", "types": ["UserText"] }
+      ],
+      "out": [
+        { "port": "prompt", "types": ["PromptText"] }
+      ]
+    },
+    {
+      "id": "llm",
+      "type": "LLMNode",
+      "name": "LLM",
+      "params": { "model": "stub" },
+      "in": [
+        { "port": "prompt", "types": ["PromptText"] }
+      ],
+      "out": [
+        { "port": "text", "types": ["LLMText"] }
+      ]
+    },
+    {
+      "id": "output",
+      "type": "OutputNode",
+      "name": "Output",
+      "params": {},
+      "in": [
+        { "port": "text", "types": ["LLMText"] }
+      ],
+      "out": []
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from": ["input", "text"], "to": ["prompt", "text"] },
+    { "id": "e2", "from": ["prompt", "prompt"], "to": ["llm", "prompt"] },
+    { "id": "e3", "from": ["llm", "text"], "to": ["output", "text"] }
+  ],
+  "prompts": {},
+  "models": {},
+  "profiles": {}
+}

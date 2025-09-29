@@ -55,6 +55,16 @@ const handleStyle: React.CSSProperties = {
   border: "2px solid #ffffff"
 };
 
+const portLabelBaseStyle: React.CSSProperties = {
+  position: "absolute",
+  fontSize: 10,
+  fontWeight: 600,
+  letterSpacing: 0.5,
+  color: "#6b7280",
+  pointerEvents: "none",
+  transform: "translateY(-50%)"
+};
+
 const computeOffset = (index: number, total: number) =>
   `${((index + 1) / (total + 1)) * 100}%`;
 
@@ -527,33 +537,61 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         onClick={shouldRenderMenu ? handlePrimaryClick : undefined}
         onContextMenu={shouldRenderMenu ? handleContextMenu : undefined}
       >
-        {inputs.map((port, index) => (
-          <Handle
-            key={port.port}
-            type="target"
-            position={inputHandlePosition}
-            id={`${data.id}:${port.port}`}
-            style={{
-              ...handleStyle,
-              top: computeOffset(index, inputs.length)
-            }}
-          />
-        ))}
+        {inputs.map((port, index) => {
+          const top = computeOffset(index, inputs.length);
+          return (
+            <React.Fragment key={port.port}>
+              <Handle
+                type="target"
+                position={inputHandlePosition}
+                id={`${data.id}:${port.port}`}
+                style={{
+                  ...handleStyle,
+                  top
+                }}
+              />
+              <span
+                style={{
+                  ...portLabelBaseStyle,
+                  top,
+                  left: inputHandlePosition === Position.Left ? 20 : undefined,
+                  right: inputHandlePosition === Position.Right ? 20 : undefined
+                }}
+              >
+                IN
+              </span>
+            </React.Fragment>
+          );
+        })}
 
         <span>{data.name}</span>
 
-        {outputs.map((port, index) => (
-          <Handle
-            key={port.port}
-            type="source"
-            position={outputHandlePosition}
-            id={`${data.id}:${port.port}`}
-            style={{
-              ...handleStyle,
-              top: computeOffset(index, outputs.length)
-            }}
-          />
-        ))}
+        {outputs.map((port, index) => {
+          const top = computeOffset(index, outputs.length);
+          return (
+            <React.Fragment key={port.port}>
+              <Handle
+                type="source"
+                position={outputHandlePosition}
+                id={`${data.id}:${port.port}`}
+                style={{
+                  ...handleStyle,
+                  top
+                }}
+              />
+              <span
+                style={{
+                  ...portLabelBaseStyle,
+                  top,
+                  left: outputHandlePosition === Position.Left ? 20 : undefined,
+                  right: outputHandlePosition === Position.Right ? 20 : undefined
+                }}
+              >
+                OUT
+              </span>
+            </React.Fragment>
+          );
+        })}
       </div>
 
       {shouldRenderMenu ? (

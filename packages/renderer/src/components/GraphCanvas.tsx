@@ -254,34 +254,36 @@ export default function GraphCanvas() {
   }, [flow.edges, setEdges]);
 
   const handleReactFlowInit = useCallback((instance: ReactFlowInstance) => {
-    reactFlowInstanceRef.current = instance;
-    layoutSignatureRef.current = null;
-  }, []);
+  reactFlowInstanceRef.current = instance;
+  // Optional: fit once on first mount. Remove this try/catch if you never want auto-fit.
+  // try { instance.fitView({ padding: 0.18 }); } catch {}
+}, []);
 
-  useEffect(() => {
-    const instance = reactFlowInstanceRef.current;
-    if (!instance || nodes.length === 0) {
-      if (nodes.length === 0) {
-        layoutSignatureRef.current = "";
-      }
-      return;
+  // DELETE THIS WHOLE BLOCK
+useEffect(() => {
+  const instance = reactFlowInstanceRef.current;
+  if (!instance || nodes.length === 0) {
+    if (nodes.length === 0) {
+      layoutSignatureRef.current = "";
     }
+    return;
+  }
 
-    const nextSignature = computeLayoutSignature(nodes);
-    if (layoutSignatureRef.current === nextSignature) {
-      return;
+  const nextSignature = computeLayoutSignature(nodes);
+  if (layoutSignatureRef.current === nextSignature) {
+    return;
+  }
+
+  layoutSignatureRef.current = nextSignature;
+
+  preserveFocusWhile(() => {
+    try {
+      instance.fitView({ padding: 0.18 });
+    } catch {
+      // Ignore
     }
-
-    layoutSignatureRef.current = nextSignature;
-
-    preserveFocusWhile(() => {
-      try {
-        instance.fitView({ padding: 0.18 });
-      } catch {
-        // Ignore fitView errors (e.g., when ReactFlow instance is mid-teardown).
-      }
-    });
-  }, [nodes, preserveFocusWhile]);
+  });
+}, [nodes, preserveFocusWhile]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -362,49 +364,33 @@ export default function GraphCanvas() {
     [flow, setEdges, setFlow]
   );
 
-  const handleNodeContextMenu = useCallback(
-    (event: React.MouseEvent, node: Node<NodeDef>) => {
-      event.preventDefault();
-      event.stopPropagation();
+const handleNodeContextMenu = useCallback(
+  (event: React.MouseEvent, node: Node<NodeDef>) => {
+    event.preventDefault();
+    event.stopPropagation();
 
-      const overlay = overlayRef.current;
-      if (!overlay) {
-        return;
-      }
+    const PAD = 8;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
 
-      const rect = overlay.getBoundingClientRect();
-      const pointerPosition = {
-        x: event.clientX - rect.left + CONTEXT_WINDOW_POINTER_OFFSET,
-        y: event.clientY - rect.top + CONTEXT_WINDOW_POINTER_OFFSET
-      };
+    const size =
+      contextWindow && contextWindow.node.id === node.data.id
+        ? contextWindow.geometry.size
+        : CONTEXT_WINDOW_DEFAULT_SIZE;
 
-      setEdgeMenu(null);
-      setContextWindow((previous) => {
-        const previousSize =
-          previous && previous.node.id === node.data.id
-            ? previous.geometry.size
-            : CONTEXT_WINDOW_DEFAULT_SIZE;
+    const x = Math.min(Math.max(event.clientX + PAD, PAD), vw - size.width - PAD);
+    const y = Math.min(Math.max(event.clientY + PAD, PAD), vh - size.height - PAD);
 
-        const nextGeometry = clampGeometry(
-          {
-            position: pointerPosition,
-            size: previousSize
-          },
-          { width: rect.width, height: rect.height }
-        );
-
-        return {
-          node: node.data,
-          geometry: nextGeometry,
-          open: true,
-          minimized: false
-        };
-      });
-
-      refreshBounds();
-    },
-    [overlayRef, refreshBounds]
-  );
+    setEdgeMenu(null);
+    setContextWindow({
+      node: node.data,
+      geometry: { position: { x, y }, size },
+      open: true,
+      minimized: false
+    });
+  },
+  [contextWindow]
+);
 
   const handlePaneClick = useCallback(() => {
     setEdgeMenu(null);

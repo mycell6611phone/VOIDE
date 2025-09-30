@@ -32,8 +32,8 @@ import {
 } from "./orientation";
 
 const containerStyle: React.CSSProperties = {
-  width: 184,
-  height: 96,
+  width: 216,
+  height: 112,
   borderRadius: 9999,
   border: "3px solid #dc2626",
   background: "#fff1f2",
@@ -48,12 +48,42 @@ const containerStyle: React.CSSProperties = {
   boxShadow: "0 6px 12px rgba(220, 38, 38, 0.18)"
 };
 
+const nodeTitleStyle: React.CSSProperties = {
+  fontSize: 18,
+  fontWeight: 700,
+  letterSpacing: 1.2,
+  textTransform: "uppercase",
+  textAlign: "center",
+  lineHeight: 1.2,
+  padding: "0 20px",
+  pointerEvents: "none"
+};
+
 const handleStyle: React.CSSProperties = {
   width: 14,
   height: 14,
   borderRadius: "50%",
   background: "#dc2626",
   border: "2px solid #fff1f2"
+};
+
+const portLabelContainerStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "50%",
+  display: "flex",
+  alignItems: "center",
+  pointerEvents: "none"
+};
+
+const portLabelTextStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  letterSpacing: 0.5,
+  color: "#be123c",
+  textTransform: "none",
+  padding: "2px 6px",
+  borderRadius: 9999,
+  background: "rgba(254, 226, 226, 0.85)"
 };
 
 const sectionTitleStyle: React.CSSProperties = {
@@ -487,6 +517,34 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
     orientation === "reversed" ? Position.Right : Position.Left;
   const outputHandlePosition =
     orientation === "reversed" ? Position.Left : Position.Right;
+  const inputLabelStyle = useMemo<React.CSSProperties>(() => {
+    if (orientation === "reversed") {
+      return {
+        ...portLabelContainerStyle,
+        right: 0,
+        transform: "translate(100%, -50%)"
+      };
+    }
+    return {
+      ...portLabelContainerStyle,
+      left: 0,
+      transform: "translate(-100%, -50%)"
+    };
+  }, [orientation]);
+  const outputLabelStyle = useMemo<React.CSSProperties>(() => {
+    if (orientation === "reversed") {
+      return {
+        ...portLabelContainerStyle,
+        left: 0,
+        transform: "translate(-100%, -50%)"
+      };
+    }
+    return {
+      ...portLabelContainerStyle,
+      right: 0,
+      transform: "translate(100%, -50%)"
+    };
+  }, [orientation]);
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const [canvasRect, setCanvasRect] = useState<CanvasViewport | null>(null);
   const [windowGeometry, setWindowGeometry] = useState<WindowGeometry | null>(null);
@@ -1136,7 +1194,13 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
           />
         ))}
 
-        <span>{nodeTitle}</span>
+        <span style={nodeTitleStyle}>{nodeTitle}</span>
+
+        {inputs.length > 0 ? (
+          <div style={inputLabelStyle} aria-hidden="true">
+            <span style={portLabelTextStyle}>In</span>
+          </div>
+        ) : null}
 
         {outputs.map((port, index) => (
           <Handle
@@ -1150,6 +1214,12 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
             }}
           />
         ))}
+
+        {outputs.length > 0 ? (
+          <div style={outputLabelStyle} aria-hidden="true">
+            <span style={portLabelTextStyle}>Out</span>
+          </div>
+        ) : null}
 
         <button
           type="button"

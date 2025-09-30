@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@voide/shared", async () => {
+  return await import("../packages/shared/src/promptPresets");
+});
 
 import {
   defaultPromptConfig,
@@ -20,21 +24,24 @@ describe("promptConfig conversion", () => {
   it("parses valid bytes and preserves passthrough", () => {
     const bytes = toBytes({
       text: "Hello",
-<<<<<<< ours
-      to: "system",
-      preset: "assistant",
-=======
       preset: "custom",
       to: "system",
->>>>>>> theirs
       custom: 42,
     });
     const cfg = promptConfigFromBytes(bytes);
     expect(cfg.text).toBe("Hello");
     expect(cfg.preset).toBe("custom");
     expect(cfg.to).toBe("system");
-    expect(cfg.preset).toBe("assistant");
     expect(cfg.passthrough.custom).toBe(42);
+  });
+
+  it("coerces unknown presets to custom", () => {
+    const cfg = promptConfigFromBytes(
+      toBytes({ text: "Hello", preset: "assistant", to: "user" }),
+    );
+    expect(cfg.preset).toBe("custom");
+    expect(cfg.text).toBe("Hello");
+    expect(cfg.to).toBe("user");
   });
 
   it("migrates legacy template/tone fields", () => {
@@ -55,7 +62,7 @@ describe("promptConfig conversion", () => {
 
   it("encodes state with passthrough merged", () => {
     const start = promptConfigFromBytes(
-      toBytes({ text: "A", preset: "custom", to: "user", extra: "value" })
+      toBytes({ text: "A", preset: "custom", to: "user", extra: "value" }),
     );
     start.text = "Updated";
     start.to = "system";
@@ -64,29 +71,23 @@ describe("promptConfig conversion", () => {
     const decoded = JSON.parse(new TextDecoder().decode(encoded));
     expect(decoded).toMatchObject({
       text: "Updated",
-<<<<<<< ours
-      to: "system",
       preset: "custom",
+      to: "system",
       extra: "value",
     });
   });
 
-  it("encodes and decodes preset overrides", () => {
+  it("round-trips recognized presets", () => {
     const initial = promptConfigFromBytes(
-      toBytes({ text: "", to: "user", preset: "engineer" })
+      toBytes({ text: "", to: "user", preset: "analysis" }),
     );
-    expect(initial.preset).toBe("engineer");
+    expect(initial.preset).toBe("analysis");
 
     const encoded = promptConfigToBytes(initial);
     const decoded = promptConfigFromBytes(encoded);
-    expect(decoded.preset).toBe("engineer");
-    expect(decoded.text).toBe("");
-=======
-      preset: "custom",
-      to: "system",
-      extra: "value",
-    });
->>>>>>> theirs
+
+    expect(decoded.preset).toBe("analysis");
+    expect(decoded.text).toBe(PROMPT_PRESET_MAP.analysis.defaultText);
   });
 });
 

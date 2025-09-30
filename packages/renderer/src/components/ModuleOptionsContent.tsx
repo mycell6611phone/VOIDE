@@ -1,4 +1,10 @@
 import React from "react";
+import {
+  DEFAULT_PROMPT_PRESET_ID,
+  PROMPT_PRESETS,
+  PROMPT_PRESET_MAP,
+  inferPromptPresetFromText,
+} from "@voide/shared";
 
 export type ModuleCategory =
   | "prompt"
@@ -78,6 +84,72 @@ const helperStyle: React.CSSProperties = {
   color: "#94a3b8"
 };
 
+const promptPresetListStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  marginTop: 6
+};
+
+const promptPresetButtonStyle: React.CSSProperties = {
+  textAlign: "left",
+  padding: "10px 12px",
+  borderRadius: 8,
+  border: "1px solid #e2e8f0",
+  background: "#f8fafc",
+  color: "#0f172a",
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  fontSize: 12,
+  lineHeight: 1.4,
+  cursor: "pointer",
+  transition: "border-color 0.2s ease, background 0.2s ease"
+};
+
+const promptPresetButtonActiveStyle: React.CSSProperties = {
+  border: "1px solid #2563eb",
+  background: "#eff6ff",
+  boxShadow: "0 0 0 1px rgba(37,99,235,0.12) inset"
+};
+
+const promptPresetLabelStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#0f172a"
+};
+
+const promptPresetDescriptionStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: "#64748b",
+  lineHeight: 1.4
+};
+
+const promptRadioGroupStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  marginTop: 6
+};
+
+const promptRadioLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  fontSize: 12,
+  color: "#0f172a"
+};
+
+const promptRadioInputStyle: React.CSSProperties = {
+  accentColor: "#2563eb"
+};
+
+const promptTextareaStyle: React.CSSProperties = {
+  ...textAreaStyle,
+  resize: "none" as const,
+  minHeight: 112
+};
+
 const paramsPreviewStyle: React.CSSProperties = {
   background: "#f8fafc",
   borderRadius: 8,
@@ -86,6 +158,73 @@ const paramsPreviewStyle: React.CSSProperties = {
   color: "#1f2937",
   overflowX: "auto"
 };
+
+type PromptPlacement = "system" | "user";
+
+interface NormalizedPromptParams {
+  text: string;
+  preset: string;
+  to: PromptPlacement;
+}
+
+function normalizePromptParams(
+  params: Record<string, any> | undefined
+): NormalizedPromptParams {
+  const rawText =
+    typeof params?.text === "string"
+      ? params.text
+      : typeof params?.template === "string"
+        ? params.template
+        : "";
+
+  let preset =
+    typeof params?.preset === "string" && params.preset in PROMPT_PRESET_MAP
+      ? params.preset
+      : undefined;
+
+  if (!preset) {
+    const inferred = inferPromptPresetFromText(rawText);
+    preset = inferred?.id;
+  }
+
+  const trimmed = rawText.trim();
+
+  if (!preset) {
+    preset = trimmed.length === 0 ? DEFAULT_PROMPT_PRESET_ID : "custom";
+  }
+
+  let text = rawText;
+  if (preset !== "custom") {
+    const presetText = PROMPT_PRESET_MAP[preset]?.defaultText ?? "";
+    if (trimmed.length === 0) {
+      text = presetText;
+    } else if (trimmed !== presetText.trim()) {
+      preset = "custom";
+    }
+  }
+
+  if (preset === "custom") {
+    text = rawText;
+  }
+
+  const to: PromptPlacement = params?.to === "system" ? "system" : "user";
+
+  return { text, preset, to };
+}
+
+function producePromptParams(
+  previous: Record<string, any> | undefined,
+  next: NormalizedPromptParams
+): Record<string, any> {
+  const base =
+    previous && typeof previous === "object" ? { ...previous } : {};
+  delete base.template;
+  delete base.tone;
+  base.text = next.text;
+  base.preset = next.preset;
+  base.to = next.to;
+  return base;
+}
 
 const moduleHeadings: Record<ModuleCategory, { title: string; description: string }>
   = {
@@ -136,42 +275,174 @@ function updateParamValue(
   });
 }
 
-function renderPromptOptions(
-  params: Record<string, any> | undefined,
-  onUpdate: ModuleOptionsContentProps["onUpdate"]
-) {
-  const template = typeof params?.template === "string" ? params.template : "";
-  const tone = typeof params?.tone === "string" ? params.tone : "neutral";
+function PromptOptions({
+  params,
+  onUpdate
+}: {
+  params: Record<string, any> | undefined;
+  onUpdate: ModuleOptionsContentProps["onUpdate"];
+}) {
+  const normalized = React.useMemo(
+    () => normalizePromptParams(params),
+    [params]
+  );
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const radioGroupName = React.useId();
+
+  React.useLayoutEffect(() => {
+    if (!textareaRef.current) {
+      return;
+    }
+    const element = textareaRef.current;
+    element.style.height = "auto";
+    element.style.height = `${Math.max(element.scrollHeight, 112)}px`;
+  }, [normalized.text]);
+
+  React.useEffect(() => {
+    if (!params) {
+      return;
+    }
+    const needsMigration =
+      typeof params.text !== "string" ||
+      typeof params.preset !== "string" ||
+      !(params.preset in PROMPT_PRESET_MAP) ||
+      params.template !== undefined ||
+      params.tone !== undefined;
+
+    if (!needsMigration) {
+      return;
+    }
+
+    onUpdate((previous) => producePromptParams(previous, normalized));
+  }, [params, normalized.text, normalized.preset, normalized.to, onUpdate]);
+
+  const handlePresetSelect = (presetId: string) => {
+    const resolved =
+      presetId in PROMPT_PRESET_MAP ? presetId : DEFAULT_PROMPT_PRESET_ID;
+    const preset = PROMPT_PRESET_MAP[resolved];
+    const nextText =
+      resolved === "custom"
+        ? normalized.text
+        : preset?.defaultText ?? normalized.text;
+
+    onUpdate((previous) =>
+      producePromptParams(previous, {
+        text: nextText,
+        preset: resolved,
+        to: normalized.to,
+      })
+    );
+  };
+
+  const handlePlacementChange = (value: PromptPlacement) => {
+    onUpdate((previous) =>
+      producePromptParams(previous, {
+        text: normalized.text,
+        preset: normalized.preset,
+        to: value,
+      })
+    );
+  };
+
+  const handleTextChange = (value: string) => {
+    let candidatePreset =
+      normalized.preset in PROMPT_PRESET_MAP
+        ? normalized.preset
+        : DEFAULT_PROMPT_PRESET_ID;
+    const trimmed = value.trim();
+    const presetText =
+      candidatePreset !== "custom"
+        ? PROMPT_PRESET_MAP[candidatePreset]?.defaultText.trim() ?? ""
+        : "";
+
+    if (candidatePreset !== "custom" && trimmed !== presetText) {
+      candidatePreset = "custom";
+    }
+
+    if (candidatePreset === "custom") {
+      const inferred = inferPromptPresetFromText(value);
+      if (inferred && trimmed === inferred.defaultText.trim()) {
+        candidatePreset = inferred.id;
+      }
+    }
+
+    onUpdate((previous) =>
+      producePromptParams(previous, {
+        text: value,
+        preset: candidatePreset,
+        to: normalized.to,
+      })
+    );
+  };
 
   return (
     <>
       <div style={fieldStyle}>
-        <span style={labelStyle}>Prompt Template</span>
-        <textarea
-          style={textAreaStyle}
-          value={template}
-          onChange={(event) =>
-            updateParamValue(onUpdate, "template", event.target.value)
-          }
-          placeholder="Summarize the task you want the model to perform"
-        />
-        <span style={helperStyle}>
-          Include contextual cues, constraints, or formatting hints.
-        </span>
+        <span style={labelStyle}>Prompt Preset</span>
+        <div style={promptPresetListStyle}>
+          {PROMPT_PRESETS.map((preset) => {
+            const active = normalized.preset === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => handlePresetSelect(preset.id)}
+                aria-pressed={active}
+                style={{
+                  ...promptPresetButtonStyle,
+                  ...(active ? promptPresetButtonActiveStyle : {}),
+                }}
+              >
+                <span style={promptPresetLabelStyle}>{preset.label}</span>
+                <span style={promptPresetDescriptionStyle}>
+                  {preset.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div style={fieldStyle}>
-        <span style={labelStyle}>Tone</span>
-        <select
-          style={inputStyle}
-          value={tone}
-          onChange={(event) => updateParamValue(onUpdate, "tone", event.target.value)}
-        >
-          <option value="neutral">Neutral</option>
-          <option value="enthusiastic">Enthusiastic</option>
-          <option value="direct">Direct</option>
-          <option value="supportive">Supportive</option>
-        </select>
+        <span style={labelStyle}>Placement</span>
+        <div style={promptRadioGroupStyle}>
+          <label style={promptRadioLabelStyle}>
+            <input
+              type="radio"
+              name={radioGroupName}
+              value="user"
+              checked={normalized.to === "user"}
+              onChange={() => handlePlacementChange("user")}
+              style={promptRadioInputStyle}
+            />
+            Inject as user message
+          </label>
+          <label style={promptRadioLabelStyle}>
+            <input
+              type="radio"
+              name={radioGroupName}
+              value="system"
+              checked={normalized.to === "system"}
+              onChange={() => handlePlacementChange("system")}
+              style={promptRadioInputStyle}
+            />
+            Inject into system prompt
+          </label>
+        </div>
+      </div>
+
+      <div style={fieldStyle}>
+        <span style={labelStyle}>Prompt Text</span>
+        <textarea
+          ref={textareaRef}
+          style={promptTextareaStyle}
+          value={normalized.text}
+          onChange={(event) => handleTextChange(event.target.value)}
+          placeholder="Describe the instructions to inject before the LLM runs"
+        />
+        <span style={helperStyle}>
+          The textarea expands automatically as you type.
+        </span>
       </div>
     </>
   );
@@ -461,7 +732,7 @@ function renderModuleOptions(
 ) {
   switch (module) {
     case "prompt":
-      return renderPromptOptions(params, onUpdate);
+      return <PromptOptions params={params} onUpdate={onUpdate} />;
     case "debate":
       return renderDebateOptions(params, onUpdate);
     case "cache":

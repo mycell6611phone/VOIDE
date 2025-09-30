@@ -1,4 +1,8 @@
-import type { FlowDef } from "@voide/shared";
+import {
+  DEFAULT_PROMPT_PRESET_ID,
+  PROMPT_PRESET_MAP,
+  type FlowDef,
+} from "@voide/shared";
 
 const text = ["TEXT"];
 
@@ -24,6 +28,7 @@ export const mockLayoutFlow: FlowDef = {
       name: "Prompt",
       params: {
         __position: { x: 420, y: 360 },
+        text: PROMPT_PRESET_MAP[DEFAULT_PROMPT_PRESET_ID].defaultText,
         preset: "analysis",
         moduleKey: "prompt"
       },

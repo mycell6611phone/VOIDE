@@ -1,10 +1,26 @@
-import React, { useEffect, useMemo, useState } from "react";
+
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  DEFAULT_PROMPT_PRESET_ID,
+  PROMPT_PRESETS,
+  PROMPT_PRESET_MAP,
+  inferPromptPresetFromText,
+} from "@voide/shared";
+
 
 import {
   PromptConfigState,
   promptConfigFromBytes,
   promptConfigToBytes,
   PromptTarget,
+  PromptPreset,
 } from "./promptConfig";
 
 export interface PromptModuleNodeProps {
@@ -36,9 +52,154 @@ const portBase: React.CSSProperties = {
   transform: "translateY(-50%)",
 };
 
+
+const presetListStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  marginTop: 6,
+};
+
+const presetButtonBaseStyle: React.CSSProperties = {
+  textAlign: "left",
+  padding: "8px 10px",
+  borderRadius: 6,
+  border: "1px solid #e2e8f0",
+  background: "#f8fafc",
+  color: "#0f172a",
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+  fontSize: 12,
+  lineHeight: 1.4,
+  cursor: "pointer",
+  transition: "border-color 0.2s ease, background 0.2s ease",
+};
+
+const presetButtonActiveStyle: React.CSSProperties = {
+  border: "1px solid #2563eb",
+  background: "#eff6ff",
+  boxShadow: "0 0 0 1px rgba(37,99,235,0.12) inset",
+};
+
+const presetLabelStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#0f172a",
+};
+
+const presetDescriptionStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: "#64748b",
+  lineHeight: 1.4,
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#0f172a",
+  letterSpacing: 0.3,
+  textTransform: "uppercase",
+};
+
+const radioGroupStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  marginTop: 6,
+};
+
+const radioLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 12,
+  color: "#0f172a",
+};
+
+const radioInputStyle: React.CSSProperties = {
+  accentColor: "#2563eb",
+};
+
+const textareaStyle: React.CSSProperties = {
+  marginTop: 6,
+  width: "100%",
+  minHeight: 80,
+  resize: "none" as const,
+  padding: 6,
+  borderRadius: 4,
+  border: "1px solid #cbd5f5",
+  background: "#f9fafb",
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: "#0f172a",
+  fontFamily: "Inter, system-ui, sans-serif",
+};
+
+const helperTextStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: "#94a3b8",
+  marginTop: 4,
+};
+
+const actionRowStyle: React.CSSProperties = {
+  marginTop: 16,
+  display: "flex",
+  gap: 8,
+  justifyContent: "flex-end",
+};
+
+
 function truncate(text: string, length: number): string {
   if (text.length <= length) return text;
   return text.slice(0, Math.max(0, length - 1)).trimEnd() + "…";
+}
+
+function cloneConfig(config: PromptConfigState): PromptConfigState {
+  return {
+    text: config.text,
+    preset: config.preset,
+    to: config.to,
+    passthrough: { ...config.passthrough },
+  };
+}
+
+function normalizeForSave(config: PromptConfigState): PromptConfigState {
+  let presetId =
+    config.preset in PROMPT_PRESET_MAP
+      ? config.preset
+      : DEFAULT_PROMPT_PRESET_ID;
+  const to: PromptTarget = config.to === "system" ? "system" : "user";
+  let text = config.text;
+  if (presetId !== "custom") {
+    const presetText = PROMPT_PRESET_MAP[presetId]?.defaultText ?? "";
+    if (text.trim().length === 0) {
+      text = presetText;
+    } else if (text.trim() !== presetText.trim()) {
+      presetId = "custom";
+    }
+  }
+  return {
+    text,
+    preset: presetId,
+    to,
+    passthrough: { ...config.passthrough },
+  };
+}
+
+function formatPresetLabel(presetId: string): string {
+  const preset = PROMPT_PRESET_MAP[presetId];
+  if (preset) {
+    return preset.label;
+  }
+  if (!presetId) {
+    return "Custom";
+  }
+  return presetId
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+    .join(" ");
 }
 
 export function PromptModuleNode({
@@ -50,28 +211,79 @@ export function PromptModuleNode({
   onMenuClose,
 }: PromptModuleNodeProps) {
   const [storedConfig, setStoredConfig] = useState<PromptConfigState>(() =>
-    promptConfigFromBytes(config ?? null)
+    normalizeForSave(promptConfigFromBytes(config ?? null))
   );
   const [menuOpen, setMenuOpen] = useState(false);
-  const [draft, setDraft] = useState<PromptConfigState>(storedConfig);
+
+  const [draft, setDraft] = useState<PromptConfigState>(() =>
+    cloneConfig(storedConfig)
+  );
+
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
-    const decoded = promptConfigFromBytes(config ?? null);
+    const decoded = normalizeForSave(promptConfigFromBytes(config ?? null));
     setStoredConfig(decoded);
-    setDraft(decoded);
+
+    setDraft(cloneConfig(decoded));
+
   }, [config?.buffer, config?.byteOffset, config?.byteLength]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+    const element = textareaRef.current;
+    if (!element) {
+      return;
+    }
+    element.style.height = "auto";
+    element.style.height = `${Math.max(element.scrollHeight, 80)}px`;
+  }, [draft.text, menuOpen]);
 
   const summary = useMemo(() => {
     const targetLabel = storedConfig.to === "system" ? "System" : "User";
-    const preview = storedConfig.text.trim().length
-      ? truncate(storedConfig.text.trim(), 70)
+    const presetLabel = formatPresetLabel(storedConfig.preset);
+    const trimmed = storedConfig.text.trim();
+    let preview = trimmed.length
+      ? truncate(trimmed, 70)
       : "(no prompt text)";
-    return { targetLabel, preview };
+    if (!trimmed.length && storedConfig.preset !== "custom") {
+      const presetText = (
+        PROMPT_PRESET_MAP[storedConfig.preset]?.defaultText ?? ""
+      ).trim();
+      if (presetText.length) {
+        preview = truncate(presetText, 70);
+      }
+    }
+    return { targetLabel, presetLabel, preview };
   }, [storedConfig]);
+
+  useEffect(() => {
+    if (draft.preset !== "custom") {
+      return;
+    }
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+    textarea.style.height = "auto";
+    const maxHeight = 5 * 20;
+    const minHeight = 3 * 20;
+    const nextHeight = Math.min(
+      maxHeight,
+      Math.max(minHeight, textarea.scrollHeight)
+    );
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > nextHeight ? "auto" : "hidden";
+  }, [draft.text, draft.preset]);
 
   function openMenu() {
     setMenuOpen(true);
-    setDraft(storedConfig);
+
+
+    setDraft(cloneConfig(storedConfig));
+
     onMenuOpen?.(id);
   }
 
@@ -80,17 +292,68 @@ export function PromptModuleNode({
     onMenuClose?.(id);
   }
 
-  function updateDraft(field: keyof Pick<PromptConfigState, "text" | "to">, value: string) {
+
+  function selectPreset(nextId: string) {
+    setDraft((prev) => {
+      const resolvedId =
+        nextId in PROMPT_PRESET_MAP ? nextId : DEFAULT_PROMPT_PRESET_ID;
+      const preset = PROMPT_PRESET_MAP[resolvedId];
+      return {
+        ...prev,
+        preset: resolvedId,
+        text:
+          resolvedId === "custom"
+            ? prev.text
+            : preset?.defaultText ?? prev.text,
+        passthrough: { ...prev.passthrough },
+      };
+    });
+  }
+
+  function handlePlacementChange(value: PromptTarget) {
     setDraft((prev) => ({
       ...prev,
-      [field]: field === "to" ? (value as PromptTarget) : value,
+      to: value,
       passthrough: { ...prev.passthrough },
     }));
+
+  }
+
+  function handleTextChange(value: string) {
+    setDraft((prev) => {
+      let candidatePreset =
+        prev.preset in PROMPT_PRESET_MAP
+          ? prev.preset
+          : DEFAULT_PROMPT_PRESET_ID;
+      const trimmed = value.trim();
+      const presetText =
+        candidatePreset !== "custom"
+          ? PROMPT_PRESET_MAP[candidatePreset]?.defaultText.trim() ?? ""
+          : "";
+      if (candidatePreset !== "custom" && trimmed !== presetText) {
+        candidatePreset = "custom";
+      }
+      if (candidatePreset === "custom") {
+        const inferred = inferPromptPresetFromText(value);
+        if (inferred && trimmed === inferred.defaultText.trim()) {
+          candidatePreset = inferred.id;
+        }
+      }
+      return {
+        ...prev,
+        text: value,
+        preset: candidatePreset,
+        passthrough: { ...prev.passthrough },
+      };
+    });
   }
 
   function saveConfig() {
-    setStoredConfig(draft);
-    onConfigure?.(promptConfigToBytes(draft));
+
+    const normalized = normalizeForSave(draft);
+    setStoredConfig(normalized);
+    onConfigure?.(promptConfigToBytes(normalized));
+
     closeMenu();
   }
 
@@ -100,6 +363,11 @@ export function PromptModuleNode({
         ...nodeStyles,
         border: selected ? "2px solid #2563eb" : "1px solid #4b5563",
         boxShadow: selected ? "0 0 0 2px rgba(37,99,235,0.15)" : "none",
+      }}
+      onClick={() => {
+        if (!menuOpen) {
+          openMenu();
+        }
       }}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -123,7 +391,7 @@ export function PromptModuleNode({
           letterSpacing: 0.5,
         }}
       >
-        → {summary.targetLabel}
+        → {summary.targetLabel} • {summary.presetLabel}
       </div>
       <div style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
         {summary.preview}
@@ -155,7 +423,7 @@ export function PromptModuleNode({
             position: "absolute",
             top: 0,
             left: "calc(100% + 8px)",
-            width: 240,
+            width: 260,
             background: "#ffffff",
             border: "1px solid #d1d5db",
             boxShadow: "0 10px 30px rgba(15, 23, 42, 0.12)",
@@ -163,68 +431,86 @@ export function PromptModuleNode({
             padding: 12,
             zIndex: 20,
           }}
+          onClick={(event) => event.stopPropagation()}
         >
           <header style={{ marginBottom: 8 }}>
             <div style={{ fontWeight: 600, fontSize: 13 }}>Prompt Settings</div>
-            <div style={{ fontSize: 11, color: "#6b7280" }}>Configure text injection</div>
+            <div style={{ fontSize: 11, color: "#6b7280" }}>
+              Configure text injection
+            </div>
           </header>
 
-          <label style={{ display: "block", fontSize: 12, fontWeight: 500 }}>
-            Inject Into
-            <select
-              value={draft.to}
-              onChange={(e) => updateDraft("to", e.target.value)}
-              style={{
-                marginTop: 4,
-                width: "100%",
-                padding: "4px 6px",
-                borderRadius: 4,
-                border: "1px solid #cbd5f5",
-                background: "#f9fafb",
-              }}
-            >
-              <option value="user">User message</option>
-              <option value="system">System prompt</option>
-            </select>
-          </label>
 
-          <label
-            style={{
-              display: "block",
-              marginTop: 12,
-              fontSize: 12,
-              fontWeight: 500,
-            }}
-          >
-            Prompt Text
+          <div style={{ marginBottom: 12 }}>
+            <div style={fieldLabelStyle}>Prompt Preset</div>
+            <div style={presetListStyle}>
+              {PROMPT_PRESETS.map((preset) => {
+                const isActive = draft.preset === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => selectPreset(preset.id)}
+                    aria-pressed={isActive}
+                    style={{
+                      ...presetButtonBaseStyle,
+                      ...(isActive ? presetButtonActiveStyle : {}),
+                    }}
+                  >
+                    <span style={presetLabelStyle}>{preset.label}</span>
+                    <span style={presetDescriptionStyle}>
+                      {preset.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={fieldLabelStyle}>Inject Into</div>
+            <div style={radioGroupStyle}>
+              <label style={radioLabelStyle}>
+                <input
+                  type="radio"
+                  name={`prompt-placement-${id}`}
+                  value="user"
+                  checked={draft.to === "user"}
+                  onChange={() => handlePlacementChange("user")}
+                  style={radioInputStyle}
+                />
+                User message
+              </label>
+              <label style={radioLabelStyle}>
+                <input
+                  type="radio"
+                  name={`prompt-placement-${id}`}
+                  value="system"
+                  checked={draft.to === "system"}
+                  onChange={() => handlePlacementChange("system")}
+                  style={radioInputStyle}
+                />
+                System prompt
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <div style={fieldLabelStyle}>Prompt Text</div>
             <textarea
+              ref={textareaRef}
               value={draft.text}
-              onChange={(e) => updateDraft("text", e.target.value)}
-              rows={5}
-              placeholder="Describe the additional instructions"
-              style={{
-                marginTop: 4,
-                width: "100%",
-                resize: "vertical",
-                minHeight: 80,
-                padding: 6,
-                borderRadius: 4,
-                border: "1px solid #cbd5f5",
-                background: "#f9fafb",
-                fontSize: 12,
-                lineHeight: 1.4,
-              }}
+              onChange={(event) => handleTextChange(event.target.value)}
+              placeholder="Describe the instructions to inject before the LLM runs"
+              style={textareaStyle}
             />
-          </label>
+            <div style={helperTextStyle}>
+              The textarea expands automatically as you type.
+            </div>
+          </div>
 
-          <div
-            style={{
-              marginTop: 12,
-              display: "flex",
-              gap: 8,
-              justifyContent: "flex-end",
-            }}
-          >
+          <div style={actionRowStyle}>
+
             <button
               type="button"
               onClick={closeMenu}
@@ -262,4 +548,3 @@ export function PromptModuleNode({
 }
 
 export default PromptModuleNode;
-

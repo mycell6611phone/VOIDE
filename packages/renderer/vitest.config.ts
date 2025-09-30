@@ -22,7 +22,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@voide/renderer": resolve(rootDir, "src")
+      "@voide/renderer": resolve(rootDir, "src"),
+      "@voide/shared": resolve(rootDir, "../shared/src")
     }
   }
 });

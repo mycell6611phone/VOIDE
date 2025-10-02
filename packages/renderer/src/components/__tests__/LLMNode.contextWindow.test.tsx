@@ -2,15 +2,7 @@ import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CanvasBoundaryProvider } from "../CanvasBoundaryContext";
-<<<<<<< ours
-<<<<<<< ours
-import { EDIT_MENU_WIDTH } from "../EditMenu";
-=======
-import { EDIT_MENU_DATA_ATTRIBUTE } from "../EditMenu";
->>>>>>> theirs
-=======
-import { EDIT_MENU_DATA_ATTRIBUTE } from "../EditMenu";
->>>>>>> theirs
+import { EDIT_MENU_DATA_ATTRIBUTE, EDIT_MENU_WIDTH } from "../EditMenu";
 import LLMNode from "../nodes/LLMNode";
 
 vi.mock("reactflow", () => ({
@@ -218,7 +210,7 @@ describe("LLMNode context window", () => {
       });
 
       const menu = await waitFor(() =>
-        document.querySelector("[data-node-edit-menu]")
+        document.querySelector(`[${EDIT_MENU_DATA_ATTRIBUTE}]`)
       );
 
       if (!(menu instanceof HTMLDivElement)) {

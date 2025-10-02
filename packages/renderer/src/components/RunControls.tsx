@@ -1,6 +1,13 @@
-import React from "react";
-
-const menuItems = ["System", "File", "Edit", "View"];
+import type { FlowDef } from "@voide/shared";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
+import { createInitialFlow } from "../constants/mockLayout";
+import { useFlowStore } from "../state/flowStore";
 
 const textButtonStyle: React.CSSProperties = {
   background: "none",
@@ -47,7 +54,327 @@ const glyphStyle: React.CSSProperties = {
   lineHeight: "18px"
 };
 
+const dropdownStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "100%",
+  left: 0,
+  marginTop: 8,
+  background: "rgba(15, 23, 42, 0.96)",
+  border: "1px solid #1e293b",
+  borderRadius: 12,
+  padding: 8,
+  minWidth: 240,
+  boxShadow: "0 20px 40px rgba(15, 23, 42, 0.45)",
+  backdropFilter: "blur(10px)",
+  zIndex: 20
+};
+
+const menuItemStyle: React.CSSProperties = {
+  width: "100%",
+  background: "transparent",
+  border: "none",
+  color: "#e2e8f0",
+  textAlign: "left",
+  padding: "8px 12px",
+  borderRadius: 8,
+  fontSize: 14,
+  fontWeight: 500,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  cursor: "pointer",
+  transition: "background 0.15s ease, color 0.15s ease"
+};
+
+const submenuStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 0,
+  left: "calc(100% + 8px)",
+  background: "rgba(10, 18, 35, 0.96)",
+  border: "1px solid #1e293b",
+  borderRadius: 12,
+  padding: 12,
+  minWidth: 220,
+  boxShadow: "0 18px 32px rgba(15, 23, 42, 0.35)",
+  display: "flex",
+  flexDirection: "column",
+  gap: 12
+};
+
+const submenuSectionLabel: React.CSSProperties = {
+  fontSize: 12,
+  letterSpacing: 0.6,
+  textTransform: "uppercase",
+  color: "#94a3b8"
+};
+
+const submenuOptionStyle: React.CSSProperties = {
+  background: "#0f172a",
+  border: "1px solid #1e293b",
+  borderRadius: 8,
+  padding: "8px 10px",
+  color: "#e2e8f0",
+  fontSize: 13,
+  fontWeight: 600,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  cursor: "pointer",
+  transition: "border 0.15s ease, background 0.15s ease"
+};
+
+const summaryTextStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#cbd5f5"
+};
+
+const computeSummaryText: React.CSSProperties = {
+  fontSize: 12,
+  color: "#38bdf8",
+  fontWeight: 500
+};
+
+const readFileAsText = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("Failed to read file"));
+    };
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        resolve(result);
+        return;
+      }
+      if (result instanceof ArrayBuffer) {
+        resolve(new TextDecoder().decode(result));
+        return;
+      }
+      resolve(String(result ?? ""));
+    };
+    reader.readAsText(file);
+  });
+
 export default function RunControls({ onRun }: { onRun: () => void }) {
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const [activeSubmenu, setActiveSubmenu] = useState<
+    "working-directory" | "compute" | null
+  >(null);
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const [hoveredWorkingOption, setHoveredWorkingOption] = useState<string | null>(
+    null
+  );
+  const [hoveredComputeOption, setHoveredComputeOption] = useState<
+    string | null
+  >(null);
+  const [computeConfig, setComputeConfig] = useState<{
+    accelerator: "CPU" | "GPU";
+    cpuCores: number;
+  }>({ accelerator: "CPU", cpuCores: 4 });
+
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const openFileInputRef = useRef<HTMLInputElement | null>(null);
+  const directoryInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingDirectorySelection = useRef<string | null>(null);
+
+  const flow = useFlowStore((state) => state.flow);
+  const setFlow = useFlowStore((state) => state.setFlow);
+
+  const workingDirectoryOptions = useMemo(
+    () => [
+      { key: "llm", label: "LLM Storage Folder" },
+      { key: "workspace", label: "Project Workspace" },
+      { key: "cache", label: "Cache Directory" }
+    ],
+    []
+  );
+
+  const cpuCoreOptions = useMemo(() => [1, 2, 4, 8, 16], []);
+
+  const closeMenus = useCallback(() => {
+    setFileMenuOpen(false);
+    setActiveSubmenu(null);
+  }, []);
+
+  const handleToggleFileMenu = useCallback(() => {
+    setFileMenuOpen((previous) => {
+      const next = !previous;
+      if (!next) {
+        setActiveSubmenu(null);
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!fileMenuOpen) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!menuRef.current) {
+        return;
+      }
+      if (!menuRef.current.contains(event.target as Node)) {
+        closeMenus();
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMenus();
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeMenus, fileMenuOpen]);
+
+  useEffect(() => {
+    if (directoryInputRef.current) {
+      directoryInputRef.current.setAttribute("webkitdirectory", "");
+    }
+  }, []);
+
+  const processProjectFile = useCallback(
+    async (file: File) => {
+      try {
+        const text =
+          typeof file.text === "function"
+            ? await file.text()
+            : typeof FileReader === "function"
+              ? await readFileAsText(file)
+              : await new Response(file).text();
+        const parsed = JSON.parse(text) as FlowDef;
+
+        if (
+          !parsed ||
+          typeof parsed !== "object" ||
+          !Array.isArray((parsed as FlowDef).nodes) ||
+          !Array.isArray((parsed as FlowDef).edges)
+        ) {
+          throw new Error("Invalid VOIDE project file.");
+        }
+
+        setFlow(parsed);
+        console.info(
+          `Opened project "${file.name}" with ${parsed.nodes.length} nodes and ${parsed.edges.length} edges.`
+        );
+      } catch (error) {
+        console.error("Failed to open project file:", error);
+      } finally {
+        closeMenus();
+      }
+    },
+    [closeMenus, setFlow]
+  );
+
+  const handleProjectFileChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const { files } = event.target;
+      if (files && files.length > 0) {
+        void processProjectFile(files[0]);
+      }
+      event.target.value = "";
+    },
+    [processProjectFile]
+  );
+
+  const handleOpenProject = useCallback(() => {
+    openFileInputRef.current?.click();
+  }, []);
+
+  const handleCloseProject = useCallback(() => {
+    setFlow(createInitialFlow());
+    console.info("Closed project and restored default layout.");
+    closeMenus();
+  }, [closeMenus, setFlow]);
+
+  const handleSaveProject = useCallback(() => {
+    try {
+      const serialized = JSON.stringify(flow, null, 2);
+      const blob = new Blob([serialized], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `voide-project-${new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+      console.info("Saved current project to disk.");
+    } catch (error) {
+      console.error("Failed to save project:", error);
+    } finally {
+      closeMenus();
+    }
+  }, [closeMenus, flow]);
+
+  const handleExportProject = useCallback(() => {
+    console.info("Export project placeholder triggered.");
+    closeMenus();
+  }, [closeMenus]);
+
+  const handleProjectSettings = useCallback(() => {
+    console.info("Project settings placeholder opened.");
+    closeMenus();
+  }, [closeMenus]);
+
+  const handleDirectoryRequest = useCallback((label: string) => {
+    pendingDirectorySelection.current = label;
+    directoryInputRef.current?.click();
+  }, []);
+
+  const handleDirectoryChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const { files } = event.target;
+      const label = pendingDirectorySelection.current;
+
+      if (label && files && files.length > 0) {
+        const selectedFile = files[0];
+        const relativePath =
+          (selectedFile as File & { webkitRelativePath?: string })
+            .webkitRelativePath ?? selectedFile.name;
+        const directoryName = relativePath.split("/")[0] ?? relativePath;
+        console.info(`Selected ${label}: ${directoryName}`);
+      } else if (label) {
+        console.info(`No directory selected for ${label}.`);
+      }
+
+      pendingDirectorySelection.current = null;
+      event.target.value = "";
+      closeMenus();
+    },
+    [closeMenus]
+  );
+
+  const handleSelectAccelerator = useCallback((accelerator: "CPU" | "GPU") => {
+    setComputeConfig((previous) => {
+      if (previous.accelerator === accelerator) {
+        return previous;
+      }
+      console.info(`Compute accelerator set to ${accelerator}.`);
+      return { ...previous, accelerator };
+    });
+  }, []);
+
+  const handleSelectCpuCores = useCallback((cores: number) => {
+    setComputeConfig((previous) => {
+      if (previous.cpuCores === cores) {
+        return previous;
+      }
+      console.info(`CPU cores set to ${cores}.`);
+      return { ...previous, cpuCores: cores };
+    });
+  }, []);
+
   return (
     <header
       style={{
@@ -61,12 +388,276 @@ export default function RunControls({ onRun }: { onRun: () => void }) {
         borderBottom: "1px solid #1e293b"
       }}
     >
-      <nav style={{ display: "flex", gap: 8 }}>
-        {menuItems.map((item) => (
-          <button key={item} style={textButtonStyle} onClick={() => console.log(item)}>
-            {item}
-          </button>
-        ))}
+      <nav
+        ref={menuRef}
+        style={{
+          display: "flex",
+          gap: 8,
+          position: "relative",
+          alignItems: "center"
+        }}
+      >
+        <button
+          type="button"
+          style={{
+            ...textButtonStyle,
+            background: fileMenuOpen ? "rgba(30, 41, 59, 0.75)" : "none"
+          }}
+          onClick={handleToggleFileMenu}
+          aria-expanded={fileMenuOpen}
+          aria-haspopup="menu"
+        >
+          File
+        </button>
+        {fileMenuOpen ? (
+          <div role="menu" style={dropdownStyle} data-testid="file-menu-panel">
+            <button
+              type="button"
+              role="menuitem"
+              style={{
+                ...menuItemStyle,
+                background: hoveredItem === "open" ? "#1e293b" : "transparent"
+              }}
+              onMouseEnter={() => setHoveredItem("open")}
+              onMouseLeave={() => setHoveredItem(null)}
+              onClick={handleOpenProject}
+            >
+              <span>Open</span>
+              <span aria-hidden>⌘O</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              style={{
+                ...menuItemStyle,
+                background: hoveredItem === "close" ? "#1e293b" : "transparent"
+              }}
+              onMouseEnter={() => setHoveredItem("close")}
+              onMouseLeave={() => setHoveredItem(null)}
+              onClick={handleCloseProject}
+            >
+              <span>Close</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              style={{
+                ...menuItemStyle,
+                background: hoveredItem === "save" ? "#1e293b" : "transparent"
+              }}
+              onMouseEnter={() => setHoveredItem("save")}
+              onMouseLeave={() => setHoveredItem(null)}
+              onClick={handleSaveProject}
+            >
+              <span>Save</span>
+              <span aria-hidden>⌘S</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              style={{
+                ...menuItemStyle,
+                background: hoveredItem === "export" ? "#1e293b" : "transparent"
+              }}
+              onMouseEnter={() => setHoveredItem("export")}
+              onMouseLeave={() => setHoveredItem(null)}
+              onClick={handleExportProject}
+            >
+              <span>Export</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              style={{
+                ...menuItemStyle,
+                background: hoveredItem === "project" ? "#1e293b" : "transparent"
+              }}
+              onMouseEnter={() => setHoveredItem("project")}
+              onMouseLeave={() => setHoveredItem(null)}
+              onClick={handleProjectSettings}
+            >
+              <span>Project</span>
+            </button>
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                role="menuitem"
+                style={{
+                  ...menuItemStyle,
+                  background:
+                    hoveredItem === "working-directory"
+                      ? "#1e293b"
+                      : "transparent"
+                }}
+                onMouseEnter={() => setHoveredItem("working-directory")}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() =>
+                  setActiveSubmenu((previous) =>
+                    previous === "working-directory" ? null : "working-directory"
+                  )
+                }
+                aria-haspopup="menu"
+                aria-expanded={activeSubmenu === "working-directory"}
+              >
+                <span>Working Directory</span>
+                <span aria-hidden>{
+                  activeSubmenu === "working-directory" ? "▾" : "▸"
+                }</span>
+              </button>
+              {activeSubmenu === "working-directory" ? (
+                <div role="menu" style={submenuStyle}>
+                  <div style={summaryTextStyle}>
+                    Select where VOIDE stores shared resources.
+                  </div>
+                  {workingDirectoryOptions.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      role="menuitem"
+                      style={{
+                        ...submenuOptionStyle,
+                        borderColor:
+                          hoveredWorkingOption === option.key
+                            ? "#f97316"
+                            : "#1e293b",
+                        backgroundColor:
+                          hoveredWorkingOption === option.key
+                            ? "#1f2937"
+                            : "#0f172a"
+                      }}
+                      onMouseEnter={() => setHoveredWorkingOption(option.key)}
+                      onMouseLeave={() => setHoveredWorkingOption(null)}
+                      onClick={() => handleDirectoryRequest(option.label)}
+                    >
+                      <span>{option.label}</span>
+                      <span aria-hidden>…</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                role="menuitem"
+                style={{
+                  ...menuItemStyle,
+                  background:
+                    hoveredItem === "compute" ? "#1e293b" : "transparent"
+                }}
+                onMouseEnter={() => setHoveredItem("compute")}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={() =>
+                  setActiveSubmenu((previous) =>
+                    previous === "compute" ? null : "compute"
+                  )
+                }
+                aria-haspopup="menu"
+                aria-expanded={activeSubmenu === "compute"}
+              >
+                <span>Compute</span>
+                <span aria-hidden>
+                  {computeConfig.accelerator} · {computeConfig.cpuCores} cores
+                </span>
+              </button>
+              {activeSubmenu === "compute" ? (
+                <div role="menu" style={submenuStyle}>
+                  <div>
+                    <div style={submenuSectionLabel}>Accelerator</div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      {["CPU", "GPU"].map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          role="menuitem"
+                          style={{
+                            ...submenuOptionStyle,
+                            padding: "8px 14px",
+                            background:
+                              computeConfig.accelerator === option
+                                ? "#1f2937"
+                                : "#0f172a",
+                            borderColor:
+                              computeConfig.accelerator === option
+                                ? "#f97316"
+                                : "#1e293b"
+                          }}
+                          aria-pressed={computeConfig.accelerator === option}
+                          onMouseEnter={() => setHoveredComputeOption(option)}
+                          onMouseLeave={() => setHoveredComputeOption(null)}
+                          onClick={() =>
+                            handleSelectAccelerator(option as "CPU" | "GPU")
+                          }
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={submenuSectionLabel}>CPU Cores</div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                        gap: 8,
+                        marginTop: 8
+                      }}
+                    >
+                      {cpuCoreOptions.map((cores) => (
+                        <button
+                          key={cores}
+                          type="button"
+                          role="menuitem"
+                          style={{
+                            ...submenuOptionStyle,
+                            background:
+                              computeConfig.cpuCores === cores
+                                ? "#1f2937"
+                                : "#0f172a",
+                            borderColor:
+                              computeConfig.cpuCores === cores
+                                ? "#f97316"
+                                : hoveredComputeOption === `cores-${cores}`
+                                  ? "#f97316"
+                                  : "#1e293b"
+                          }}
+                          aria-pressed={computeConfig.cpuCores === cores}
+                          onMouseEnter={() =>
+                            setHoveredComputeOption(`cores-${cores}`)
+                          }
+                          onMouseLeave={() => setHoveredComputeOption(null)}
+                          onClick={() => handleSelectCpuCores(cores)}
+                        >
+                          {cores}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ ...summaryTextStyle, ...computeSummaryText }}>
+                    Current: {computeConfig.accelerator} with {computeConfig.cpuCores}{" "}
+                    cores
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+        <input
+          ref={openFileInputRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: "none" }}
+          onChange={handleProjectFileChange}
+          data-testid="file-menu-open-input"
+        />
+        <input
+          ref={directoryInputRef}
+          type="file"
+          style={{ display: "none" }}
+          onChange={handleDirectoryChange}
+          data-testid="file-menu-directory-input"
+        />
       </nav>
 
       <div style={{ display: "flex", gap: 16, alignItems: "center" }}>

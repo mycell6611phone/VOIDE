@@ -37,7 +37,7 @@ describe("promptConfig conversion", () => {
 
   it("coerces unknown presets to custom", () => {
     const cfg = promptConfigFromBytes(
-      toBytes({ text: "Hello", preset: "assistant", to: "user" }),
+      toBytes({ text: "Hello", preset: "assistant", to: "user" })
     );
     expect(cfg.preset).toBe("custom");
     expect(cfg.text).toBe("Hello");
@@ -79,15 +79,14 @@ describe("promptConfig conversion", () => {
 
   it("round-trips recognized presets", () => {
     const initial = promptConfigFromBytes(
-      toBytes({ text: "", to: "user", preset: "analysis" }),
+
+      toBytes({ text: "", to: "user", preset: "analysis" })
     );
     expect(initial.preset).toBe("analysis");
 
     const encoded = promptConfigToBytes(initial);
     const decoded = promptConfigFromBytes(encoded);
-
     expect(decoded.preset).toBe("analysis");
     expect(decoded.text).toBe(PROMPT_PRESET_MAP.analysis.defaultText);
   });
 });
-

@@ -6,13 +6,11 @@ import {
 } from "@voide/shared";
 
 export type PromptTarget = "system" | "user";
-export type PromptPreset = "assistant" | "engineer" | "custom";
 
 export interface PromptConfigState {
   text: string;
   preset: string;
   to: PromptTarget;
-  preset: PromptPreset;
   passthrough: Record<string, unknown>;
 }
 
@@ -23,7 +21,6 @@ export const defaultPromptConfig: PromptConfigState = {
   text: defaultPreset?.defaultText ?? "",
   preset: defaultPreset?.id ?? DEFAULT_PROMPT_PRESET_ID,
   to: "user",
-  preset: "custom",
   passthrough: {},
 };
 
@@ -53,40 +50,37 @@ export function promptConfigFromBytes(
           ? template
           : "";
 
-    let normalizedPreset =
+    let presetId: string | undefined =
       typeof preset === "string" && preset in PROMPT_PRESET_MAP
         ? preset
         : undefined;
 
-    if (!normalizedPreset) {
+    if (!presetId) {
       const inferred = inferPromptPresetFromText(initialText);
-      normalizedPreset = inferred?.id;
+      presetId = inferred?.id;
     }
 
     const trimmed = initialText.trim();
 
-    if (!normalizedPreset) {
-      normalizedPreset = trimmed.length === 0 ? DEFAULT_PROMPT_PRESET_ID : "custom";
+    if (!presetId) {
+      presetId = trimmed.length === 0 ? DEFAULT_PROMPT_PRESET_ID : "custom";
     }
 
     let normalizedText = initialText;
-    if (normalizedPreset !== "custom") {
-      const presetText = PROMPT_PRESET_MAP[normalizedPreset]?.defaultText ?? "";
+    if (presetId !== "custom") {
+      const presetText = PROMPT_PRESET_MAP[presetId]?.defaultText ?? "";
       if (trimmed.length === 0) {
         normalizedText = presetText;
       } else if (trimmed !== presetText.trim()) {
-        normalizedPreset = "custom";
+        presetId = "custom";
       }
     }
 
-    if (normalizedPreset === "custom") {
+    if (presetId === "custom") {
       normalizedText = initialText;
     }
 
-
     const normalizedTo: PromptTarget = to === "system" ? "system" : "user";
-    const normalizedPreset: PromptPreset =
-      preset === "assistant" || preset === "engineer" ? preset : "custom";
 
     const passthrough: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(rest)) {
@@ -98,12 +92,9 @@ export function promptConfigFromBytes(
 
     return {
       text: normalizedText,
-      preset: normalizedPreset,
+      preset: presetId,
       to: normalizedTo,
-
-
       passthrough,
-
     };
   } catch {
     return { ...defaultPromptConfig, passthrough: {} };
@@ -116,7 +107,6 @@ export function promptConfigToBytes(cfg: PromptConfigState): Uint8Array {
     text: cfg.text,
     preset: cfg.preset,
     to: cfg.to,
-    preset: cfg.preset,
   } satisfies Record<string, unknown>;
 
   return new TextEncoder().encode(JSON.stringify(payload));

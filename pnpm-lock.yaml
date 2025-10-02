@@ -44,6 +44,9 @@ importers:
 
   core:
     dependencies:
+      '@voide/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
       better-sqlite3:
         specifier: ^9.6.0
         version: 9.6.0

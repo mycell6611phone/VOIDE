@@ -20,7 +20,6 @@ import {
   promptConfigFromBytes,
   promptConfigToBytes,
   PromptTarget,
-  PromptPreset,
 } from "./promptConfig";
 
 export interface PromptModuleNodeProps {

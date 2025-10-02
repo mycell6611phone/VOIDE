@@ -293,49 +293,33 @@ const handleNodeContextMenu = useCallback(
     );
   }, []);
 
-  const handleEdgeContextMenu = useCallback(
-    (event: React.MouseEvent, edge: Edge<NodeDef>) => {
-      event.preventDefault();
-      event.stopPropagation();
+ const handleEdgeContextMenu = useCallback(
+  (event: React.MouseEvent, edge: Edge<NodeDef>) => {
+    event.preventDefault();
+    event.stopPropagation();
 
-      const overlay = overlayRef.current;
-      if (!overlay) {
-        return;
-      }
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
 
-      const rect = overlay.getBoundingClientRect();
-      const pointerX = event.clientX - rect.left;
-      const pointerY = event.clientY - rect.top;
+    const clampedX = Math.min(
+      Math.max(event.clientX, CONTEXT_WINDOW_POINTER_OFFSET),
+      vw - EDIT_MENU_WIDTH - CONTEXT_WINDOW_POINTER_OFFSET
+    );
+    const clampedY = Math.min(
+      Math.max(event.clientY, CONTEXT_WINDOW_POINTER_OFFSET),
+      vh - EDIT_MENU_HEIGHT - CONTEXT_WINDOW_POINTER_OFFSET
+    );
 
-      const maxX = Math.max(
-        CONTEXT_WINDOW_POINTER_OFFSET,
-        rect.width - EDIT_MENU_WIDTH - CONTEXT_WINDOW_POINTER_OFFSET
-      );
-      const maxY = Math.max(
-        CONTEXT_WINDOW_POINTER_OFFSET,
-        rect.height - EDIT_MENU_HEIGHT - CONTEXT_WINDOW_POINTER_OFFSET
-      );
+    setContextWindow(null);
+    setEdgeMenu({
+      edgeId: edge.id,
+      left: clampedX,
+      top: clampedY,
+    });
+  },
+  []
+);
 
-      const clampedX = Math.min(
-        Math.max(pointerX, CONTEXT_WINDOW_POINTER_OFFSET),
-        maxX
-      );
-      const clampedY = Math.min(
-        Math.max(pointerY, CONTEXT_WINDOW_POINTER_OFFSET),
-        maxY
-      );
-
-      setContextWindow((previous) =>
-        previous ? { ...previous, open: false, minimized: false } : null
-      );
-      setEdgeMenu({
-        edgeId: edge.id,
-        left: rect.left + clampedX,
-        top: rect.top + clampedY
-      });
-    },
-    [setContextWindow, setEdgeMenu]
-  );
 
   const handleEdgeMenuSelect = useCallback(
     (label: EditMenuItemLabel) => {

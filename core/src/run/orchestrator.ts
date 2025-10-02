@@ -2,6 +2,7 @@ import * as pb from "../proto/voide/v1/flow.js";
 import { NodeRegistry, makeContext } from "../sdk/node.js";
 import { Providers } from "../nodes/builtins.js";
 import { Scheduler } from "./scheduler.js";
+import { emit as emitTelemetry, TelemetryEventType } from "./telemetry.js";
 
 export type NodeStatus =
   | "idle"
@@ -123,6 +124,7 @@ export async function* orchestrate(
 
   const states = new Map<string, NodeStatus>();
   const ready: string[] = [];
+  let wireSeq = 0;
   for (const n of flow.nodes) {
     states.set(n.id, "idle");
     if ((inEdges.get(n.id) ?? []).length === 0) {
@@ -146,6 +148,10 @@ export async function* orchestrate(
     if (executed.has(nodeId)) continue;
     executed.add(nodeId);
     states.set(nodeId, "running");
+    emitTelemetry({
+      type: TelemetryEventType.NodeStart,
+      payload: { id: nodeId, span: runId },
+    });
     yield {
       type: "node_state",
       runId,
@@ -181,6 +187,15 @@ export async function* orchestrate(
         if (attempt > DEFAULT_RETRIES) {
           const error = err instanceof Error ? err : new Error(String(err));
           states.set(nodeId, "error");
+          emitTelemetry({
+            type: TelemetryEventType.NodeEnd,
+            payload: {
+              id: nodeId,
+              span: runId,
+              ok: false,
+              reason: error.message,
+            },
+          });
           yield {
             type: "node_state",
             runId,
@@ -201,6 +216,14 @@ export async function* orchestrate(
       }
     }
     states.set(nodeId, "ok");
+    emitTelemetry({
+      type: TelemetryEventType.NodeEnd,
+      payload: {
+        id: nodeId,
+        span: runId,
+        ok: true,
+      },
+    });
     yield {
       type: "node_state",
       runId,
@@ -214,6 +237,19 @@ export async function* orchestrate(
       if (val !== undefined) {
         e.mailbox.push(val);
         const bytes = JSON.stringify(val).length;
+        wireSeq += 1;
+        emitTelemetry({
+          type: TelemetryEventType.WireTx,
+          payload: {
+            id: e.id,
+            span: runId,
+            pkt: `${wireSeq}`,
+            from: e.fromNode,
+            to: e.toNode,
+            outPort: e.fromPort,
+            inPort: e.toPort,
+          },
+        });
         yield {
           type: "edge_transfer",
           runId,

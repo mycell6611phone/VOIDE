@@ -1,3 +1,5 @@
+import { heartbeat as telemetryHeartbeat } from "./telemetry.js";
+
 export class Scheduler {
   private steps: number = Infinity;
   private cancelled = false;
@@ -6,10 +8,12 @@ export class Scheduler {
   private notify() {
     for (const w of this.waiters) w();
     this.waiters = [];
+    telemetryHeartbeat();
   }
 
   pause(): void {
     if (this.steps !== 0) this.steps = 0;
+    telemetryHeartbeat();
   }
 
   resume(): void {
@@ -31,6 +35,7 @@ export class Scheduler {
   }
 
   async next(): Promise<void> {
+    telemetryHeartbeat();
     if (this.cancelled) throw new Error("cancelled");
     if (this.steps === 0) {
       await new Promise<void>((resolve) => this.waiters.push(resolve));

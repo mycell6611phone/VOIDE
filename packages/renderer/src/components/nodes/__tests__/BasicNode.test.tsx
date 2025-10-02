@@ -215,6 +215,52 @@ describe("BasicNode edit menu", () => {
     });
   });
 
+  it("keeps the prompt textarea focused while typing", async () => {
+    const node = useFlowStore.getState().flow.nodes[0];
+
+    useFlowStore.setState((state) => ({
+      ...state,
+      flow: {
+        ...state.flow,
+        nodes: state.flow.nodes.map((entry) =>
+          entry.id === node.id
+            ? {
+                ...entry,
+                params: {
+                  ...(entry.params ?? {}),
+                  moduleKey: "prompt",
+                  text: "",
+                  preset: "custom",
+                },
+              }
+            : entry
+        ),
+      },
+    }));
+
+    renderNode(node);
+
+    const nodeLabel = screen.getByText("Prompt Node");
+    fireEvent.click(nodeLabel, { button: 0 });
+
+    const textarea = await screen.findByPlaceholderText(
+      "Describe the instructions to inject before the LLM runs"
+    );
+
+    textarea.focus();
+    fireEvent.change(textarea, { target: { value: "Hello" } });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(textarea);
+    });
+
+    fireEvent.change(textarea, { target: { value: "Hello world" } });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(textarea);
+    });
+  });
+
   it("toggles input orientation through the edit menu", async () => {
     const node = createSwitchableNode();
 

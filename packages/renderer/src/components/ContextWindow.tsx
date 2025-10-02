@@ -62,6 +62,7 @@ export default function ContextWindow({
   const canvasRef = useCanvasBoundary();
   const [visible, setVisible] = useState(open);
   const closeTimerRef = useRef<number>();
+  const frameRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -185,11 +186,11 @@ export default function ContextWindow({
         direction: "n" as ResizeDirection,
         style: {
           ...handleBaseStyle,
-          top: -2,
+          top: 0,
           left: "50%",
-          transform: "translateX(-50%)",
-          width: "40%",
-          height: 6,
+          transform: "translate(-50%, -50%)",
+          width: "60%",
+          height: 10,
           cursor: "ns-resize",
         },
       },
@@ -197,11 +198,11 @@ export default function ContextWindow({
         direction: "s" as ResizeDirection,
         style: {
           ...handleBaseStyle,
-          bottom: -2,
+          bottom: 0,
           left: "50%",
-          transform: "translateX(-50%)",
-          width: "40%",
-          height: 6,
+          transform: "translate(-50%, 50%)",
+          width: "60%",
+          height: 10,
           cursor: "ns-resize",
         },
       },
@@ -209,11 +210,11 @@ export default function ContextWindow({
         direction: "e" as ResizeDirection,
         style: {
           ...handleBaseStyle,
-          right: -2,
+          right: 0,
           top: "50%",
-          transform: "translateY(-50%)",
-          width: 6,
-          height: "40%",
+          transform: "translate(50%, -50%)",
+          width: 10,
+          height: "60%",
           cursor: "ew-resize",
         },
       },
@@ -221,11 +222,11 @@ export default function ContextWindow({
         direction: "w" as ResizeDirection,
         style: {
           ...handleBaseStyle,
-          left: -2,
+          left: 0,
           top: "50%",
-          transform: "translateY(-50%)",
-          width: 6,
-          height: "40%",
+          transform: "translate(-50%, -50%)",
+          width: 10,
+          height: "60%",
           cursor: "ew-resize",
         },
       },
@@ -233,10 +234,11 @@ export default function ContextWindow({
         direction: "ne" as ResizeDirection,
         style: {
           ...handleBaseStyle,
-          top: -4,
-          right: -4,
-          width: 12,
-          height: 12,
+          top: 0,
+          right: 0,
+          width: 14,
+          height: 14,
+          transform: "translate(50%, -50%)",
           cursor: "nesw-resize",
         },
       },
@@ -244,10 +246,11 @@ export default function ContextWindow({
         direction: "nw" as ResizeDirection,
         style: {
           ...handleBaseStyle,
-          top: -4,
-          left: -4,
-          width: 12,
-          height: 12,
+          top: 0,
+          left: 0,
+          width: 14,
+          height: 14,
+          transform: "translate(-50%, -50%)",
           cursor: "nwse-resize",
         },
       },
@@ -255,10 +258,11 @@ export default function ContextWindow({
         direction: "se" as ResizeDirection,
         style: {
           ...handleBaseStyle,
-          bottom: -4,
-          right: -4,
-          width: 12,
-          height: 12,
+          bottom: 0,
+          right: 0,
+          width: 14,
+          height: 14,
+          transform: "translate(50%, 50%)",
           cursor: "nwse-resize",
         },
       },
@@ -266,10 +270,11 @@ export default function ContextWindow({
         direction: "sw" as ResizeDirection,
         style: {
           ...handleBaseStyle,
-          bottom: -4,
-          left: -4,
-          width: 12,
-          height: 12,
+          bottom: 0,
+          left: 0,
+          width: 14,
+          height: 14,
+          transform: "translate(-50%, 50%)",
           cursor: "nesw-resize",
         },
       },
@@ -277,7 +282,7 @@ export default function ContextWindow({
     [],
   );
 
-  const wrapperStyle: React.CSSProperties = {
+  const frameStyle: React.CSSProperties = {
     position: "absolute",
     top: geometry.position.y,
     left: geometry.position.x,
@@ -285,18 +290,26 @@ export default function ContextWindow({
     height: minimized ? HEADER_HEIGHT : geometry.size.height,
     minWidth: resolvedMinSize.width,
     minHeight: minimized ? HEADER_HEIGHT : resolvedMinSize.height,
+    display: visible ? "block" : "none",
+    pointerEvents: "auto",
+    zIndex: 30,
+    transition: "width 140ms ease, height 140ms ease",
+    overflow: "visible",
+  };
+
+  const windowStyle: React.CSSProperties = {
+    width: "100%",
+    height: "100%",
     background: "#f8fafc",
     border: "1px solid #cbd5f5",
     borderRadius: 12,
     boxShadow: "0 18px 32px rgba(15, 23, 42, 0.18)",
     overflow: "hidden",
-    display: visible ? "flex" : "none",
+    display: "flex",
     flexDirection: "column",
-    transition: `opacity ${TRANSITION_MS}ms ease, transform ${TRANSITION_MS}ms ease, width 140ms ease, height 140ms ease`,
     opacity: open ? 1 : 0,
     transform: open ? "scale(1)" : "scale(0.98)",
-    pointerEvents: "auto",
-    zIndex: 30,
+    transition: `opacity ${TRANSITION_MS}ms ease, transform ${TRANSITION_MS}ms ease`,
   };
 
   const headerStyle: React.CSSProperties = {
@@ -338,6 +351,27 @@ export default function ContextWindow({
     display: minimized ? "none" : "block",
   };
 
+  const stopPointerPropagation = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.stopPropagation();
+    },
+    [],
+  );
+
+  const stopMousePropagation = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.stopPropagation();
+    },
+    [],
+  );
+
+  const stopWheelPropagation = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      event.stopPropagation();
+    },
+    [],
+  );
+
   if (!visible) {
     return null;
   }
@@ -345,44 +379,50 @@ export default function ContextWindow({
   return (
     <div
       data-testid="context-window"
-      style={wrapperStyle}
-      onContextMenu={(e) => e.preventDefault()}
+      ref={frameRef}
+      style={frameStyle}
+      onPointerDownCapture={stopPointerPropagation}
+      onMouseDownCapture={stopMousePropagation}
+      onContextMenuCapture={stopMousePropagation}
+      onWheelCapture={stopWheelPropagation}
     >
-      <div
-        style={headerStyle}
-        onMouseDown={beginDrag}
-        role="toolbar"
-        aria-label={`${title} controls`}
-      >
-        <span>{title}</span>
-        <div style={buttonContainerStyle}>
-          <button
-            type="button"
-            aria-label={minimized ? "Restore" : "Minimize"}
-            style={buttonStyle}
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleMinimize();
-            }}
-          >
-            {minimized ? "▢" : "_"}
-          </button>
-          <button
-            type="button"
-            aria-label="Close"
-            style={buttonStyle}
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onRequestClose();
-            }}
-          >
-            ×
-          </button>
+      <div style={windowStyle}>
+        <div
+          style={headerStyle}
+          onMouseDown={beginDrag}
+          role="toolbar"
+          aria-label={`${title} controls`}
+        >
+          <span>{title}</span>
+          <div style={buttonContainerStyle}>
+            <button
+              type="button"
+              aria-label={minimized ? "Restore" : "Minimize"}
+              style={buttonStyle}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleMinimize();
+              }}
+            >
+              {minimized ? "▢" : "_"}
+            </button>
+            <button
+              type="button"
+              aria-label="Close"
+              style={buttonStyle}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRequestClose();
+              }}
+            >
+              ×
+            </button>
+          </div>
         </div>
+        <div style={contentStyle}>{children}</div>
       </div>
-      <div style={contentStyle}>{children}</div>
       {!minimized
         ? handles.map((handle) => (
             <div

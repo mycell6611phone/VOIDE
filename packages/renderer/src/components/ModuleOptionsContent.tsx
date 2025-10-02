@@ -287,6 +287,10 @@ function PromptOptions({
     [params]
   );
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const restoreFocusRef = React.useRef(false);
+  const selectionRangeRef = React.useRef<{ start: number; end: number } | null>(
+    null
+  );
   const radioGroupName = React.useId();
 
   React.useLayoutEffect(() => {
@@ -296,6 +300,24 @@ function PromptOptions({
     const element = textareaRef.current;
     element.style.height = "auto";
     element.style.height = `${Math.max(element.scrollHeight, 112)}px`;
+
+    if (restoreFocusRef.current) {
+      if (document.activeElement !== element) {
+        element.focus({ preventScroll: true });
+      }
+      const range = selectionRangeRef.current;
+      if (range) {
+        const start = Number.isFinite(range.start) ? range.start : element.value.length;
+        const end = Number.isFinite(range.end) ? range.end : start;
+        try {
+          element.setSelectionRange(start, end);
+        } catch (error) {
+          // Ignore selection errors (e.g., when element is read-only)
+        }
+      }
+      restoreFocusRef.current = false;
+      selectionRangeRef.current = null;
+    }
   }, [normalized.text]);
 
   React.useEffect(() => {
@@ -344,7 +366,26 @@ function PromptOptions({
     );
   };
 
-  const handleTextChange = (value: string) => {
+  const handleTextChange = (
+    event: React.ChangeEvent<HTMLTextAreaElement>
+  ) => {
+    const { value, selectionStart, selectionEnd } = event.target;
+    if (document.activeElement === event.target) {
+      restoreFocusRef.current = true;
+      const start =
+        typeof selectionStart === "number" && Number.isFinite(selectionStart)
+          ? selectionStart
+          : value.length;
+      const end =
+        typeof selectionEnd === "number" && Number.isFinite(selectionEnd)
+          ? selectionEnd
+          : start;
+      selectionRangeRef.current = { start, end };
+    } else {
+      restoreFocusRef.current = false;
+      selectionRangeRef.current = null;
+    }
+
     let candidatePreset =
       normalized.preset in PROMPT_PRESET_MAP
         ? normalized.preset
@@ -437,7 +478,7 @@ function PromptOptions({
           ref={textareaRef}
           style={promptTextareaStyle}
           value={normalized.text}
-          onChange={(event) => handleTextChange(event.target.value)}
+          onChange={handleTextChange}
           placeholder="Describe the instructions to inject before the LLM runs"
         />
         <span style={helperStyle}>

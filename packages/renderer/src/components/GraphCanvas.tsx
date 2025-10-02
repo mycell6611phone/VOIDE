@@ -255,17 +255,33 @@ const handleNodeContextMenu = useCallback(
     event.preventDefault();
     event.stopPropagation();
 
-    const PAD = 8;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
+    const PAD = CONTEXT_WINDOW_POINTER_OFFSET;
     const size =
       contextWindow && contextWindow.node.id === node.data.id
         ? contextWindow.geometry.size
         : CONTEXT_WINDOW_DEFAULT_SIZE;
 
-    const x = Math.min(Math.max(event.clientX + PAD, PAD), vw - size.width - PAD);
-    const y = Math.min(Math.max(event.clientY + PAD, PAD), vh - size.height - PAD);
+    const overlay = overlayRef.current;
+    let x: number;
+    let y: number;
+
+    if (overlay) {
+      const rect = overlay.getBoundingClientRect();
+      const pointerX = event.clientX - rect.left;
+      const pointerY = event.clientY - rect.top;
+
+      const maxX = Math.max(PAD, rect.width - size.width - PAD);
+      const maxY = Math.max(PAD, rect.height - size.height - PAD);
+
+      x = Math.min(Math.max(pointerX + PAD, PAD), maxX);
+      y = Math.min(Math.max(pointerY + PAD, PAD), maxY);
+    } else {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      x = Math.min(Math.max(event.clientX + PAD, PAD), vw - size.width - PAD);
+      y = Math.min(Math.max(event.clientY + PAD, PAD), vh - size.height - PAD);
+    }
 
     setEdgeMenu(null);
     setContextWindow({
@@ -275,7 +291,7 @@ const handleNodeContextMenu = useCallback(
       minimized: false
     });
   },
-  [contextWindow]
+  [contextWindow, overlayRef]
 );
 
   const handlePaneClick = useCallback(() => {

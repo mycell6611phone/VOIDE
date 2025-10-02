@@ -4,7 +4,8 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "voide": "./dist/cli.js"
+    "voide": "./dist/cli.js",
+    "voide-telemetryd": "./dist/telemetryd.js"
   },
   "engines": { "node": ">=20.11" },
   "scripts": {

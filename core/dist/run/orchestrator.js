@@ -1,6 +1,7 @@
 import * as pb from "../proto/voide/v1/flow.js";
 import { makeContext } from "../sdk/node.js";
 import { Scheduler } from "./scheduler.js";
+import { emit as emitTelemetry } from "./telemetry.js";
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_RETRIES = 0;
 function parseEdge(e) {
@@ -51,6 +52,7 @@ export async function* orchestrate(flowBin, runtimeInputs, registry, providers =
     }
     const states = new Map();
     const ready = [];
+    let wireSeq = 0;
     for (const n of flow.nodes) {
         states.set(n.id, "idle");
         if ((inEdges.get(n.id) ?? []).length === 0) {
@@ -74,6 +76,10 @@ export async function* orchestrate(flowBin, runtimeInputs, registry, providers =
             continue;
         executed.add(nodeId);
         states.set(nodeId, "running");
+        emitTelemetry({
+            type: 1 /* TelemetryEventType.NodeStart */,
+            payload: { id: nodeId, span: runId },
+        });
         yield {
             type: "node_state",
             runId,
@@ -106,6 +112,15 @@ export async function* orchestrate(flowBin, runtimeInputs, registry, providers =
                 if (attempt > DEFAULT_RETRIES) {
                     const error = err instanceof Error ? err : new Error(String(err));
                     states.set(nodeId, "error");
+                    emitTelemetry({
+                        type: 2 /* TelemetryEventType.NodeEnd */,
+                        payload: {
+                            id: nodeId,
+                            span: runId,
+                            ok: false,
+                            reason: error.message,
+                        },
+                    });
                     yield {
                         type: "node_state",
                         runId,
@@ -126,6 +141,14 @@ export async function* orchestrate(flowBin, runtimeInputs, registry, providers =
             }
         }
         states.set(nodeId, "ok");
+        emitTelemetry({
+            type: 2 /* TelemetryEventType.NodeEnd */,
+            payload: {
+                id: nodeId,
+                span: runId,
+                ok: true,
+            },
+        });
         yield {
             type: "node_state",
             runId,
@@ -138,6 +161,19 @@ export async function* orchestrate(flowBin, runtimeInputs, registry, providers =
             if (val !== undefined) {
                 e.mailbox.push(val);
                 const bytes = JSON.stringify(val).length;
+                wireSeq += 1;
+                emitTelemetry({
+                    type: 3 /* TelemetryEventType.WireTx */,
+                    payload: {
+                        id: e.id,
+                        span: runId,
+                        pkt: `${wireSeq}`,
+                        from: e.fromNode,
+                        to: e.toNode,
+                        outPort: e.fromPort,
+                        inPort: e.toPort,
+                    },
+                });
                 yield {
                     type: "edge_transfer",
                     runId,

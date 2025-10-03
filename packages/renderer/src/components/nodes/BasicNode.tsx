@@ -3,6 +3,8 @@ import { Handle, Position, type NodeProps } from "reactflow";
 import type { NodeDef } from "@voide/shared";
 import ContextWindow from "../ContextWindow";
 import ModuleOptionsContent, {
+  MEMORY_SUB_MENUS,
+  type MemorySubMenuKey,
   type ModuleCategory,
   type ParamsUpdater
 } from "../ModuleOptionsContent";
@@ -143,6 +145,34 @@ interface MenuState {
   geometry: WindowGeometry;
 }
 
+interface MemorySubWindowState {
+  open: boolean;
+  minimized: boolean;
+  geometry: WindowGeometry;
+}
+
+type MemorySubWindowMap = Record<MemorySubMenuKey, MemorySubWindowState>;
+
+const createMemorySubWindowMap = (size: WindowSize): MemorySubWindowMap => {
+  const halfSize: WindowSize = {
+    width: Math.max(1, Math.round(size.width / 2)),
+    height: Math.max(1, Math.round(size.height / 2))
+  };
+
+  const map = {} as MemorySubWindowMap;
+  for (const menu of MEMORY_SUB_MENUS) {
+    map[menu.key] = {
+      open: false,
+      minimized: false,
+      geometry: {
+        position: { x: 0, y: 0 },
+        size: { ...halfSize }
+      }
+    };
+  }
+  return map;
+};
+
 export default function BasicNode({ data }: NodeProps<NodeDef>) {
   const inputs = data.in ?? [];
   const outputs = data.out ?? [];
@@ -165,6 +195,9 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       size: { ...defaultSize }
     }
   }));
+  const [memorySubWindows, setMemorySubWindows] = useState<MemorySubWindowMap>(
+    () => createMemorySubWindowMap(defaultSize)
+  );
   const [editMenu, setEditMenu] = useState<
     { left: number; top: number; pointer: { x: number; y: number } | null } | null
   >(null);
@@ -197,6 +230,136 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       return clampGeometry(geometry, { width: rect.width, height: rect.height });
     },
     [overlayRef]
+  );
+
+  useEffect(() => {
+    setMemorySubWindows(createMemorySubWindowMap(defaultSize));
+  }, [defaultSize]);
+
+  useEffect(() => {
+    if (moduleCategory !== "memory" || menuState.open) {
+      return;
+    }
+    setMemorySubWindows((previous) => {
+      let changed = false;
+      const next: MemorySubWindowMap = { ...previous };
+      for (const menu of MEMORY_SUB_MENUS) {
+        const current = next[menu.key];
+        if (!current) {
+          continue;
+        }
+        if (current.open || current.minimized) {
+          next[menu.key] = { ...current, open: false, minimized: false };
+          changed = true;
+        }
+      }
+      return changed ? next : previous;
+    });
+  }, [menuState.open, moduleCategory]);
+
+  const handleMemorySubWindowUpdate = useCallback(
+    (key: MemorySubMenuKey) => (geometry: WindowGeometry) => {
+      setMemorySubWindows((previous) => {
+        const current = previous[key];
+        if (!current) {
+          return previous;
+        }
+        const clamped = clampWithCanvas(geometry);
+        const { position, size } = current.geometry;
+        if (
+          position.x === clamped.position.x &&
+          position.y === clamped.position.y &&
+          size.width === clamped.size.width &&
+          size.height === clamped.size.height
+        ) {
+          return previous;
+        }
+        return {
+          ...previous,
+          [key]: {
+            ...current,
+            geometry: clamped
+          }
+        };
+      });
+    },
+    [clampWithCanvas]
+  );
+
+  const handleMemorySubWindowClose = useCallback(
+    (key: MemorySubMenuKey) => () => {
+      setMemorySubWindows((previous) => {
+        const current = previous[key];
+        if (!current) {
+          return previous;
+        }
+        if (!current.open && !current.minimized) {
+          return previous;
+        }
+        return {
+          ...previous,
+          [key]: {
+            ...current,
+            open: false,
+            minimized: false
+          }
+        };
+      });
+    },
+    []
+  );
+
+  const handleMemorySubWindowToggleMinimize = useCallback(
+    (key: MemorySubMenuKey) => () => {
+      setMemorySubWindows((previous) => {
+        const current = previous[key];
+        if (!current) {
+          return previous;
+        }
+        return {
+          ...previous,
+          [key]: {
+            ...current,
+            minimized: !current.minimized
+          }
+        };
+      });
+    },
+    []
+  );
+
+  const openMemorySubWindow = useCallback(
+    (key: MemorySubMenuKey) => {
+      if (moduleCategory !== "memory") {
+        return;
+      }
+      setMemorySubWindows((previous) => {
+        const desiredSize: WindowSize = {
+          width: Math.max(1, Math.round(menuState.geometry.size.width / 2)),
+          height: Math.max(1, Math.round(menuState.geometry.size.height / 2))
+        };
+        const menuIndex = MEMORY_SUB_MENUS.findIndex((menu) => menu.key === key);
+        const desiredGeometry = clampWithCanvas({
+          position: {
+            x: menuState.geometry.position.x + menuState.geometry.size.width + 16,
+            y: menuState.geometry.position.y + Math.max(0, menuIndex) * 24
+          },
+          size: desiredSize
+        });
+        const existing = previous[key];
+        const geometry =
+          existing && existing.open ? existing.geometry : desiredGeometry;
+        return {
+          ...previous,
+          [key]: {
+            open: true,
+            minimized: false,
+            geometry
+          }
+        };
+      });
+    },
+    [clampWithCanvas, menuState.geometry, moduleCategory]
   );
 
   const openOptionsWindow = useCallback(
@@ -613,9 +776,36 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
             module={moduleCategory!}
             params={data.params}
             onUpdate={handleParamsUpdate}
+            onOpenMemorySubMenu={
+              moduleCategory === "memory" ? openMemorySubWindow : undefined
+            }
           />
         </ContextWindow>
       ) : null}
+
+      {moduleCategory === "memory"
+        ? MEMORY_SUB_MENUS.map((menu) => {
+            const subWindow = memorySubWindows[menu.key];
+            if (!subWindow) {
+              return null;
+            }
+            return (
+              <ContextWindow
+                key={`${data.id}-${menu.key}`}
+                title={`${data.name} • ${menu.label}`}
+                open={subWindow.open}
+                position={subWindow.geometry.position}
+                size={subWindow.geometry.size}
+                minimized={subWindow.minimized}
+                onRequestClose={handleMemorySubWindowClose(menu.key)}
+                onToggleMinimize={handleMemorySubWindowToggleMinimize(menu.key)}
+                onUpdate={handleMemorySubWindowUpdate(menu.key)}
+              >
+                <div />
+              </ContextWindow>
+            );
+          })
+        : null}
 
       {editMenu ? (
         <EditMenu

@@ -29,21 +29,11 @@ function App() {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "240px 1fr 320px",
+        gridTemplateRows: "64px 1fr",
         height: "100vh",
       }}
     >
-      <div style={{ height: "100%", overflow: "auto" }}>
-        <Palette />
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateRows: "48px 1fr 200px",
-          height: "100%",
-          minHeight: 0,
-        }}
-      >
+      <div style={{ gridColumn: "1 / -1", width: "100%", height: "100%" }}>
         <RunControls
           onRun={async () => {
             const r = await voide.runFlow(flow);
@@ -53,15 +43,36 @@ function App() {
             if (runId) await voide.stopFlow(runId);
           }}
         />
-        <div style={{ minHeight: 0, height: "100%" }}>
-          <GraphCanvas />
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "240px 1fr 320px",
+          minHeight: 0,
+          height: "100%",
+        }}
+      >
+        <div style={{ height: "100%", overflow: "auto" }}>
+          <Palette />
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateRows: "1fr 200px",
+            height: "100%",
+            minHeight: 0,
+          }}
+        >
+          <div style={{ minHeight: 0, height: "100%" }}>
+            <GraphCanvas />
+          </div>
+          <div style={{ height: "100%", overflow: "auto" }}>
+            <Inspector runId={runId} />
+          </div>
         </div>
         <div style={{ height: "100%", overflow: "auto" }}>
-          <Inspector runId={runId} />
+          <PropertiesPanel />
         </div>
-      </div>
-      <div style={{ height: "100%", overflow: "auto" }}>
-        <PropertiesPanel />
       </div>
     </div>
   );

@@ -63,4 +63,6 @@ turbo/*
 .turbo/*
 */.turbo/*
 ,pdf
-
+dist/
+**/dist/
+*.tsbuildinfo

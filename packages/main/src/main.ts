@@ -108,17 +108,9 @@ async function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
   const devUrl = resolveRendererDevServerURL();
-  let loaded = false;
   if (devUrl) {
-    try {
-      await mainWindow.loadURL(devUrl);
-      loaded = true;
-    } catch (error) {
-      console.warn(`Failed to load renderer dev server at ${devUrl}, falling back to bundled renderer.`, error);
-    }
-  }
-
-  if (!loaded) {
+    await mainWindow.loadURL(devUrl);
+  } else {
     await mainWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
   }
 
@@ -158,19 +150,11 @@ async function createChatWindow() {
   chatWindow.once('ready-to-show', () => chatWindow?.show());
 
   const devUrl = resolveRendererDevServerURL();
-
-if (!app.isPackaged && devUrl) {
-  // Development: always use Vite
-  await chatWindow.loadURL(devUrl);
-} else {
-  // Production: load bundled build
-  await chatWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
-}
-
-
-  
+  if (devUrl) {
+    await chatWindow.loadURL(`${devUrl}#/chat`);
+  } else {
     await chatWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'), { hash: 'chat' });
-  
+  }
 
   chatWindow.on('closed', () => {
     chatWindow = null;

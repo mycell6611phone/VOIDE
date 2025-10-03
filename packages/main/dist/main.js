@@ -133,19 +133,15 @@ async function createChatWindow() {
     });
     chatWindow.once('ready-to-show', () => chatWindow?.show());
     const devUrl = resolveRendererDevServerURL();
-    let loaded = false;
-    if (devUrl) {
-        try {
-            await chatWindow.loadURL(`${devUrl}#/chat`);
-            loaded = true;
-        }
-        catch (error) {
-            console.warn(`Failed to load renderer dev server at ${devUrl}#/chat, falling back to bundled renderer.`, error);
-        }
+    if (!app.isPackaged && devUrl) {
+        // Development: always use Vite
+        await chatWindow.loadURL(devUrl);
     }
-    if (!loaded) {
-        await chatWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'), { hash: 'chat' });
+    else {
+        // Production: load bundled build
+        await chatWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
     }
+    await chatWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'), { hash: 'chat' });
     chatWindow.on('closed', () => {
         chatWindow = null;
     });

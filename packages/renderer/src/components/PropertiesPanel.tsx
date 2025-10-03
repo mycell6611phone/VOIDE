@@ -1,7 +1,8 @@
 import React from "react";
 import { useForm } from "react-hook-form";
 import { useFlowStore } from "../state/flowStore";
-import { ipcClient } from "../lib/ipcClient";
+import { voide } from "../voide";
+
 
 export default function PropertiesPanel() {
   const { flow, setFlow } = useFlowStore();
@@ -20,10 +21,29 @@ export default function PropertiesPanel() {
         <button type="submit">Save</button>
       </form>
       <hr />
-      <button onClick={async () => {
-        const v = await ipcClient.validateFlow(flow);
-        alert(v.ok ? "Valid" : JSON.stringify(v.errors));
-      }}>Validate</button>
+      <button
+        onClick={async () => {
+          const res = await voide.openFlow();
+          if (res?.flow) setFlow(res.flow);
+        }}
+      >
+        Open
+      </button>
+      <button
+        onClick={async () => {
+          await voide.saveFlow(flow);
+        }}
+      >
+        Save
+      </button>
+      <button
+        onClick={async () => {
+          const result = await voide.validateFlow(flow);
+          alert(result.ok ? "Valid" : JSON.stringify(result.errors));
+        }}
+      >
+        Validate
+      </button>
     </div>
   );
 }

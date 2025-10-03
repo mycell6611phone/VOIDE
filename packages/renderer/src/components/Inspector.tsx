@@ -1,12 +1,20 @@
 import React, { useEffect, useState } from "react";
+import { voide } from "../voide";
 
 export default function Inspector({ runId }: { runId: string | null }) {
   const [rows, setRows] = useState<any[]>([]);
   useEffect(() => {
-    if (!runId) return;
+    if (!runId) {
+      setRows([]);
+      return;
+    }
     const t = setInterval(async () => {
-      const payloads = await (window as any).voide.getLastRunPayloads(runId);
-      setRows(payloads);
+      try {
+        const payloads = await voide.getLastRunPayloads(runId);
+        setRows(payloads);
+      } catch (err) {
+        console.error("Failed to fetch run payloads", err);
+      }
     }, 700);
     return () => clearInterval(t);
   }, [runId]);

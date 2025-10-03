@@ -4,15 +4,8 @@ import RunControls from "./components/RunControls";
 import Palette from "./components/Palette";
 import ChatInterface from "./components/ChatInterface";
 import { useFlowStore } from "./state/flowStore";
-import { ipcClient } from "./lib/ipcClient";
-import { useChatStore } from "./state/chatStore";
+import { voide } from "./voide";
 
-const appShellStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  height: "100vh",
-  background: "#e2e8f0"
-};
 
 const workspaceRowStyle: React.CSSProperties = {
   display: "flex",
@@ -27,35 +20,33 @@ const canvasContainerStyle: React.CSSProperties = {
   background: "#ffffff"
 };
 
-function getCurrentRoute(): string {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  const hash = window.location.hash.replace(/^#/, "");
-  return hash.replace(/^\//, "");
-}
-
-function MainWorkspace() {
-  const flow = useFlowStore((state) => state.flow);
-  const handleRun = useCallback(async () => {
-    const { sendActiveDraft, hasOpenChat } = useChatStore.getState();
-    const drafted = sendActiveDraft();
-    if (hasOpenChat() && !drafted) {
-      return;
-    }
-    await ipcClient.runFlow(flow);
-  }, [flow]);
+  useEffect(() => {
+    let cancelled = false;
+    voide
+      .getNodeCatalog()
+      .then((catalog) => {
+        if (!cancelled) setCatalog(catalog);
+      })
+      .catch((err) => console.error("Failed to load node catalog", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [setCatalog]);
 
   return (
-    <div style={appShellStyle}>
-      <RunControls
-        onRun={handleRun}
-      />
-      <div style={workspaceRowStyle}>
-        <Palette />
-        <div style={canvasContainerStyle}>
-          <GraphCanvas />
-        </div>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", height: "100vh" }}>
+      <div style={{ display: "grid", gridTemplateRows: "48px 1fr 200px" }}>
+        <RunControls
+          onRun={async () => {
+            const r = await voide.runFlow(flow);
+            setRunId(r.runId);
+          }}
+          onStop={async () => {
+            if (runId) await voide.stopFlow(runId);
+          }}
+        />
+        <GraphCanvas />
+        <Inspector runId={runId} />
       </div>
     </div>
   );

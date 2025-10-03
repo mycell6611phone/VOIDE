@@ -3,6 +3,8 @@ import GraphCanvas from "./components/GraphCanvas";
 import RunControls from "./components/RunControls";
 import Palette from "./components/Palette";
 import ChatInterface from "./components/ChatInterface";
+import Inspector from "./components/Inspector";
+import PropertiesPanel from "./components/PropertiesPanel";
 import { useFlowStore } from "./state/flowStore";
 import { voide } from "./voide";
 

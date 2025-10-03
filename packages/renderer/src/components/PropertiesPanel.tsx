@@ -1,14 +1,21 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useFlowStore } from "../state/flowStore";
 import { voide } from "../voide";
 
+type FlowFormValues = { id: string; version: string };
 
 export default function PropertiesPanel() {
   const { flow, setFlow } = useFlowStore();
-  const { register, handleSubmit } = useForm({ defaultValues: { id: flow.id, version: flow.version } });
+  const { register, handleSubmit, reset } = useForm<FlowFormValues>({
+   defaultValues: { id: flow.id, version: flow.version }
+  });
 
-  const onSubmit = (data: any) => {
+  useEffect(() => {
+    reset({ id: flow.id, version: flow.version });
+  }, [flow.id, flow.version, reset]);
+
+  const onSubmit = (data: FlowFormValues) => {
     setFlow({ ...flow, id: data.id, version: data.version });
   };
 

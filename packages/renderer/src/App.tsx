@@ -6,21 +6,11 @@ import ChatInterface from "./components/ChatInterface";
 import { useFlowStore } from "./state/flowStore";
 import { voide } from "./voide";
 
+function App() {
+  const { flow, setCatalog } = useFlowStore();
+  const [runId, setRunId] = useState<string | null>(null);
 
-const workspaceRowStyle: React.CSSProperties = {
-  display: "flex",
-  flex: 1,
-  minHeight: 0
-};
-
-const canvasContainerStyle: React.CSSProperties = {
-  flex: 1,
-  minHeight: 0,
-  position: "relative",
-  background: "#ffffff"
-};
-
-  useEffect(() => {
+   useEffect(() => {
     let cancelled = false;
     voide
       .getNodeCatalog()
@@ -36,7 +26,7 @@ const canvasContainerStyle: React.CSSProperties = {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", height: "100vh" }}>
       <div style={{ display: "grid", gridTemplateRows: "48px 1fr 200px" }}>
-        <RunControls
+         <RunControls
           onRun={async () => {
             const r = await voide.runFlow(flow);
             setRunId(r.runId);
@@ -48,25 +38,9 @@ const canvasContainerStyle: React.CSSProperties = {
         <GraphCanvas />
         <Inspector runId={runId} />
       </div>
+      <PropertiesPanel />
     </div>
   );
 }
 
-export default function App() {
-  const [route, setRoute] = useState<string>(() => getCurrentRoute());
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const handleHashChange = () => setRoute(getCurrentRoute());
-    window.addEventListener("hashchange", handleHashChange);
-    return () => window.removeEventListener("hashchange", handleHashChange);
-  }, []);
-
-  if (route === "chat") {
-    return <ChatInterface />;
-  }
-
-  return <MainWorkspace />;
-}
+export default App;

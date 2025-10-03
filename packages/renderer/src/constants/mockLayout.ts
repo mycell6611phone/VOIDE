@@ -59,8 +59,11 @@ export const mockLayoutFlow: FlowDef = {
         mode: "append",
         moduleKey: "memory"
       },
-      in: [{ port: "write", types: text }],
-      out: [{ port: "recall", types: text }]
+      in: [
+        { port: "search", types: text },
+        { port: "write", types: text }
+      ],
+      out: [{ port: "attach", types: text }]
     }
   ],
   edges: [
@@ -84,7 +87,7 @@ export const mockLayoutFlow: FlowDef = {
     },
     {
       id: "edge-memory-ui",
-      from: ["memory-primary", "recall"],
+      from: ["memory-primary", "attach"],
       to: ["ui-entry", "feedback"],
       label: "memory"
     }

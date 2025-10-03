@@ -111,7 +111,11 @@ const deriveModuleCategory = (node: NodeDef): ModuleCategory | null => {
   if (haystack.includes("cache") || haystack.includes("memo")) {
     return "cache";
   }
-  if (haystack.includes("memory") || haystack.includes("recall")) {
+  if (
+    haystack.includes("memory") ||
+    haystack.includes("recall") ||
+    haystack.includes("attach")
+  ) {
     return "memory";
   }
   if (haystack.includes("divert") || haystack.includes("divider") || haystack.includes("switch")) {

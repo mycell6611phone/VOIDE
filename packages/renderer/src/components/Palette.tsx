@@ -72,9 +72,12 @@ const MODULES: ModuleConfig[] = [
     key: "memory",
     label: "Memory",
     nodeType: "module",
-    inputs: [{ port: "store", types: ["TEXT", "JSON"] }],
-    outputs: [{ port: "recall", types: ["TEXT", "JSON"] }],
-    description: "Long-lived context"
+    inputs: [
+      { port: "search", types: ["TEXT", "JSON"] },
+      { port: "write", types: ["TEXT", "JSON"] }
+    ],
+    outputs: [{ port: "attach", types: ["TEXT", "JSON"] }],
+    description: "Store and retrieve persistent context"
   },
   {
     key: "divider",

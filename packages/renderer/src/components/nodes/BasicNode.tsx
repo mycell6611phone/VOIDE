@@ -198,6 +198,17 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
   const [memorySubWindows, setMemorySubWindows] = useState<MemorySubWindowMap>(
     () => createMemorySubWindowMap(defaultSize)
   );
+  const menuGeometry = menuState.geometry;
+  const menuPosition = menuGeometry.position;
+  const menuSize = menuGeometry.size;
+
+  const memorySubWindowMinSize = useMemo<WindowSize>(
+    () => ({
+      width: Math.max(1, Math.round(menuSize.width / 2)),
+      height: Math.max(1, Math.round(menuSize.height / 2))
+    }),
+    [menuSize.height, menuSize.width]
+  );
   const [editMenu, setEditMenu] = useState<
     { left: number; top: number; pointer: { x: number; y: number } | null } | null
   >(null);
@@ -334,15 +345,12 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         return;
       }
       setMemorySubWindows((previous) => {
-        const desiredSize: WindowSize = {
-          width: Math.max(1, Math.round(menuState.geometry.size.width / 2)),
-          height: Math.max(1, Math.round(menuState.geometry.size.height / 2))
-        };
+        const desiredSize: WindowSize = { ...memorySubWindowMinSize };
         const menuIndex = MEMORY_SUB_MENUS.findIndex((menu) => menu.key === key);
         const desiredGeometry = clampWithCanvas({
           position: {
-            x: menuState.geometry.position.x + menuState.geometry.size.width + 16,
-            y: menuState.geometry.position.y + Math.max(0, menuIndex) * 24
+            x: menuPosition.x + menuSize.width + 16,
+            y: menuPosition.y + Math.max(0, menuIndex) * 24
           },
           size: desiredSize
         });
@@ -359,7 +367,8 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         };
       });
     },
-    [clampWithCanvas, menuState.geometry, moduleCategory]
+
+    [clampWithCanvas, memorySubWindowMinSize, menuPosition.x, menuPosition.y, menuSize.width, moduleCategory]
   );
 
   const openOptionsWindow = useCallback(
@@ -622,20 +631,16 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       window.removeEventListener("keydown", handleKey);
     };
   }, [editMenu]);
-
   const shouldRenderMenu = Boolean(moduleCategory);
   const enableChatShortcut = moduleCategory === "interface";
-
   const handlePrimaryClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (enableChatShortcut) {
         event.stopPropagation();
-
         const overlayRect = overlayRef.current?.getBoundingClientRect();
         const nodeRect = event.currentTarget.getBoundingClientRect();
         const existing = getThread(data.id);
         const size = existing?.geometry?.size ?? { ...DEFAULT_CHAT_WINDOW_SIZE };
-
         let geometry: WindowGeometry = existing?.geometry ?? {
           position: { x: 0, y: 0 },
           size: { ...size }
@@ -695,7 +700,6 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       overlayRef
     ]
   );
-
   return (
     <>
       <div
@@ -730,9 +734,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
             </React.Fragment>
           );
         })}
-
         <span>{data.name}</span>
-
         {outputs.map((port, index) => {
           const top = computeOffset(index, outputs.length);
           return (
@@ -760,7 +762,6 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
           );
         })}
       </div>
-
       {shouldRenderMenu ? (
         <ContextWindow
           title={`${data.name} Options`}
@@ -782,7 +783,6 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
           />
         </ContextWindow>
       ) : null}
-
       {moduleCategory === "memory"
         ? MEMORY_SUB_MENUS.map((menu) => {
             const subWindow = memorySubWindows[menu.key];
@@ -800,13 +800,13 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
                 onRequestClose={handleMemorySubWindowClose(menu.key)}
                 onToggleMinimize={handleMemorySubWindowToggleMinimize(menu.key)}
                 onUpdate={handleMemorySubWindowUpdate(menu.key)}
-              >
+                minSize={memorySubWindowMinSize}
+               >
                 <div />
               </ContextWindow>
             );
           })
         : null}
-
       {editMenu ? (
         <EditMenu
           position={{ left: editMenu.left, top: editMenu.top }}

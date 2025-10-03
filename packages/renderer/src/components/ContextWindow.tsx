@@ -96,13 +96,19 @@ export default function ContextWindow({
     [],
   );
 
-  const resolvedMinSize = useMemo<WindowSize>(
-    () => ({
-      width: Math.max(minSize?.width ?? 280, 240),
-      height: Math.max(minSize?.height ?? 220, HEADER_HEIGHT + 40),
-    }),
-    [minSize],
-  );
+  const resolvedMinSize = useMemo<WindowSize>(() => {
+    if (minSize) {
+      return {
+        width: Math.max(1, Math.round(minSize.width)),
+        height: Math.max(HEADER_HEIGHT, Math.round(minSize.height)),
+      };
+    }
+
+    return {
+      width: 280,
+      height: Math.max(220, HEADER_HEIGHT + 40),
+    };
+  }, [minSize]);
 
   const geometry = useMemo<WindowGeometry>(
     () => ({ position, size }),

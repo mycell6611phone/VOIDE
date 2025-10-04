@@ -6,7 +6,6 @@ import ChatInterface from "./components/ChatInterface";
 import { useFlowStore } from "./state/flowStore";
 import { voide } from "./voide";
 import Inspector from "./components/Inspector";
-import PropertiesPanel from "./components/PropertiesPanel";
 
 function App() {
   const { flow, setCatalog } = useFlowStore();
@@ -47,7 +46,7 @@ function App() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "240px 1fr 320px",
+          gridTemplateColumns: "240px 1fr",
           minHeight: 0,
           height: "100%",
         }}
@@ -63,15 +62,18 @@ function App() {
             minHeight: 0,
           }}
         >
-          <div style={{ minHeight: 0, height: "100%" }}>
+          <div
+            style={{
+              minHeight: 0,
+              height: "100%",
+              overflow: "hidden",
+            }}
+          >
             <GraphCanvas />
           </div>
           <div style={{ height: "100%", overflow: "auto" }}>
             <Inspector runId={runId} />
           </div>
-        </div>
-        <div style={{ height: "100%", overflow: "auto" }}>
-          <PropertiesPanel />
         </div>
       </div>
     </div>

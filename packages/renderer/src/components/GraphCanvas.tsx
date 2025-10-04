@@ -439,7 +439,14 @@ const handleNodeContextMenu = useCallback(
       <div
         ref={containerRef}
         data-testid="graph-canvas-container"
-        style={{ width: "100%", height: "100%", position: "relative" }}
+        style={{
+          width: "100%",
+          height: "100%",
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden"
+        }}
       >
         <ReactFlow
           nodes={nodes}
@@ -454,7 +461,12 @@ const handleNodeContextMenu = useCallback(
           onPaneContextMenu={handlePaneContextMenu}
           onInit={handleReactFlowInit}
           proOptions={{ hideAttribution: true }}
+          autoPanOnNodeDrag={false}
+          autoPanOnConnect={false}
           style={{
+            flex: 1,
+            width: "100%",
+            height: "100%",
             background: "#ffffff",
             cursor: activeTool === "wire" ? "crosshair" : "default"
           }}

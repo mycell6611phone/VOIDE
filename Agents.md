@@ -8,11 +8,11 @@ Guardrails for Agents
 
 Always ask: “Is this needed at this stage of development?”
 
-Current stage is the GUI (canvas, menus, palette, wiring tool, modules, buttons).
+Current stage is **Build** — implementing backend flow compilation, IPC contracts, and the execution runtime that powers the canvas.
 
 Minimal backend code is acceptable only if required to make GUI elements function (e.g., menu stubs, save/load stubs).
 
-Features like telemetry, logging, adapters, or cloud are not needed until explicitly requested in later stages.
+Features like telemetry, logging, adapters, or cloud are still out of scope unless they unblock Build → Run. Focus work on the deterministic compiler, orchestrator, adapters needed for offline execution, and typed IPC bridges.
 
 2. Need Gate
 
@@ -64,9 +64,9 @@ Never edit NORTH_STAR.md — that file is immutable except by the project owner.
 
 Workflow
 
-GUI — build visible interface, palettes, modules, wiring tool, menus, buttons.
+GUI — build visible interface, palettes, modules, wiring tool, menus, buttons. ✅
 
-Build — implement backend wiring logic.
+Build — implement backend wiring logic, compiler, IPC contracts, and worker orchestration. **(You are here.)**
 
 Run — execution engine + activation lights.
 
@@ -90,6 +90,9 @@ has its own `AGENTS.md` with deeper notes.
 - `/ui` — Vite/React canvas prototype. Details in `ui/AGENTS.md`.
 - `/packages` — Electron workspace packages (main, preload, renderer, IPC,
   shared libraries, adapters). Overview in `packages/AGENTS.md`.
+- `/packages/main` — Flow orchestration + worker pool entry points for Build/Run IPC.
+- `/packages/ipc` — Shared Zod schemas for backend channels.
+- `/packages/preload` — Bridge that forwards Build/Run requests to the main process.
 - `/flows` — Sample flow JSON + schema. Guidance in `flows/AGENTS.md`.
 - `/tests` — Vitest suites that cover module behavior. See `tests/AGENTS.md`.
 - `/tools` — Ancillary services (e.g., FAISS daemon). See `tools/AGENTS.md`.
@@ -100,3 +103,11 @@ has its own `AGENTS.md` with deeper notes.
 ## Immutable Product Snapshot
 
 - The VOIDE canvas lets users drag modules onto the workspace, wire them together to design complex data flows, and watch live activation lights for debugging stalled modules or stuck loops.
+
+## Backend Transition Notes
+
+- Prioritize the Build → Run loop: renderer serializes `FlowGraph` → main process invokes `@voide/core` compiler → compiled handle cached for runs.
+- Keep the runtime deterministic and offline. All adapters must fall back to local mocks when heavyweight binaries are missing.
+- IPC changes must land in lockstep across `packages/ipc`, `packages/main`, `packages/preload`, and the renderer store hooks.
+- Extend Vitest coverage under `core/test` and integration coverage under `packages/main` whenever adding compiler passes or scheduler features.
+- Document new backend behaviors alongside Flow schemas in `/flows/schema` and module manifests in `/modules` to keep UI and runtime aligned.

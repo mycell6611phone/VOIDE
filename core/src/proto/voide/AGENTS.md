@@ -8,3 +8,8 @@
 Namespace-specific protobuf facades for VOIDE schemas. Regenerated via
 `pnpm --filter @voide/core proto:gen`. Avoid editing manually; add helpers in
 adjacent non-generated files if needed.
+
+## Backend Transition Notes
+
+- When adding new VOIDE-specific messages, describe their role (Build vs. Run) here so downstream packages know how to consume them.
+- Keep a changelog snippet in this file whenever message field numbers change to help track compatibility with persisted data.

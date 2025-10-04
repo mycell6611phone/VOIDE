@@ -7,3 +7,7 @@
 
 Legacy server experiment preserved for reference. Not wired into the current
 workspace. Avoid updating unless tasked with MVP revival.
+
+## Backend Transition Notes
+
+- If you consult this prototype, summarize the relevant backend insight here (e.g., API shapes, persistence strategies) so we do not repeat deprecated patterns.

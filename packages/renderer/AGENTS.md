@@ -28,3 +28,8 @@ standalone `/ui` package but integrates tightly with IPC and Electron APIs.
 - Pressing **Run** must reuse the `CompiledFlow` returned by Build rather than
   re-reading renderer state, ensuring runtime parity with the CLI and main
   process.
+
+## Backend Transition Notes
+
+- Coordinate renderer store changes with backend contracts—document new preload methods and IPC payload expectations here before coding UI updates.
+- Add developer toggles that surface compiled-flow hashes or backend errors to speed up debugging during Build-stage work.

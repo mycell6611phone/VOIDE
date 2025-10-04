@@ -20,3 +20,8 @@
 - Preserve formatting (2-space JSON) to keep diffs readable.
 - JSON files here mirror the `FlowGraph` protobuf for human inspection, but the
   protobuf emitted by `voide pack` is the source of truth for Build/Run.
+
+## Backend Transition Notes
+
+- Treat each sample flow as a regression test for the compiler. After modifying backend passes in `core/src/build`, re-run `pnpm voide validate` to confirm they still compile.
+- Capture tricky backend cases (loops, adapters, concurrency groups) as new flow samples before implementing the logic so the expected IR is documented.

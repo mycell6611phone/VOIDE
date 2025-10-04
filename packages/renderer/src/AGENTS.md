@@ -20,3 +20,8 @@
 - Keep feature boundaries clear to avoid tangled imports.
 - Align UX with `/ui` unless Electron-specific behavior is required.
 - `state/flowStore.ts` now auto-syncs LLM node names with the selected model metadata. If you add new LLM params, expose a string label (e.g., `modelLabel`) or update the helper so the canvas name stays in sync.
+
+## Backend Transition Notes
+
+- Document new store actions that interact with backend Build/Run flows (e.g., `compileFlow`, `startRun`) and ensure they handle optimistic UI updates when backend requests fail.
+- Keep IPC DTO shapes mirrored in local TypeScript types here so renderer compilation fails fast when backend contracts change.

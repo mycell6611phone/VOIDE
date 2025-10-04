@@ -30,3 +30,9 @@ only that compiled artifact.
 - Stay offline; adapters that would hit the network must be stubbed.
 - Generated code lives under `protos/` — do not hand-edit.
 - Keep CLI entrypoint `src/cli.ts` lean; heavy logic belongs in `src/runtime/`.
+
+## Backend Transition Notes
+
+- Capture compiler architecture decisions (passes, IR versions) here so `packages/main` and the CLI can track compatibility.
+- When adding new protobuf messages, document their purpose and downstream consumers in this file before regenerating code.
+- Run `pnpm --filter @voide/core test -- --runInBand` after major scheduler/compiler updates to surface non-determinism locally.

@@ -24,3 +24,8 @@
 - Update/extend Vitest suites under `core/test`.
 - Re-run `pnpm --filter @voide/core test` before committing.
 - If changing protobuf shapes, regenerate bindings (`proto:gen`) and sync UI.
+
+## Backend Transition Notes
+
+- Track IR version numbers and pass ordering here so orchestrator implementations in `packages/main` remain compatible.
+- When introducing new compiler diagnostics, describe the expected error codes/messages in this file before exposing them to IPC/CLI surfaces.

@@ -23,3 +23,8 @@ modules under `src/modules` and renderer expectations.
   capabilities, and allowed adapters so Build can materialize `CompiledFlow`.
   Keep these contracts deterministic; runtime workers instantiate operators
   directly from the compiled registry entries.
+
+## Backend Transition Notes
+
+- Capture adapter compatibility rules (e.g., which module supports which adapter) here so Build-stage validation stays consistent.
+- When adding module parameters that influence runtime behavior, document the corresponding IR fields and expected defaults.

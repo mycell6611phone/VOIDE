@@ -17,3 +17,8 @@
 - Keep startup lean; defer heavy work until after `app.ready`.
 - IPC handlers should validate inputs using `@voide/ipc` before execution.
 - Respect offline guardrails (no auto updates or telemetry).
+
+## Backend Transition Notes
+
+- Organize Build orchestration under `ipc/flowBuild.ts` (or equivalent) and route heavy processing into `orchestrator/` or `services/` modules to keep the entrypoint slim.
+- Capture a durable cache location decision (in-memory vs. on-disk) here once chosen so all backend contributors reuse the same strategy.

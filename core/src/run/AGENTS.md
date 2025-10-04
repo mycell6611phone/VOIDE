@@ -25,3 +25,8 @@ features, ensure both codepaths evolve together.
   handling concurrency groups, loop ticks, retries, and backpressure.
 - Telemetry events stream back over the runtime bus and surface to the renderer
   for activation lights and run inspection.
+
+## Backend Transition Notes
+
+- Keep CLI orchestrator features in sync with `packages/main/src/orchestrator`—document any intentional divergences here.
+- When adding Run-stage options (e.g., tracing, breakpoints), describe the expected config shape in this file before exposing it to IPC.

@@ -10,3 +10,8 @@ and execution engine expectations. Expand here when adding reusable runtime
 helpers.
 - Define TypeScript mirrors for `CompiledFlow` structures here so that
   orchestrator/scheduler code and Electron workers share the same IR contract.
+
+## Backend Transition Notes
+
+- Capture any new runtime bus events or telemetry enums here before wiring them into the Electron lights UI.
+- Provide typed factories for worker contexts so `packages/main` can spin up execution environments without duplicating setup logic.

@@ -57,3 +57,8 @@ message CompiledFlow {
 
 Pressing **Build** in the UI or running `voide pack` re-runs the full pass
 pipeline, guaranteeing that downstream runs operate on fresh compiled output.
+
+## Backend Transition Notes
+
+- Track compiler pass changes (new steps, reordered passes) here so frontend/CLI teams know when cached compiled flows must be invalidated.
+- When adding new IR fields, describe the expected producer (which pass sets it) and consumer (orchestrator module) to keep coordination tight.

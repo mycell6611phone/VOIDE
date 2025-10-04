@@ -8,3 +8,8 @@
 Utility scripts run during core development (e.g., protobuf generation). Execute
 with Node 20+ using ESM loader (`ts-node/esm`). Update docs if adding new entry
 points.
+
+## Backend Transition Notes
+
+- Document any new automation (e.g., IR diffing, schedule visualization) here so backend devs can reuse them during Build-stage work.
+- Scripts that mutate protobufs or compiled artifacts should print the target IR version and hash to help diagnose cache drift.

@@ -13,3 +13,8 @@
 - Ensure license metadata satisfies the allowlist (MIT, Apache-2.0, BSD, ISC).
 - Use local file paths/URIs only; no remote download links in free mode.
 - Update documentation (e.g., `ReadMe.txt`) when adding notable models.
+
+## Backend Transition Notes
+
+- Annotate each manifest entry with capability hints (context window, adapter key) that the compiler can use during Build.
+- Record any migration steps required when renaming or removing models so cached compiled flows referencing them can degrade gracefully.

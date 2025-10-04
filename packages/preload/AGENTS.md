@@ -24,3 +24,8 @@ Defines the preload script that exposes a constrained API to the renderer via
 - Separate Build vs Run entry points: preload should proxy `flow:build` to submit
   a `FlowGraph` and hand the compiled handle back to the renderer, and `flow:run`
   should forward only the compiled token plus run options.
+
+## Backend Transition Notes
+
+- Surface preload typings for new backend operations (`cancelRun`, `listRuns`) before wiring renderer state so front-end devs know the available hooks.
+- Ensure preload gracefully handles main-process restarts by replaying pending Build promises or rejecting them with actionable errors.

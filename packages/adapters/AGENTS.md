@@ -19,3 +19,8 @@ offline and gracefully degrade when optional deps are missing.
 - Avoid spawning network-bound processes. For GPU features, respect `VOIDE_ENABLE_CUDA` env gates.
 - Keep public APIs small; other packages import from this workspace module.
 - Rebuild via `pnpm --filter @voide/adapters build` after changes.
+
+## Backend Transition Notes
+
+- Define capability metadata (e.g., max tokens, streaming support) alongside adapters so the compiler can select compatible backends during Build.
+- Provide deterministic mocks in this package and document how main-process services should fall back when optional binaries are missing.

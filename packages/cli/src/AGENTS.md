@@ -7,3 +7,8 @@
 
 `index.ts` implements workspace CLI commands. Keep commands composable and
 prefer dependency injection so they can be tested without side effects.
+
+## Backend Transition Notes
+
+- Route Build/Run invocations through `@voide/core` exports instead of shelling out so tests can stub dependencies.
+- Emit structured errors that mirror IPC failures to make CLI runs representative of Electron behavior.

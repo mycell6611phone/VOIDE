@@ -13,3 +13,8 @@
 - Stay offline: only interact with local filesystem paths.
 - Validate licenses using the allowlist defined in root guardrails.
 - Keep exported APIs stable; renderer/main rely on them for status reporting.
+
+## Backend Transition Notes
+
+- Provide synchronous metadata queries so the compiler can confirm model availability during Build without blocking on async setup.
+- Emit consistent status objects consumed by both `packages/main` services and the CLI to avoid branching logic per platform.

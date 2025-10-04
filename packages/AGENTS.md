@@ -28,3 +28,9 @@ Everything uses pnpm workspaces with TypeScript + ESM.
 - Stick to ESM, Node ≥20.11.
 - Keep IPC types in sync between `ipc`, `main`, `preload`, and renderer.
 - Follow root offline guardrails—no network calls in adapters or renderer.
+
+## Backend Transition Notes
+
+- Focus Build-stage work on `@voide/main`, `@voide/ipc`, `@voide/preload`, `@voide/core`, and `@voide/adapters`. Coordinate cross-package changes in a single PR to avoid skew.
+- Use `pnpm -r exec pnpm test` scoped to backend packages after large compiler/orchestrator updates to ensure contracts still align.
+- Document new IPC channels or payload changes here before wiring them into the renderer to keep the workspace aligned on backend expectations.

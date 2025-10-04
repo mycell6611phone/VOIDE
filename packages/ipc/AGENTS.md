@@ -25,3 +25,9 @@ between main, preload, renderer, and workers.
 - Distinguish between Build and Run contracts: `flow:build` accepts a
   `FlowGraph` payload and returns a `CompiledFlow` reference/bytes, while
   `flow:run` should consume only compiled artifacts plus run options.
+
+## Backend Transition Notes
+
+- Add new backend capabilities by introducing explicit channels (e.g., `flow:listCompiled`, `flow:cancelRun`) and document them here before implementation.
+- Mirror `@voide/core` type exports so the compiler IR shape used in IPC stays synchronized with runtime expectations.
+- After editing channel schemas, run `pnpm --filter @voide/ipc test` and `pnpm --filter @voide/main test` to verify both ends compile.

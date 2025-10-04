@@ -7,3 +7,8 @@
 
 Exposes helpers intended for external consumers embedding VOIDE flows (`node.ts`).
 Maintain semantic versioning; document breaking changes in `RoadMap.md`.
+
+## Backend Transition Notes
+
+- Surface Build/Run APIs that match the Electron IPC surface so integrators can reuse the same flows.
+- Note any experimental SDK features here and gate them behind explicit flags before publishing wider documentation.

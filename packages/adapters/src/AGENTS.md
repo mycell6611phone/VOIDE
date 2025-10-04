@@ -13,3 +13,8 @@ Contains adapter wrappers for different backends:
 Ensure each adapter exports a consistent interface so runtime callers can swap
 backends transparently. Guard optional imports and surface clear errors when
 artifacts are missing.
+
+## Backend Transition Notes
+
+- Expose a `describe()` helper per adapter that returns deterministic capability data consumed by the compiler and orchestrator.
+- Keep adapter-specific configuration pure (no global singletons) so worker threads can instantiate them safely during Run.

@@ -15,3 +15,8 @@ demos and regression testing.
 - Keep examples small and anonymized.
 - When adding new examples, document them in `ReadMe.txt` or relevant docs.
 - Validate new flows with `pnpm voide validate` before committing.
+
+## Backend Transition Notes
+
+- Use these examples as fixtures when testing Build/Run pipelines; record which backend behaviors each file exercises so regressions can be traced quickly.
+- Store compiled hashes or expected scheduler summaries alongside new examples to help validate backend determinism.

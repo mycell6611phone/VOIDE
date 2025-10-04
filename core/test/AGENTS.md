@@ -7,3 +7,8 @@
 
 Contains Vitest suites validating runtime behavior. Ensure new runtime features
 are covered here. Run with `pnpm --filter @voide/core test`.
+
+## Backend Transition Notes
+
+- Add regression tests whenever compiler passes or orchestrator behavior changes; document the intent of each suite here.
+- Keep deterministic snapshots of compiled flows to detect accidental IR drift during Build-stage work.

@@ -41,3 +41,8 @@ React components composing the Electron renderer UI.
 - The flow store clipboard keeps the last copied entity and its baseline position. Repeated pastes offset by `+48,+48` from that snapshot.
 - Use the exported `EDIT_MENU_DATA_ATTRIBUTE` for outside-click detection; both nodes and edges listen for `[data-voide-edit-menu]` before dismissing the menu.
   - The LLM node variant mirrors this behavior; if there is no clean space to the left or right, position the menu so it overlaps the node instead of snapping to a distant edge.
+
+## Backend Transition Notes
+
+- Expose backend status (Build progress, Run telemetry) through lightweight components in this folder so UI wiring stays close to canvas interactions.
+- When adding controls that mutate backend state (e.g., Cancel Run), note the required IPC method and optimistic UI plan here before implementation.

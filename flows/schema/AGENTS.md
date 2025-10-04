@@ -12,3 +12,8 @@ Contains machine-readable JSON Schema files for VOIDE flows.
 - `schema.json` — Supporting definitions (bundled reference).
 
 When editing schemas, sync updates with `core` Zod definitions and rerun `pnpm voide validate` on sample flows.
+
+## Backend Transition Notes
+
+- Keep schema revisions paired with updates to the compiler input types in `core/src/flow` and any IPC payloads in `packages/ipc`.
+- Record schema version bumps in commit messages so backend migrations can track which CompiledFlow artifacts remain compatible.

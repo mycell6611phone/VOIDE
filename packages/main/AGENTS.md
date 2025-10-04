@@ -30,3 +30,9 @@ threads. Written in TypeScript, compiled to `dist/main.js`.
 - Main launches worker threads that instantiate operators defined in
   `CompiledFlow.operators` and streams telemetry back to the renderer for the
   lights UI.
+
+## Backend Transition Notes
+
+- Persist compiled-flow metadata (hashes, timestamps, originating flow IDs) so subsequent Run requests can reuse or invalidate cached artifacts deterministically.
+- When expanding worker orchestration, document thread pool sizing and backpressure strategy here before implementation.
+- Wire new backend services (model manager, cache) through `services/` and reference their contracts in this file to keep the integration surface discoverable.

@@ -10,3 +10,8 @@ specifications and line references.
 
 Use these docs to understand UX/behavior expectations before touching runtime or
 UI code (`src/modules`, `core/src/modules`, renderer packages).
+
+## Backend Transition Notes
+
+- When backend capabilities diverge from existing blueprints, document the delta here first so both compiler and renderer updates reference the same source.
+- Link to any new module manifests or schema updates created during Build-stage work.

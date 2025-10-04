@@ -29,6 +29,8 @@ const createFileList = (file: File): FileList =>
     item: (index: number) => (index === 0 ? file : null)
   } as unknown as FileList);
 
+const exitAppMock = vi.fn().mockResolvedValue({ ok: true });
+
 beforeEach(() => {
   const initialFlow = createInitialFlow();
   useFlowStore.setState({
@@ -37,11 +39,16 @@ beforeEach(() => {
     activeTool: "select",
     clipboard: null
   });
+  exitAppMock.mockReset();
+  (window as unknown as { voide?: { exitApp: typeof exitAppMock } }).voide = {
+    exitApp: exitAppMock
+  };
 });
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  delete (window as { voide?: unknown }).voide;
 });
 
 describe("RunControls file menu", () => {
@@ -57,9 +64,10 @@ describe("RunControls file menu", () => {
     expect(screen.getByRole("menuitem", { name: /Close/ })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /Save/ })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /Export/ })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: /Project/ })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /Project/ })).toBeNull();
     expect(screen.getByRole("menuitem", { name: /Working Directory/ })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /Compute/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /^Exit/ })).toBeTruthy();
   });
 
   it("opens a project file and updates the flow store", async () => {
@@ -164,7 +172,7 @@ describe("RunControls file menu", () => {
     }
   });
 
-  it("triggers export and project placeholders", () => {
+  it("triggers export placeholder", () => {
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
     renderControls();
 
@@ -174,12 +182,37 @@ describe("RunControls file menu", () => {
     const exportButton = screen.getByRole("menuitem", { name: /^Export$/ });
     fireEvent.click(exportButton);
 
-    fireEvent.click(trigger);
-    const projectButton = screen.getByRole("menuitem", { name: /^Project$/ });
-    fireEvent.click(projectButton);
-
     expect(infoSpy).toHaveBeenCalledWith("Export project placeholder triggered.");
-    expect(infoSpy).toHaveBeenCalledWith("Project settings placeholder opened.");
+  });
+
+  it("invokes the exit API when Exit is selected", async () => {
+    renderControls();
+
+    const trigger = screen.getByRole("button", { name: "File" });
+    fireEvent.click(trigger);
+
+    const exitButton = screen.getByRole("menuitem", { name: /^Exit/ });
+    fireEvent.click(exitButton);
+
+    await waitFor(() => {
+      expect(exitAppMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("closes the file menu when focus leaves the menu", async () => {
+    renderControls();
+
+    const trigger = screen.getByRole("button", { name: "File" });
+    fireEvent.click(trigger);
+
+    const navigation = screen.getByRole("navigation");
+    const playButton = screen.getByRole("button", { name: "Play" });
+    playButton.focus();
+    fireEvent.blur(navigation, { relatedTarget: playButton });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("file-menu-panel")).not.toBeInTheDocument();
+    });
   });
 
   it("opens the working directory submenu and requests a folder", async () => {

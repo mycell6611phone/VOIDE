@@ -173,7 +173,7 @@ export default function RunControls({ onRun }: { onRun: () => void }) {
     cpuCores: number;
   }>({ accelerator: "CPU", cpuCores: 4 });
 
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLElement | null>(null);
   const openFileInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
   const pendingDirectorySelection = useRef<string | null>(null);
@@ -195,6 +195,9 @@ export default function RunControls({ onRun }: { onRun: () => void }) {
   const closeMenus = useCallback(() => {
     setFileMenuOpen(false);
     setActiveSubmenu(null);
+    setHoveredItem(null);
+    setHoveredWorkingOption(null);
+    setHoveredComputeOption(null);
   }, []);
 
   const handleToggleFileMenu = useCallback(() => {
@@ -322,15 +325,35 @@ export default function RunControls({ onRun }: { onRun: () => void }) {
     closeMenus();
   }, [closeMenus]);
 
-  const handleProjectSettings = useCallback(() => {
-    console.info("Project settings placeholder opened.");
-    closeMenus();
-  }, [closeMenus]);
-
   const handleDirectoryRequest = useCallback((label: string) => {
     pendingDirectorySelection.current = label;
     directoryInputRef.current?.click();
   }, []);
+
+  const handleExitApp = useCallback(async () => {
+    try {
+      await window.voide?.exitApp?.();
+    } catch (error) {
+      console.error("Failed to exit VOIDE:", error);
+    } finally {
+      closeMenus();
+    }
+  }, [closeMenus]);
+
+  const handleMenuBlur = useCallback(
+    (event: React.FocusEvent<HTMLElement>) => {
+      if (!fileMenuOpen) {
+        return;
+      }
+      const nextTarget = event.relatedTarget as Node | null;
+      const menuElement = menuRef.current;
+      if (menuElement && nextTarget && menuElement.contains(nextTarget)) {
+        return;
+      }
+      closeMenus();
+    },
+    [closeMenus, fileMenuOpen]
+  );
 
   const handleDirectoryChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -390,6 +413,7 @@ export default function RunControls({ onRun }: { onRun: () => void }) {
     >
       <nav
         ref={menuRef}
+        onBlur={handleMenuBlur}
         style={{
           display: "flex",
           gap: 8,
@@ -464,19 +488,6 @@ export default function RunControls({ onRun }: { onRun: () => void }) {
               onClick={handleExportProject}
             >
               <span>Export</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              style={{
-                ...menuItemStyle,
-                background: hoveredItem === "project" ? "#1e293b" : "transparent"
-              }}
-              onMouseEnter={() => setHoveredItem("project")}
-              onMouseLeave={() => setHoveredItem(null)}
-              onClick={handleProjectSettings}
-            >
-              <span>Project</span>
             </button>
             <div style={{ position: "relative" }}>
               <button
@@ -641,6 +652,20 @@ export default function RunControls({ onRun }: { onRun: () => void }) {
                 </div>
               ) : null}
             </div>
+            <button
+              type="button"
+              role="menuitem"
+              style={{
+                ...menuItemStyle,
+                background: hoveredItem === "exit" ? "#1e293b" : "transparent"
+              }}
+              onMouseEnter={() => setHoveredItem("exit")}
+              onMouseLeave={() => setHoveredItem(null)}
+              onClick={handleExitApp}
+            >
+              <span>Exit</span>
+              <span aria-hidden>⌘Q</span>
+            </button>
           </div>
         ) : null}
         <input

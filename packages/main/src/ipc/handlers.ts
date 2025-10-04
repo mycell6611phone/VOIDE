@@ -5,6 +5,7 @@ import {
   modelEnsure,
   appGetVersion,
   chatWindowOpen,
+  appExit,
 } from "@voide/ipc";
 import { validateFlow } from "../services/validate.js";
 import { runFlow } from "../orchestrator/engine.js";
@@ -16,6 +17,7 @@ function formatError(err: unknown) {
 
 type HandlerDeps = {
   openChatWindow: () => Promise<unknown> | unknown;
+  exitApplication: () => Promise<void> | void;
 };
 
 export function registerHandlers(deps: HandlerDeps) {
@@ -63,6 +65,15 @@ export function registerHandlers(deps: HandlerDeps) {
     try {
       await deps.openChatWindow();
       return chatWindowOpen.response.parse({ ok: true });
+    } catch (err) {
+      return formatError(err);
+    }
+  });
+
+  ipcMain.handle(appExit.name, async () => {
+    try {
+      await deps.exitApplication();
+      return appExit.response.parse({ ok: true });
     } catch (err) {
       return formatError(err);
     }

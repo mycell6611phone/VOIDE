@@ -17,6 +17,7 @@ type RunState = {
 };
 
 const runs = new Map<string, RunState>();
+const loopTasks = new Map<string, Promise<void>>();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PiscinaCtor = Piscina as any;
 // Worker bundles live in packages/workers/dist. From the compiled file
@@ -43,11 +44,32 @@ export async function runFlow(flow: FlowDef) {
   runs.set(runId, st);
   await createRun(runId, flow.id);
   updateRunStatus(runId, "running");
-  loop(runId).catch(err => { updateRunStatus(runId, "error"); console.error(err); });
+  const loopPromise = loop(runId)
+    .catch(err => {
+      if (!st.halted) {
+        updateRunStatus(runId, "error");
+      }
+      console.error(err);
+    })
+    .finally(() => {
+      runs.delete(runId);
+      loopTasks.delete(runId);
+    });
+  loopTasks.set(runId, loopPromise);
   return { runId };
 }
 
-export async function stopFlow(runId: string) { const st = runs.get(runId); if (st) st.halted = true; return { ok: true }; }
+export async function stopFlow(runId: string) {
+  const st = runs.get(runId);
+  if (!st) {
+    return { ok: true };
+  }
+  if (!st.halted) {
+    st.halted = true;
+    updateRunStatus(runId, "stopped");
+  }
+  return { ok: true };
+}
 export async function stepFlow(_runId: string) { return { ok: true }; }
 
 export async function getLastRunPayloads(runId: string) {
@@ -93,6 +115,44 @@ async function loop(runId: string) {
     }
   }
   if (!st.halted) updateRunStatus(runId, "done");
+}
+
+let shutdownPromise: Promise<void> | null = null;
+
+export async function shutdownOrchestrator() {
+  if (shutdownPromise) {
+    return shutdownPromise;
+  }
+
+  shutdownPromise = (async () => {
+    const runIds = Array.from(runs.keys());
+    await Promise.all(runIds.map((id) => stopFlow(id)));
+
+    const loopPromises = Array.from(loopTasks.values()).map((task) =>
+      task.catch((error) => {
+        console.error("Loop shutdown error:", error);
+      })
+    );
+    await Promise.all(loopPromises);
+
+    runs.clear();
+    loopTasks.clear();
+
+    const pools = [poolLLM, poolEmbed];
+    await Promise.all(
+      pools.map((pool) => {
+        if (pool && typeof pool.destroy === "function") {
+          return pool.destroy();
+        }
+        return Promise.resolve();
+      })
+    );
+  })()
+    .catch((error) => {
+      console.error("Failed to shutdown orchestrator:", error);
+    });
+
+  return shutdownPromise;
 }
 
 async function executeNode(st: RunState, node: NodeDef): Promise<Array<[string, any]>> {

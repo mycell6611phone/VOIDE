@@ -8,6 +8,7 @@ import {
   telemetryEvent,
   TelemetryPayload,
   chatWindowOpen,
+  appExit,
 } from "@voide/ipc";
 
 const api = {
@@ -21,6 +22,10 @@ const api = {
   openChatWindow: async () => {
     const result = await ipcRenderer.invoke(chatWindowOpen.name);
     return chatWindowOpen.response.parse(result);
+  },
+  exitApp: async () => {
+    const result = await ipcRenderer.invoke(appExit.name);
+    return appExit.response.parse(result);
   },
 };
 

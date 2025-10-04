@@ -147,3 +147,11 @@ export const chatWindowOpen = {
 
 export type ChatWindowOpenRes = z.infer<typeof chatWindowOpen.response>;
 
+export const appExit = {
+  name: "app:exit",
+  request: z.undefined(),
+  response: z.object({ ok: z.boolean() })
+};
+
+export type AppExitRes = z.infer<typeof appExit.response>;
+

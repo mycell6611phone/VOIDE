@@ -4,8 +4,9 @@ import { app, BrowserWindow, session, shell } from 'electron';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setupIPC } from './ipc.js';
-import { initDB } from './services/db.js';
+import { initDB, closeDB } from './services/db.js';
 import { registerHandlers } from './ipc/handlers.js';
+import { shutdownOrchestrator } from './orchestrator/engine.js';
 
 const DEFAULT_RENDERER_DEV_PORT = 5173;
 
@@ -30,6 +31,39 @@ const PRELOAD_BUNDLE_PATH = path.join(__dirname, '../../preload/dist/preload.js'
 
 let mainWindow: BrowserWindow | null = null;
 let chatWindow: BrowserWindow | null = null;
+let exitRequested = false;
+let shutdownSequence: Promise<void> | null = null;
+
+async function performGracefulShutdown() {
+  if (shutdownSequence) {
+    return shutdownSequence;
+  }
+
+  shutdownSequence = (async () => {
+    try {
+      await shutdownOrchestrator();
+    } catch (error) {
+      console.error("Failed to shutdown orchestrator:", error);
+    } finally {
+      try {
+        await closeDB();
+      } catch (error) {
+        console.error("Failed to close database during shutdown:", error);
+      }
+    }
+  })();
+
+  return shutdownSequence;
+}
+
+async function requestAppExit() {
+  if (!exitRequested) {
+    exitRequested = true;
+  }
+
+  await performGracefulShutdown();
+  app.quit();
+}
 
 if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = app.isPackaged ? 'production' : 'development';
@@ -119,6 +153,13 @@ async function createWindow() {
     return { action: 'deny' };
   });
 
+  mainWindow.on('close', (event) => {
+    if (!exitRequested) {
+      event.preventDefault();
+      void requestAppExit();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -167,7 +208,10 @@ app.whenReady().then(async () => {
   blockNetworkRequests();
   await initDB().catch(() => {}); // keep free-mode resilient
   setupIPC();
-  registerHandlers({ openChatWindow: createChatWindow });
+  registerHandlers({
+    openChatWindow: createChatWindow,
+    exitApplication: requestAppExit,
+  });
   await createWindow();
 
   app.on('activate', async () => {
@@ -177,5 +221,12 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', (event) => {
+  if (!exitRequested) {
+    event.preventDefault();
+    void requestAppExit();
+  }
 });
 

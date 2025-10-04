@@ -6,7 +6,7 @@ import type { PayloadT } from "@voide/shared";
 import { emitTelemetry } from "../ipc/telemetry.js";
 import type { TelemetryPayload } from "@voide/ipc";
 
-let db: Database;
+let db: Database | null = null;
 
 export async function initDB() {
   const dir = path.join(process.env.HOME || process.cwd(), ".voide");
@@ -40,15 +40,39 @@ export async function initDB() {
   `);
 }
 
-export function getDB(): Database { return db; }
+export function getDB(): Database {
+  if (!db) {
+    throw new Error("Database has not been initialized.");
+  }
+  return db;
+}
+
+export function closeDB() {
+  if (!db) {
+    return;
+  }
+  try {
+    db.close();
+  } catch (error) {
+    console.error("Failed to close database:", error);
+  } finally {
+    db = null;
+  }
+}
 
 export async function createRun(runId: string, flowId: string) {
-  db.prepare("insert into runs(id,flow_id,status) values(?,?,?)").run(runId, flowId, "created");
+  const database = getDB();
+  database
+    .prepare("insert into runs(id,flow_id,status) values(?,?,?)")
+    .run(runId, flowId, "created");
 }
 
 export function updateRunStatus(runId: string, status: string) {
+  const database = getDB();
   const ended = status === "done" || status === "error" ? ", ended_at=strftime('%s','now')" : "";
-  db.prepare(`update runs set status=? ${ended} where id=?`).run(status, runId);
+  database
+    .prepare(`update runs set status=? ${ended} where id=?`)
+    .run(status, runId);
 }
 
 export async function recordRunLog(ev: TelemetryPayload) {
@@ -56,11 +80,16 @@ export async function recordRunLog(ev: TelemetryPayload) {
 }
 
 export async function savePayload(runId: string, nodeId: string, port: string, payload: PayloadT) {
-  db.prepare("insert into payloads(run_id,node_id,port,kind,body) values(?,?,?,?,?)")
+  const database = getDB();
+  database
+    .prepare("insert into payloads(run_id,node_id,port,kind,body) values(?,?,?,?,?)")
     .run(runId, nodeId, port, payload.kind, JSON.stringify(payload));
 }
 
 export async function getPayloadsForRun(runId: string) {
-  const rows = db.prepare("select node_id,port,kind,body,created_at from payloads where run_id=? order by id asc").all(runId);
+  const database = getDB();
+  const rows = database
+    .prepare("select node_id,port,kind,body,created_at from payloads where run_id=? order by id asc")
+    .all(runId);
   return rows.map((r: any) => ({ nodeId: r.node_id, port: r.port, payload: JSON.parse(r.body) }));
 }

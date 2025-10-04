@@ -3,9 +3,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import type { FlowDef, NodeDef, LLMParams, LoopParams, PayloadT, TextPayload } from "@voide/shared";
+import { TelemetryEventType } from "@voide/shared";
 import { topoOrder, Frontier, downstream } from "./scheduler.js";
 import { getModelRegistry } from "../services/models.js";
 import { recordRunLog, createRun, updateRunStatus, savePayload, getPayloadsForRun } from "../services/db.js";
+import { emitSchedulerTelemetry } from "../services/telemetry.js";
 
 type RunState = {
   runId: string;
@@ -14,6 +16,7 @@ type RunState = {
   halted: boolean;
   iter: Map<string, number>;
   values: Map<string, PayloadT[]>;
+  pktSeq: number;
 };
 
 const runs = new Map<string, RunState>();
@@ -40,7 +43,7 @@ export async function runFlow(flow: FlowDef) {
   const runId = uuidv4();
   const order = topoOrder(flow);
   const f0 = new Frontier(order.filter(id => flow.edges.every(e => e.to[0] !== id)));
-  const st: RunState = { runId, flow, frontier: f0, halted: false, iter: new Map(), values: new Map() };
+  const st: RunState = { runId, flow, frontier: f0, halted: false, iter: new Map(), values: new Map(), pktSeq: 0 };
   runs.set(runId, st);
   await createRun(runId, flow.id);
   updateRunStatus(runId, "running");
@@ -95,14 +98,28 @@ async function loop(runId: string) {
   while (!st.halted && st.frontier.hasReady()) {
     const nodeId = st.frontier.nextReady();
     const node = nodeById(st.flow, nodeId);
+    emitSchedulerTelemetry({
+      type: TelemetryEventType.NodeStart,
+      payload: { id: node.id, span: st.runId },
+    });
     try {
       const out = await executeNode(st, node);
       for (const [port, payload] of out) {
         st.values.set(portKey(node.id, port), [payload]);
         await savePayload(runId, node.id, port, payload);
+        emitWireTransfers(st, node, port);
       }
       downstream(st.flow, node.id).forEach(n => st.frontier.add(n));
+      emitSchedulerTelemetry({
+        type: TelemetryEventType.NodeEnd,
+        payload: { id: node.id, span: st.runId, ok: true },
+      });
+      emitSchedulerTelemetry({
+        type: TelemetryEventType.AckClear,
+        payload: { id: node.id, span: st.runId },
+      });
     } catch (err: any) {
+      const reason = String(err);
       await recordRunLog({
         type: "operation_progress",
         runId,
@@ -110,7 +127,15 @@ async function loop(runId: string) {
         tokens: 0,
         latencyMs: 0,
         status: "error",
-        reason: String(err),
+        reason,
+      });
+      emitSchedulerTelemetry({
+        type: TelemetryEventType.NodeEnd,
+        payload: { id: node.id, span: st.runId, ok: false, reason },
+      });
+      emitSchedulerTelemetry({
+        type: TelemetryEventType.Stalled,
+        payload: { id: node.id, span: st.runId, reason },
       });
     }
   }
@@ -241,6 +266,26 @@ async function executeNode(st: RunState, node: NodeDef): Promise<Array<[string, 
     return [];
   }
   throw new Error(`unknown node type ${node.type}`);
+}
+
+function emitWireTransfers(st: RunState, node: NodeDef, port: string) {
+  const edges = st.flow.edges.filter((e) => e.from[0] === node.id && e.from[1] === port);
+  for (const edge of edges) {
+    const pkt = ++st.pktSeq;
+    emitSchedulerTelemetry({
+      type: TelemetryEventType.WireTransfer,
+      payload: {
+        id: edge.id ?? `${node.id}:${port}->${edge.to[0]}:${edge.to[1]}`,
+        span: st.runId,
+        pkt,
+        from: node.id,
+        to: edge.to[0],
+        outPort: port,
+        inPort: edge.to[1],
+        ok: true,
+      },
+    });
+  }
 }
 
 function incomingText(st: RunState, nodeId: string): string[] {

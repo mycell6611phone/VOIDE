@@ -1,0 +1,15 @@
+{
+  "name": "@voide/telemetryd",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "voide-telemetryd": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@voide/shared": "workspace:*"
+  }
+}

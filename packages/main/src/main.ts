@@ -7,6 +7,7 @@ import { setupIPC } from './ipc.js';
 import { initDB, closeDB } from './services/db.js';
 import { registerHandlers } from './ipc/handlers.js';
 import { shutdownOrchestrator } from './orchestrator/engine.js';
+import { initTelemetry, shutdownTelemetry } from './services/telemetry.js';
 
 const DEFAULT_RENDERER_DEV_PORT = 5173;
 
@@ -45,6 +46,11 @@ async function performGracefulShutdown() {
     } catch (error) {
       console.error("Failed to shutdown orchestrator:", error);
     } finally {
+      try {
+        shutdownTelemetry();
+      } catch (error) {
+        console.error("Failed to shutdown telemetry:", error);
+      }
       try {
         await closeDB();
       } catch (error) {
@@ -206,6 +212,7 @@ async function createChatWindow() {
 
 app.whenReady().then(async () => {
   blockNetworkRequests();
+  initTelemetry();
   await initDB().catch(() => {}); // keep free-mode resilient
   setupIPC();
   registerHandlers({

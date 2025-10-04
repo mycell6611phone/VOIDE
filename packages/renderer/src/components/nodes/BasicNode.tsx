@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
+import { shallow } from "zustand/shallow";
 import type { NodeDef } from "@voide/shared";
 import ContextWindow from "../ContextWindow";
 import ModuleOptionsContent, {
@@ -23,6 +24,12 @@ import EditMenu, {
   type EditMenuItemLabel
 } from "../EditMenu";
 import { useFlowStore } from "../../state/flowStore";
+import {
+  portActivityKey,
+  selectPortStatus,
+  usePortActivityStore,
+  type PortActivityStatus
+} from "../../state/portActivityStore";
 import {
   DEFAULT_CHAT_WINDOW_SIZE,
   useChatStore
@@ -54,7 +61,21 @@ const handleStyle: React.CSSProperties = {
   height: 12,
   borderRadius: "50%",
   background: "#1f2937",
-  border: "2px solid #ffffff"
+  border: "2px solid #ffffff",
+  boxShadow: "0 0 0 0 rgba(0, 0, 0, 0)",
+  transition: "background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.3s ease"
+};
+
+const inputHandleHighlight: React.CSSProperties = {
+  background: "#38bdf8",
+  border: "2px solid #bae6fd",
+  boxShadow: "0 0 0 4px rgba(56, 189, 248, 0.35)"
+};
+
+const outputHandleHighlight: React.CSSProperties = {
+  background: "#f97316",
+  border: "2px solid #fed7aa",
+  boxShadow: "0 0 0 4px rgba(249, 115, 22, 0.35)"
 };
 
 const portLabelBaseStyle: React.CSSProperties = {
@@ -64,11 +85,44 @@ const portLabelBaseStyle: React.CSSProperties = {
   letterSpacing: 0.5,
   color: "#6b7280",
   pointerEvents: "none",
-  transform: "translateY(-50%)"
+  transform: "translateY(-50%)",
+  transition: "color 0.2s ease"
+};
+
+const inputLabelHighlight: React.CSSProperties = {
+  color: "#0284c7"
+};
+
+const outputLabelHighlight: React.CSSProperties = {
+  color: "#c2410c"
 };
 
 const computeOffset = (index: number, total: number) =>
   `${((index + 1) / (total + 1)) * 100}%`;
+
+const resolveHandleHighlight = (
+  status: PortActivityStatus
+): React.CSSProperties | undefined => {
+  if (status === "input-active") {
+    return inputHandleHighlight;
+  }
+  if (status === "output-active") {
+    return outputHandleHighlight;
+  }
+  return undefined;
+};
+
+const resolveLabelHighlight = (
+  status: PortActivityStatus
+): React.CSSProperties | undefined => {
+  if (status === "input-active") {
+    return inputLabelHighlight;
+  }
+  if (status === "output-active") {
+    return outputLabelHighlight;
+  }
+  return undefined;
+};
 
 const moduleDefaultSizes: Record<ModuleCategory, WindowSize> = {
   prompt: { width: 360, height: 320 },
@@ -187,6 +241,26 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
     orientation === "reversed" ? Position.Left : Position.Right;
   const moduleCategory = useMemo(() => deriveModuleCategory(data), [data]);
   const defaultSize = useMemo(() => getDefaultSize(moduleCategory), [moduleCategory]);
+  const inputStatuses = usePortActivityStore(
+    useCallback(
+      (state) =>
+        inputs.map((port) =>
+          selectPortStatus(state, portActivityKey(data.id, port.port))
+        ) as PortActivityStatus[],
+      [data.id, inputs]
+    ),
+    shallow
+  );
+  const outputStatuses = usePortActivityStore(
+    useCallback(
+      (state) =>
+        outputs.map((port) =>
+          selectPortStatus(state, portActivityKey(data.id, port.port))
+        ) as PortActivityStatus[],
+      [data.id, outputs]
+    ),
+    shallow
+  );
   const [menuState, setMenuState] = useState<MenuState>(() => ({
     open: false,
     minimized: false,
@@ -710,20 +784,31 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       >
         {inputs.map((port, index) => {
           const top = computeOffset(index, inputs.length);
+          const status: PortActivityStatus = inputStatuses[index] ?? "idle";
+          const handleHighlight = resolveHandleHighlight(status);
+          const labelHighlight = resolveLabelHighlight(status);
           return (
             <React.Fragment key={port.port}>
               <Handle
                 type="target"
                 position={inputHandlePosition}
                 id={`${data.id}:${port.port}`}
+                data-voide-port-id={`${data.id}:${port.port}`}
+                data-voide-port-role="input"
+                data-voide-port-state={status}
                 style={{
                   ...handleStyle,
+                  ...(handleHighlight ?? {}),
                   top
                 }}
               />
               <span
+                data-voide-port-label
+                data-voide-port-role="input"
+                data-voide-port-state={status}
                 style={{
                   ...portLabelBaseStyle,
+                  ...(labelHighlight ?? {}),
                   top,
                   left: inputHandlePosition === Position.Left ? 20 : undefined,
                   right: inputHandlePosition === Position.Right ? 20 : undefined
@@ -737,20 +822,31 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         <span>{data.name}</span>
         {outputs.map((port, index) => {
           const top = computeOffset(index, outputs.length);
+          const status: PortActivityStatus = outputStatuses[index] ?? "idle";
+          const handleHighlight = resolveHandleHighlight(status);
+          const labelHighlight = resolveLabelHighlight(status);
           return (
             <React.Fragment key={port.port}>
               <Handle
                 type="source"
                 position={outputHandlePosition}
                 id={`${data.id}:${port.port}`}
+                data-voide-port-id={`${data.id}:${port.port}`}
+                data-voide-port-role="output"
+                data-voide-port-state={status}
                 style={{
                   ...handleStyle,
+                  ...(handleHighlight ?? {}),
                   top
                 }}
               />
               <span
+                data-voide-port-label
+                data-voide-port-role="output"
+                data-voide-port-state={status}
                 style={{
                   ...portLabelBaseStyle,
+                  ...(labelHighlight ?? {}),
                   top,
                   left: outputHandlePosition === Position.Left ? 20 : undefined,
                   right: outputHandlePosition === Position.Right ? 20 : undefined

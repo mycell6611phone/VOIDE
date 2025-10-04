@@ -23,6 +23,7 @@ import ReactFlow, {
 } from "reactflow";
 
 import type { EdgeDef, NodeDef } from "@voide/shared";
+import type { TelemetryPayload } from "@voide/ipc";
 import { useFlowStore } from "../state/flowStore";
 import ModuleNode from "./nodes/BasicNode";
 import LLMNode from "./nodes/LLMNode";
@@ -37,6 +38,11 @@ import EditMenu, {
 } from "./EditMenu";
 import { type WindowGeometry, type WindowSize } from "./contextWindowUtils";
 import ChatWindow from "./ChatWindow";
+import {
+  recordInputPortActivity,
+  recordOutputPortActivity
+} from "../state/portActivityStore";
+import { voide } from "../voide";
 
 const POSITION_KEY = "__position";
 const CONTEXT_WINDOW_DEFAULT_SIZE: WindowSize = { width: 320, height: 260 };
@@ -110,6 +116,11 @@ export default function GraphCanvas() {
     GraphContextWindowState | null
   >(null);
   const [edgeMenu, setEdgeMenu] = useState<EdgeContextMenuState | null>(null);
+  const edgesRef = useRef<EdgeDef[]>(flow.edges);
+
+  useEffect(() => {
+    edgesRef.current = flow.edges;
+  }, [flow.edges]);
 
   const refreshBounds = useCallback(() => {
     if (!containerRef.current) {
@@ -166,6 +177,42 @@ export default function GraphCanvas() {
   useEffect(() => {
     setEdges(flow.edges.map(toReactFlowEdge));
   }, [flow.edges, setEdges]);
+
+  useEffect(() => {
+    if (typeof voide.onTelemetry !== "function") {
+      return;
+    }
+
+    const handleTelemetry = (payload: TelemetryPayload) => {
+      if (!payload || typeof payload !== "object") {
+        return;
+      }
+      if (payload.type !== "edge_transfer") {
+        return;
+      }
+      const edges = edgesRef.current;
+      const match = edges.find((edge) => edge.id === payload.edgeId);
+      if (!match) {
+        return;
+      }
+      const [sourceNode, sourcePort] = match.from;
+      const [targetNode, targetPort] = match.to;
+      if (sourceNode && sourcePort) {
+        recordOutputPortActivity(sourceNode, sourcePort);
+      }
+      if (targetNode && targetPort) {
+        recordInputPortActivity(targetNode, targetPort);
+      }
+    };
+
+    const unsubscribe = voide.onTelemetry(handleTelemetry);
+
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, []);
 
   const handleReactFlowInit = useCallback((instance: ReactFlowInstance) => {
     reactFlowInstanceRef.current = instance;

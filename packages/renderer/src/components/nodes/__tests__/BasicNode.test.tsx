@@ -1,5 +1,5 @@
 import React, { type MutableRefObject } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Position, ReactFlowProvider, type NodeProps } from "reactflow";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import * as matchers from "@testing-library/jest-dom/matchers";
@@ -9,6 +9,12 @@ import BasicNode from "../BasicNode";
 import { CanvasBoundaryProvider, type CanvasBoundaryContextValue } from "../../CanvasBoundaryContext";
 import { useFlowStore } from "../../../state/flowStore";
 import { createInitialFlow } from "../../../constants/mockLayout";
+import {
+  PORT_ACTIVITY_RESET_DELAY_MS,
+  recordInputPortActivity,
+  recordOutputPortActivity,
+  resetPortActivityStore
+} from "../../../state/portActivityStore";
 
 expect.extend(matchers);
 
@@ -101,6 +107,7 @@ const resetStore = () => {
     flow: createInitialFlow(),
     clipboard: null
   }));
+  resetPortActivityStore();
 };
 
 describe("BasicNode edit menu", () => {
@@ -318,6 +325,70 @@ describe("BasicNode edit menu", () => {
     expect(
       (storedNode.params as Record<string, unknown>)?.__ioOrientation
     ).toBeUndefined();
+  });
+});
+
+describe("BasicNode port telemetry", () => {
+  it("lights input and output handles when activity is recorded", async () => {
+    vi.useFakeTimers();
+    try {
+      const node = createSwitchableNode();
+      useFlowStore.setState((state) => ({
+        ...state,
+        flow: {
+          id: "flow:test-port-activity",
+          version: "1.0.0",
+          nodes: [node],
+          edges: []
+        },
+        clipboard: null
+      }));
+
+      const { container } = renderNode(node);
+
+      const inputHandle = container.querySelector(
+        `[data-voide-port-id="${node.id}:input"][data-voide-port-role="input"]`
+      ) as HTMLElement | null;
+      const outputHandle = container.querySelector(
+        `[data-voide-port-id="${node.id}:output"][data-voide-port-role="output"]`
+      ) as HTMLElement | null;
+      const inputLabel = container.querySelector(
+        '[data-voide-port-label][data-voide-port-role="input"]'
+      ) as HTMLElement | null;
+      const outputLabel = container.querySelector(
+        '[data-voide-port-label][data-voide-port-role="output"]'
+      ) as HTMLElement | null;
+
+      expect(inputHandle).not.toBeNull();
+      expect(outputHandle).not.toBeNull();
+      expect(inputLabel).not.toBeNull();
+      expect(outputLabel).not.toBeNull();
+
+      act(() => {
+        recordInputPortActivity(node.id, "input");
+      });
+      expect(inputHandle?.dataset.voidePortState).toBe("input-active");
+      expect(inputHandle?.style.background).toBe("rgb(56, 189, 248)");
+      expect(inputLabel?.style.color).toBe("rgb(2, 132, 199)");
+
+      act(() => {
+        recordOutputPortActivity(node.id, "output");
+      });
+      expect(outputHandle?.dataset.voidePortState).toBe("output-active");
+      expect(outputHandle?.style.background).toBe("rgb(249, 115, 22)");
+      expect(outputLabel?.style.color).toBe("rgb(194, 65, 12)");
+
+      await act(async () => {
+        vi.advanceTimersByTime(PORT_ACTIVITY_RESET_DELAY_MS + 10);
+      });
+
+      expect(inputHandle?.dataset.voidePortState).toBe("idle");
+      expect(outputHandle?.dataset.voidePortState).toBe("idle");
+      expect(inputHandle?.style.background).toBe("rgb(31, 41, 55)");
+      expect(outputHandle?.style.background).toBe("rgb(31, 41, 55)");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

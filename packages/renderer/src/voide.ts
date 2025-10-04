@@ -1,4 +1,5 @@
 import { FlowDef, PayloadT } from "@voide/shared";
+import type { TelemetryPayload } from "@voide/ipc";
 
 export interface VoideApi {
   getNodeCatalog: () => Promise<Array<{ type: string; in: PortSpec[]; out: PortSpec[] }>>;
@@ -8,6 +9,7 @@ export interface VoideApi {
   saveFlow: (flow: FlowDef) => Promise<void>;
   validateFlow: (flow: FlowDef) => Promise<{ ok: boolean; errors?: unknown }>; // eslint-disable-line @typescript-eslint/no-explicit-any
   getLastRunPayloads: (runId: string) => Promise<Array<{ nodeId: string; port: string; payload: PayloadT }>>;
+  onTelemetry?: (cb: (event: TelemetryPayload) => void) => (() => void) | void;
 }
 
 type PortSpec = { port: string; types: string[] };
@@ -63,6 +65,17 @@ const sampleFlow: FlowDef = {
 function createFallbackVoide(): VoideApi {
   const runs = new Map<string, RunPayloadRecord[]>();
   let storedFlow: FlowDef = sampleFlow;
+  const telemetryListeners = new Set<(event: TelemetryPayload) => void>();
+
+  const emitTelemetry = (event: TelemetryPayload) => {
+    telemetryListeners.forEach((listener) => {
+      try {
+        listener(event);
+      } catch (error) {
+        console.warn("[voide-mock] Telemetry listener threw", error);
+      }
+    });
+  };
 
   return {
     async getNodeCatalog() {
@@ -80,6 +93,21 @@ function createFallbackVoide(): VoideApi {
       );
       runs.set(runId, payloads);
       console.info(`[voide-mock] Pretending to run flow '${flow.id}' → ${runId}`);
+      globalThis.setTimeout(() => {
+        const timestamp = Date.now();
+        flow.edges.forEach((edge) => {
+          if (!edge.id) {
+            return;
+          }
+          emitTelemetry({
+            type: "edge_transfer",
+            runId,
+            edgeId: edge.id,
+            bytes: Math.max(1, Math.round(Math.random() * 512)),
+            at: timestamp
+          });
+        });
+      }, 0);
       return { runId };
     },
     async stopFlow(runId) {
@@ -111,6 +139,12 @@ function createFallbackVoide(): VoideApi {
     },
     async getLastRunPayloads(runId) {
       return runs.get(runId) ?? [];
+    },
+    onTelemetry(cb) {
+      telemetryListeners.add(cb);
+      return () => {
+        telemetryListeners.delete(cb);
+      };
     }
   };
 }

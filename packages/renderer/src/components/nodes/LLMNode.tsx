@@ -6,6 +6,7 @@ import React, {
   useState
 } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
+import { shallow } from "zustand/shallow";
 import type { NodeDef } from "@voide/shared";
 import ContextWindow from "../ContextWindow";
 import EditMenu, {
@@ -25,6 +26,12 @@ import {
   type WindowGeometry
 } from "../contextWindowUtils";
 import { deriveLLMDisplayName, useFlowStore } from "../../state/flowStore";
+import {
+  portActivityKey,
+  selectPortStatus,
+  usePortActivityStore,
+  type PortActivityStatus
+} from "../../state/portActivityStore";
 import models from "./models.json";
 import {
   readNodeOrientation,
@@ -64,7 +71,21 @@ const handleStyle: React.CSSProperties = {
   height: 14,
   borderRadius: "50%",
   background: "#dc2626",
-  border: "2px solid #fff1f2"
+  border: "2px solid #fff1f2",
+  boxShadow: "0 0 0 0 rgba(0, 0, 0, 0)",
+  transition: "background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.3s ease"
+};
+
+const inputHandleHighlight: React.CSSProperties = {
+  background: "#38bdf8",
+  border: "2px solid #bae6fd",
+  boxShadow: "0 0 0 4px rgba(56, 189, 248, 0.35)"
+};
+
+const outputHandleHighlight: React.CSSProperties = {
+  background: "#f97316",
+  border: "2px solid #fed7aa",
+  boxShadow: "0 0 0 4px rgba(249, 115, 22, 0.35)"
 };
 
 const portLabelContainerStyle: React.CSSProperties = {
@@ -83,7 +104,18 @@ const portLabelTextStyle: React.CSSProperties = {
   textTransform: "none",
   padding: "2px 6px",
   borderRadius: 9999,
-  background: "rgba(254, 226, 226, 0.85)"
+  background: "rgba(254, 226, 226, 0.85)",
+  transition: "color 0.2s ease, background-color 0.2s ease"
+};
+
+const inputLabelHighlight: React.CSSProperties = {
+  color: "#0c4a6e",
+  background: "rgba(56, 189, 248, 0.2)"
+};
+
+const outputLabelHighlight: React.CSSProperties = {
+  color: "#7c2d12",
+  background: "rgba(249, 115, 22, 0.2)"
 };
 
 const sectionTitleStyle: React.CSSProperties = {
@@ -194,6 +226,30 @@ const MIN_RESPONSE_TOKENS = 16;
 
 const computeOffset = (index: number, total: number) =>
   `${((index + 1) / (total + 1)) * 100}%`;
+
+const resolveHandleHighlight = (
+  status: PortActivityStatus
+): React.CSSProperties | undefined => {
+  if (status === "input-active") {
+    return inputHandleHighlight;
+  }
+  if (status === "output-active") {
+    return outputHandleHighlight;
+  }
+  return undefined;
+};
+
+const resolveLabelHighlight = (
+  status: PortActivityStatus
+): React.CSSProperties | undefined => {
+  if (status === "input-active") {
+    return inputLabelHighlight;
+  }
+  if (status === "output-active") {
+    return outputLabelHighlight;
+  }
+  return undefined;
+};
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -517,6 +573,34 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
     orientation === "reversed" ? Position.Right : Position.Left;
   const outputHandlePosition =
     orientation === "reversed" ? Position.Left : Position.Right;
+  const inputStatuses = usePortActivityStore(
+    useCallback(
+      (state) =>
+        inputs.map((port) =>
+          selectPortStatus(state, portActivityKey(data.id, port.port))
+        ) as PortActivityStatus[],
+      [data.id, inputs]
+    ),
+    shallow
+  );
+  const outputStatuses = usePortActivityStore(
+    useCallback(
+      (state) =>
+        outputs.map((port) =>
+          selectPortStatus(state, portActivityKey(data.id, port.port))
+        ) as PortActivityStatus[],
+      [data.id, outputs]
+    ),
+    shallow
+  );
+  const inputLabelStatus = useMemo<PortActivityStatus>(
+    () => (inputStatuses.some((status) => status === "input-active") ? "input-active" : "idle"),
+    [inputStatuses]
+  );
+  const outputLabelStatus = useMemo<PortActivityStatus>(
+    () => (outputStatuses.some((status) => status === "output-active") ? "output-active" : "idle"),
+    [outputStatuses]
+  );
   const inputLabelStyle = useMemo<React.CSSProperties>(() => {
     if (orientation === "reversed") {
       return {
@@ -1181,43 +1265,77 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
         onContextMenu={handleContextMenu}
         onClick={handleNodeClick}
       >
-        {inputs.map((port, index) => (
-          <Handle
-            key={port.port}
-            type="target"
-            position={inputHandlePosition}
-            id={`${data.id}:${port.port}`}
-            style={{
-              ...handleStyle,
-              top: computeOffset(index, inputs.length)
-            }}
-          />
-        ))}
+        {inputs.map((port, index) => {
+          const status: PortActivityStatus = inputStatuses[index] ?? "idle";
+          const highlight = resolveHandleHighlight(status);
+          return (
+            <Handle
+              key={port.port}
+              type="target"
+              position={inputHandlePosition}
+              id={`${data.id}:${port.port}`}
+              data-voide-port-id={`${data.id}:${port.port}`}
+              data-voide-port-role="input"
+              data-voide-port-state={status}
+              style={{
+                ...handleStyle,
+                ...(highlight ?? {}),
+                top: computeOffset(index, inputs.length)
+              }}
+            />
+          );
+        })}
 
         <span style={nodeTitleStyle}>{nodeTitle}</span>
 
         {inputs.length > 0 ? (
           <div style={inputLabelStyle} aria-hidden="true">
-            <span style={portLabelTextStyle}>In</span>
+            <span
+              style={{
+                ...portLabelTextStyle,
+                ...(resolveLabelHighlight(inputLabelStatus) ?? {})
+              }}
+              data-voide-port-role="input"
+              data-voide-port-state={inputLabelStatus}
+            >
+              In
+            </span>
           </div>
         ) : null}
 
-        {outputs.map((port, index) => (
-          <Handle
-            key={port.port}
-            type="source"
-            position={outputHandlePosition}
-            id={`${data.id}:${port.port}`}
-            style={{
-              ...handleStyle,
-              top: computeOffset(index, outputs.length)
-            }}
-          />
-        ))}
+        {outputs.map((port, index) => {
+          const status: PortActivityStatus = outputStatuses[index] ?? "idle";
+          const highlight = resolveHandleHighlight(status);
+          return (
+            <Handle
+              key={port.port}
+              type="source"
+              position={outputHandlePosition}
+              id={`${data.id}:${port.port}`}
+              data-voide-port-id={`${data.id}:${port.port}`}
+              data-voide-port-role="output"
+              data-voide-port-state={status}
+              style={{
+                ...handleStyle,
+                ...(highlight ?? {}),
+                top: computeOffset(index, outputs.length)
+              }}
+            />
+          );
+        })}
 
         {outputs.length > 0 ? (
           <div style={outputLabelStyle} aria-hidden="true">
-            <span style={portLabelTextStyle}>Out</span>
+            <span
+              style={{
+                ...portLabelTextStyle,
+                ...(resolveLabelHighlight(outputLabelStatus) ?? {})
+              }}
+              data-voide-port-role="output"
+              data-voide-port-state={outputLabelStatus}
+            >
+              Out
+            </span>
           </div>
         ) : null}
 

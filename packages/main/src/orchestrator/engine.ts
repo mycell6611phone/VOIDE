@@ -56,6 +56,23 @@ type RegistryModelWithStatus = {
   license?: string;
   url?: string;
   status: string;
+  adapter?: string | null;
+  runtime?: string | null;
+  temperature?: number | null;
+  maxTokens?: number | null;
+  type?: string | null;
+  defaults?: unknown;
+  defaultConfig?: unknown;
+  params?: unknown;
+  config?: unknown;
+};
+
+type RegistryModelDefaults = {
+  adapter?: LLMParams["adapter"];
+  runtime?: RuntimeProfile;
+  temperature?: number;
+  maxTokens?: number;
+  type?: string | null;
 };
 
 const fsPromises = fs.promises;
@@ -123,6 +140,15 @@ function normalizeKey(value: string | null | undefined): string | null {
   return trimmed.toLowerCase();
 }
 
+function addNormalizedVariants(target: Set<string>, value: string | null | undefined) {
+  if (!value || typeof value !== "string") return;
+  const normalized = normalizeKey(value);
+  if (!normalized) return;
+  target.add(normalized);
+  const compact = normalized.replace(/[^a-z0-9]+/g, "");
+  if (compact) target.add(compact);
+}
+
 function stripModelPrefix(value: string): string {
   return value.replace(/^model:/i, "");
 }
@@ -140,22 +166,23 @@ function manifestIdCandidates(entry: ManifestModel): string[] {
   const out = new Set<string>();
   const baseCandidates = [entry.filename, entry.order, entry.name];
   for (const candidate of baseCandidates) {
-    const normalized = normalizeKey(candidate);
-    if (normalized) out.add(normalized);
+    addNormalizedVariants(out, candidate);
     const sanitized = sanitizeModelId(candidate ?? undefined);
     if (sanitized) {
-      const sanNormalized = normalizeKey(sanitized);
-      if (sanNormalized) out.add(sanNormalized);
-      const stripped = normalizeKey(stripModelPrefix(sanitized));
-      if (stripped) out.add(stripped);
+      addNormalizedVariants(out, sanitized);
+      const stripped = stripModelPrefix(sanitized);
+      if (stripped !== sanitized) {
+        addNormalizedVariants(out, stripped);
+      }
     }
   }
   return Array.from(out);
 }
 
 function manifestNameCandidates(entry: ManifestModel): string[] {
-  const normalized = normalizeKey(entry.name);
-  return normalized ? [normalized] : [];
+  const out = new Set<string>();
+  addNormalizedVariants(out, entry.name);
+  return Array.from(out);
 }
 
 function gatherParamCandidates(rawParams: Record<string, unknown>): {
@@ -166,17 +193,19 @@ function gatherParamCandidates(rawParams: Record<string, unknown>): {
   const nameCandidates = new Set<string>();
   const addId = (value: unknown) => {
     if (typeof value !== "string") return;
-    const normalized = normalizeKey(value);
-    if (!normalized) return;
-    idCandidates.add(normalized);
-    const stripped = normalizeKey(stripModelPrefix(normalized));
-    if (stripped) idCandidates.add(stripped);
+    addNormalizedVariants(idCandidates, value);
+    const sanitized = sanitizeModelId(value);
+    if (sanitized) {
+      addNormalizedVariants(idCandidates, sanitized);
+      const stripped = stripModelPrefix(sanitized);
+      if (stripped !== sanitized) {
+        addNormalizedVariants(idCandidates, stripped);
+      }
+    }
   };
   const addName = (value: unknown) => {
     if (typeof value !== "string") return;
-    const normalized = normalizeKey(value);
-    if (!normalized) return;
-    nameCandidates.add(normalized);
+    addNormalizedVariants(nameCandidates, value);
   };
 
   addId(rawParams.modelId);
@@ -226,6 +255,121 @@ function normalizeRuntime(value: unknown): RuntimeProfile | undefined {
   if (normalized === "GPU") return "CUDA";
   if (normalized === "CUDA" || normalized === "CPU") return normalized as RuntimeProfile;
   return undefined;
+}
+
+function extractRegistryDefaults(registryModel: RegistryModelWithStatus | null): RegistryModelDefaults {
+  const defaults: RegistryModelDefaults = {};
+  if (!registryModel) {
+    return defaults;
+  }
+
+  const queue: unknown[] = [
+    registryModel.defaults,
+    registryModel.defaultConfig,
+    registryModel.params,
+    registryModel.config,
+    registryModel,
+  ];
+  const seen = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object") {
+      continue;
+    }
+    if (seen.has(current)) {
+      continue;
+    }
+    seen.add(current);
+    const source = current as Record<string, unknown>;
+
+    if (defaults.adapter === undefined) {
+      const adapterCandidates = [
+        source["adapter"],
+        source["backend"],
+        source["defaultAdapter"],
+      ];
+      for (const candidate of adapterCandidates) {
+        const normalized = normalizeAdapter(candidate);
+        if (normalized) {
+          defaults.adapter = normalized;
+          break;
+        }
+      }
+    }
+
+    if (defaults.runtime === undefined) {
+      const runtimeCandidates = [
+        source["runtime"],
+        source["defaultRuntime"],
+        source["runtimeProfile"],
+      ];
+      for (const candidate of runtimeCandidates) {
+        const normalized = normalizeRuntime(candidate);
+        if (normalized) {
+          defaults.runtime = normalized;
+          break;
+        }
+      }
+    }
+
+    if (defaults.temperature === undefined) {
+      const temperatureCandidates = [
+        source["temperature"],
+        source["defaultTemperature"],
+      ];
+      for (const candidate of temperatureCandidates) {
+        const value = toNumber(candidate);
+        if (value !== undefined) {
+          defaults.temperature = value;
+          break;
+        }
+      }
+    }
+
+    if (defaults.maxTokens === undefined) {
+      const maxTokenCandidates = [
+        source["maxTokens"],
+        source["defaultMaxTokens"],
+        source["context"],
+        source["contextLength"],
+        source["contextWindow"],
+        source["context_length"],
+        source["context_window"],
+      ];
+      for (const candidate of maxTokenCandidates) {
+        const value = toPositiveInt(candidate);
+        if (value !== undefined) {
+          defaults.maxTokens = value;
+          break;
+        }
+      }
+    }
+
+    if (defaults.type === undefined) {
+      const typeCandidates = [
+        source["type"],
+        source["modelType"],
+        source["backendType"],
+      ];
+      for (const candidate of typeCandidates) {
+        if (typeof candidate === "string" && candidate.trim()) {
+          defaults.type = candidate;
+          break;
+        }
+      }
+    }
+
+    const nestedKeys = ["defaults", "params", "config", "settings", "llm", "model"];
+    for (const key of nestedKeys) {
+      const nested = source[key];
+      if (nested && typeof nested === "object" && !seen.has(nested)) {
+        queue.push(nested);
+      }
+    }
+  }
+
+  return defaults;
 }
 
 function toNumber(value: unknown): number | undefined {
@@ -324,92 +468,106 @@ async function resolveLLMJobConfig(rawParams: Record<string, unknown>): Promise<
     );
   }) ?? null;
 
-  if (!manifestModel) {
-    const label = firstNonEmptyString([
-      rawParams.modelId as string | undefined,
-      (rawParams as any).model_id,
-      (rawParams as any).modelName,
-      (rawParams as any).modelLabel,
-    ]) ?? "unknown";
-    throw new Error(`Selected model "${label}" not found in manifest.`);
-  }
-
   const registry = await getModelRegistry();
   const combinedIdCandidates = new Set<string>(idCandidates);
-  for (const id of manifestIdCandidates(manifestModel)) {
-    combinedIdCandidates.add(id);
-  }
   const combinedNameCandidates = new Set<string>(nameCandidates);
-  for (const name of manifestNameCandidates(manifestModel)) {
-    combinedNameCandidates.add(name);
-  }
-  if (manifestModel.filename) {
-    const normalizedFilename = normalizeKey(manifestModel.filename);
-    if (normalizedFilename) combinedNameCandidates.add(normalizedFilename);
+  if (manifestModel) {
+    for (const id of manifestIdCandidates(manifestModel)) {
+      combinedIdCandidates.add(id);
+    }
+    for (const name of manifestNameCandidates(manifestModel)) {
+      combinedNameCandidates.add(name);
+    }
+    if (manifestModel.filename) {
+      addNormalizedVariants(combinedNameCandidates, manifestModel.filename);
+    }
   }
 
   const registryModel = (registry.models as RegistryModelWithStatus[]).find((entry) => {
     const values = new Set<string>();
-    if (entry.id) {
-      const normalizedId = normalizeKey(entry.id);
-      if (normalizedId) values.add(normalizedId);
-      const stripped = normalizeKey(stripModelPrefix(entry.id));
-      if (stripped) values.add(stripped);
+    addNormalizedVariants(values, entry.id);
+    if (typeof entry.id === "string") {
+      const sanitizedId = sanitizeModelId(entry.id);
+      if (sanitizedId) {
+        addNormalizedVariants(values, sanitizedId);
+        const stripped = stripModelPrefix(sanitizedId);
+        if (stripped !== sanitizedId) {
+          addNormalizedVariants(values, stripped);
+        }
+      }
     }
-    if (entry.name) {
-      const name = normalizeKey(entry.name);
-      if (name) values.add(name);
-    }
-    if (entry.filename) {
-      const filename = normalizeKey(entry.filename);
-      if (filename) values.add(filename);
-      const sanitized = sanitizeModelId(entry.filename);
-      if (sanitized) {
-        const normalizedSanitized = normalizeKey(sanitized);
-        if (normalizedSanitized) values.add(normalizedSanitized);
-        const stripped = normalizeKey(stripModelPrefix(sanitized));
-        if (stripped) values.add(stripped);
+    addNormalizedVariants(values, entry.name);
+    addNormalizedVariants(values, entry.filename);
+    if (typeof entry.filename === "string") {
+      const sanitizedFilename = sanitizeModelId(entry.filename);
+      if (sanitizedFilename) {
+        addNormalizedVariants(values, sanitizedFilename);
+        const stripped = stripModelPrefix(sanitizedFilename);
+        if (stripped !== sanitizedFilename) {
+          addNormalizedVariants(values, stripped);
+        }
       }
     }
     return Array.from(values).some((value) => combinedIdCandidates.has(value) || combinedNameCandidates.has(value));
   }) ?? null;
 
+  const modelLabel = firstNonEmptyString([
+    manifestModel?.name,
+    manifestModel?.filename,
+    rawParams.modelId as string | undefined,
+    (rawParams as any).model_id,
+    (rawParams as any).modelName,
+    (rawParams as any).modelLabel,
+    registryModel?.name,
+    registryModel?.id,
+  ]) ?? "selected model";
+
   if (!registryModel) {
-    const label = manifestModel.name ?? manifestModel.filename ?? "unknown";
-    throw new Error(`Selected model "${label}" is not available in the local registry.`);
+    throw new Error(`Selected model "${modelLabel}" is not available in the local registry.`);
   }
 
+  const registryDefaults = extractRegistryDefaults(registryModel);
   const paramAdapter = normalizeAdapter(rawParams.adapter);
-  const manifestAdapter = normalizeAdapter(manifestModel.adapter);
-  const registryAdapter = normalizeAdapter(registryModel.backend);
-  const typeKey = normalizeKey(manifestModel.type) ?? "";
+  const manifestAdapter = normalizeAdapter(manifestModel?.adapter);
+  const registryBackendAdapter = normalizeAdapter(registryModel.backend ?? registryModel.adapter);
+  const typeSource = manifestModel?.type ?? registryDefaults.type ?? registryModel.type ?? registryModel.backend;
+  const typeKey = normalizeKey(typeof typeSource === "string" ? typeSource : undefined) ?? "";
   const fallbackAdapter = TYPE_ADAPTER_OVERRIDES[typeKey] ?? DEFAULT_ADAPTER;
-  const finalAdapter = paramAdapter ?? manifestAdapter ?? registryAdapter ?? fallbackAdapter;
+  const finalAdapter = paramAdapter ?? registryDefaults.adapter ?? manifestAdapter ?? registryBackendAdapter ?? fallbackAdapter;
   if (!finalAdapter) {
-    throw new Error(`No adapter configured for model "${manifestModel.name ?? registryModel.name}".`);
+    throw new Error(`No adapter configured for model "${modelLabel}".`);
   }
 
   const paramRuntime = normalizeRuntime(rawParams.runtime);
-  const manifestRuntime = normalizeRuntime(manifestModel.runtime);
-  const finalRuntime = paramRuntime ?? manifestRuntime ?? DEFAULT_RUNTIME;
+  const manifestRuntime = normalizeRuntime(manifestModel?.runtime);
+  const finalRuntime = paramRuntime ?? registryDefaults.runtime ?? manifestRuntime ?? DEFAULT_RUNTIME;
 
-  const reasonerOverride = (manifestModel.name ?? "").toLowerCase().includes("reasoner v1");
-  const fallbackTemperature = reasonerOverride
-    ? 0.2
-    : TYPE_TEMPERATURE_OVERRIDES[typeKey] ?? DEFAULT_TEMPERATURE;
-  const manifestTemperature = toNumber(manifestModel.temperature);
-  const finalTemperature = toNumber(rawParams.temperature) ?? manifestTemperature ?? fallbackTemperature;
+  const reasonerOverride = (manifestModel?.name ?? registryModel.name ?? "").toLowerCase().includes("reasoner v1");
+  const manifestTemperature = toNumber(manifestModel?.temperature);
+  const finalTemperature =
+    toNumber(rawParams.temperature) ??
+    registryDefaults.temperature ??
+    manifestTemperature ??
+    (reasonerOverride
+      ? 0.2
+      : TYPE_TEMPERATURE_OVERRIDES[typeKey] ?? DEFAULT_TEMPERATURE);
+
   if (finalTemperature === undefined) {
-    throw new Error(`Missing temperature configuration for model "${manifestModel.name ?? registryModel.name}".`);
+    throw new Error(`Missing temperature configuration for model "${modelLabel}".`);
   }
 
-  const manifestMaxTokens = toPositiveInt(manifestModel.maxTokens);
-  const fallbackMaxTokens = manifestModel.embeddingModel ? undefined : DEFAULT_MAX_TOKENS;
-  let finalMaxTokens = toPositiveInt(rawParams.maxTokens) ?? manifestMaxTokens ?? fallbackMaxTokens;
+  const manifestMaxTokens = toPositiveInt(manifestModel?.maxTokens);
+  const registryMaxTokens = registryDefaults.maxTokens;
+  const defaultMaxTokens = manifestModel?.embeddingModel ? undefined : DEFAULT_MAX_TOKENS;
+  let finalMaxTokens =
+    toPositiveInt(rawParams.maxTokens) ??
+    registryMaxTokens ??
+    manifestMaxTokens ??
+    defaultMaxTokens;
   if (finalMaxTokens === undefined) {
-    throw new Error(`Missing maxTokens configuration for model "${manifestModel.name ?? registryModel.name}".`);
+    throw new Error(`Missing maxTokens configuration for model "${modelLabel}".`);
   }
-  const enforceLimit = manifestMaxTokens ?? fallbackMaxTokens;
+  const enforceLimit = registryMaxTokens ?? manifestMaxTokens ?? defaultMaxTokens;
   if (enforceLimit !== undefined && finalMaxTokens > enforceLimit) {
     finalMaxTokens = enforceLimit;
   }
@@ -420,10 +578,11 @@ async function resolveLLMJobConfig(rawParams: Record<string, unknown>): Promise<
     rawParams.modelId as string | undefined,
     (rawParams as any).model_id,
     registryModel.id,
-    sanitizeModelId(manifestModel.filename ?? manifestModel.name ?? manifestModel.order ?? undefined) ?? undefined,
+    sanitizeModelId(registryModel.id) ?? undefined,
+    sanitizeModelId(manifestModel?.filename ?? manifestModel?.name ?? manifestModel?.order ?? undefined) ?? undefined,
   ]);
   if (!resolvedModelId) {
-    throw new Error(`Unable to determine model id for "${manifestModel.name ?? registryModel.name}".`);
+    throw new Error(`Unable to determine model id for "${modelLabel}".`);
   }
 
   const modelFile = await resolveModelFilePath(registryModel, manifestModel, finalAdapter);
@@ -526,16 +685,33 @@ export async function getLastRunPayloads(runId: string) {
 }
 
 export function getNodeCatalog() {
+  const placeholder = (type: string) => ({
+    type,
+    in: [{ port: "in", types: ["text", "json"] }],
+    out: [{ port: "out", types: ["text", "json"] }],
+  });
+
   return [
-    { type: "orchestrator", in: [{ port: "in", types: ["text","json","messages"] }], out: [{ port: "out", types: ["text","json","messages"] }] },
-    { type: "critic", in: [{ port: "text", types: ["text"] }], out: [{ port: "notes", types: ["text"] }] },
-    { type: "llm.generic", in: [{ port: "prompt", types: ["text"] }], out: [{ port: "completion", types: ["text"] }] },
-    { type: "system.prompt", in: [], out: [{ port: "out", types: ["text"] }] },
-    { type: "embedding", in: [{ port: "text", types: ["text"] }], out: [{ port: "vec", types: ["vector"] }] },
-    { type: "retriever", in: [{ port: "vec", types: ["vector"] }], out: [{ port: "docs", types: ["json"] }] },
-    { type: "vector.store", in: [{ port: "upsert", types: ["json","vector"] }], out: [{ port: "ok", types: ["json"] }] },
-    { type: "loop", in: [{ port: "in", types: ["text"] }], out: [{ port: "body", types: ["text"] }, { port: "out", types: ["text"] }] },
-    { type: "output", in: [{ port: "in", types: ["text","json"] }], out: [] }
+    placeholder("ui"),
+    {
+      type: "llm",
+      in: [{ port: "prompt", types: ["text"] }],
+      out: [{ port: "completion", types: ["text"] }],
+    },
+    placeholder("prompt"),
+    placeholder("memory"),
+    placeholder("debate"),
+    placeholder("log"),
+    placeholder("cache"),
+    placeholder("divider"),
+    {
+      type: "loop",
+      in: [{ port: "in", types: ["text"] }],
+      out: [
+        { port: "body", types: ["text"] },
+        { port: "out", types: ["text"] },
+      ],
+    },
   ];
 }
 
@@ -646,6 +822,9 @@ async function executeNode(st: RunState, node: NodeDef): Promise<Array<[string, 
     const inputs = incomingText(st, node.id);
     const prompt = inputs.join("\n");
     const { params: mergedParams, modelFile } = await resolveLLMJobConfig(params);
+    console.info(
+      `[orchestrator] Invoking adapter ${mergedParams.adapter} (runtime=${mergedParams.runtime}, maxTokens=${mergedParams.maxTokens}, temperature=${mergedParams.temperature}) for model ${mergedParams.modelId} on node ${node.id}`
+    );
     const result = await poolLLM.run({
       params: mergedParams,
       prompt,

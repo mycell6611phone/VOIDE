@@ -16,15 +16,15 @@ type PortSpec = { port: string; types: string[] };
 type RunPayloadRecord = { nodeId: string; port: string; payload: PayloadT };
 
 const mockCatalog: Array<{ type: string; in: PortSpec[]; out: PortSpec[] }> = [
-  { type: "orchestrator", in: [{ port: "in", types: ["text", "json", "messages"] }], out: [{ port: "out", types: ["text", "json", "messages"] }] },
-  { type: "critic", in: [{ port: "text", types: ["text"] }], out: [{ port: "notes", types: ["text"] }] },
-  { type: "llm.generic", in: [{ port: "prompt", types: ["text"] }], out: [{ port: "completion", types: ["text"] }] },
-  { type: "system.prompt", in: [], out: [{ port: "out", types: ["text"] }] },
-  { type: "embedding", in: [{ port: "text", types: ["text"] }], out: [{ port: "vec", types: ["vector"] }] },
-  { type: "retriever", in: [{ port: "vec", types: ["vector"] }], out: [{ port: "docs", types: ["json"] }] },
-  { type: "vector.store", in: [{ port: "upsert", types: ["json", "vector"] }], out: [{ port: "ok", types: ["json"] }] },
-  { type: "loop", in: [{ port: "in", types: ["text"] }], out: [{ port: "body", types: ["text"] }, { port: "out", types: ["text"] }] },
-  { type: "output", in: [{ port: "in", types: ["text", "json"] }], out: [] }
+  { type: "ui", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
+  { type: "llm", in: [{ port: "prompt", types: ["text"] }], out: [{ port: "completion", types: ["text"] }] },
+  { type: "prompt", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
+  { type: "memory", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
+  { type: "debate", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
+  { type: "log", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
+  { type: "cache", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
+  { type: "divider", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
+  { type: "loop", in: [{ port: "in", types: ["text"] }], out: [{ port: "body", types: ["text"] }, { port: "out", types: ["text"] }] }
 ];
 
 const sampleFlow: FlowDef = {

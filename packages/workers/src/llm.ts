@@ -19,7 +19,11 @@ export default async function run(job: LLMJob) {
   const { params, prompt, modelFile } = job;
   const t0 = Date.now();
   let text = "";
-  switch (params.adapter) {
+  const adapter = params.adapter;
+  if (!adapter) {
+    throw new Error("LLM adapter not specified in job parameters.");
+  }
+  switch (adapter) {
     case "mock":
       text = await runMock(prompt);
       break;
@@ -30,7 +34,7 @@ export default async function run(job: LLMJob) {
       text = await runLlamaCpp({ modelFile, prompt, maxTokens: params.maxTokens, temperature: params.temperature, runtime: params.runtime as RuntimeProfile });
       break;
     default:
-      throw new Error(`Unknown adapter "${params.adapter}" requested.`);
+      throw new Error(`Unknown adapter "${adapter}" requested.`);
   }
   const dt = Date.now() - t0;
   return { text, tokens: tokensOf(text), latencyMs: dt };

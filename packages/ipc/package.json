@@ -14,8 +14,11 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "vitest": "^1.5.0"
+    "@types/node": "^24.3.0",
+    "@vitest/ui": "^3.2.4",
+    "vitest": "^1.6.1"
   },
-  "engines": { "node": ">=20.11" }
+  "engines": {
+    "node": ">=20.11"
+  }
 }
-

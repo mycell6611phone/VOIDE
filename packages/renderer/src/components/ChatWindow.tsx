@@ -124,6 +124,12 @@ const textareaStyle: React.CSSProperties = {
   boxShadow: "inset 0 1px 2px rgba(15, 23, 42, 0.08)",
 };
 
+const textareaFocusStyle: React.CSSProperties = {
+  border: `1px solid ${ACCENT_COLOR}`,
+  boxShadow: "0 0 0 3px rgba(108, 99, 255, 0.25)",
+  background: "#ffffff",
+};
+
 const headerStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -267,14 +273,82 @@ function ChatWindowSurface({
   onDraftAttachmentsAdd,
   onDraftAttachmentRemove
 }: ChatWindowSurfaceProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState(false);
   const [visible, setVisible] = useState(false);
   const closingRef = useRef(false);
+  const [shouldRestoreFocus, setShouldRestoreFocusState] = useState(false);
+  const shouldRestoreFocusRef = useRef(shouldRestoreFocus);
+  const [isTextareaFocused, setIsTextareaFocused] = useState(false);
+
+  const setPersistentFocus = useCallback((value: boolean) => {
+    shouldRestoreFocusRef.current = value;
+    setShouldRestoreFocusState(value);
+  }, []);
+
+  useEffect(() => {
+    shouldRestoreFocusRef.current = shouldRestoreFocus;
+  }, [shouldRestoreFocus]);
+
+  const focusTextarea = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || typeof document === "undefined") {
+      return;
+    }
+    if (document.activeElement === textarea) {
+      return;
+    }
+    textarea.focus({ preventScroll: true });
+    const length = textarea.value.length;
+    try {
+      textarea.setSelectionRange(length, length);
+    } catch {
+      // ignore selection errors on unfocusable states
+    }
+  }, []);
+
+  const computedTextareaStyle = useMemo(
+    () => ({
+      ...textareaStyle,
+      ...(isTextareaFocused ? textareaFocusStyle : {}),
+    }),
+    [isTextareaFocused]
+  );
 
   const formatter = useTimestampFormatter();
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const container = containerRef.current;
+      if (!container) {
+        return;
+      }
+      if (container.contains(event.target as Node)) {
+        return;
+      }
+      setPersistentFocus(false);
+      setIsTextareaFocused(false);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [setPersistentFocus]);
+
+  useEffect(() => {
+    if (mode === "floating" && !thread.open) {
+      setPersistentFocus(false);
+      setIsTextareaFocused(false);
+    }
+  }, [mode, setPersistentFocus, thread.open]);
 
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
@@ -300,6 +374,27 @@ function ChatWindowSurface({
   useEffect(() => {
     adjustTextareaHeight();
   }, [thread.draft, adjustTextareaHeight]);
+
+  useEffect(() => {
+    if (!shouldRestoreFocus) {
+      return;
+    }
+    if (mode === "floating" && (!thread.open || thread.minimized)) {
+      return;
+    }
+    focusTextarea();
+  }, [
+    focusTextarea,
+    mode,
+    shouldRestoreFocus,
+    thread.draftAttachments.length,
+    thread.isSending,
+    thread.messages.length,
+    thread.minimized,
+    thread.nodeId,
+    thread.open,
+    visible,
+  ]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -336,9 +431,20 @@ function ChatWindowSurface({
     onScrollStateChange(scrollTop, stick);
   }, [onScrollStateChange]);
 
+  const handleAccessoryMouseDown = useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      event.preventDefault();
+      setPersistentFocus(true);
+      focusTextarea();
+    },
+    [focusTextarea, setPersistentFocus]
+  );
+
   const handleFileButton = useCallback(() => {
+    setPersistentFocus(true);
+    focusTextarea();
     fileInputRef.current?.click();
-  }, []);
+  }, [focusTextarea, setPersistentFocus]);
 
   const handleFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -347,8 +453,10 @@ function ChatWindowSurface({
         onDraftAttachmentsAdd(files);
       }
       event.target.value = "";
+      setPersistentFocus(true);
+      focusTextarea();
     },
-    [onDraftAttachmentsAdd]
+    [focusTextarea, onDraftAttachmentsAdd, setPersistentFocus]
   );
 
   const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -373,8 +481,10 @@ function ChatWindowSurface({
         onDraftAttachmentsAdd(files);
       }
       setDragging(false);
+      setPersistentFocus(true);
+      focusTextarea();
     },
-    [onDraftAttachmentsAdd]
+    [focusTextarea, onDraftAttachmentsAdd, setPersistentFocus]
   );
 
   const animateAndCall = useCallback(
@@ -413,8 +523,11 @@ function ChatWindowSurface({
     if (thread.isSending || !hasDraft) {
       return;
     }
-    void onSend();
-  }, [onSend, thread.draft, thread.draftAttachments.length, thread.isSending]);
+    setPersistentFocus(true);
+    Promise.resolve(onSend()).finally(() => {
+      focusTextarea();
+    });
+  }, [focusTextarea, onSend, setPersistentFocus, thread.draft, thread.draftAttachments.length, thread.isSending]);
 
   const handleSecondaryEnter = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     event.currentTarget.style.backgroundColor = SECONDARY_HOVER;
@@ -431,6 +544,68 @@ function ChatWindowSurface({
   const handlePrimaryLeave = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     event.currentTarget.style.backgroundColor = ACCENT_COLOR;
   }, []);
+
+  const handleTextareaFocus = useCallback(() => {
+    setPersistentFocus(true);
+    setIsTextareaFocused(true);
+  }, [setPersistentFocus]);
+
+  const handleTextareaBlur = useCallback(() => {
+    setIsTextareaFocused(false);
+    if (!shouldRestoreFocusRef.current) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      focusTextarea();
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      focusTextarea();
+    });
+  }, [focusTextarea]);
+
+  const handleTextareaKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.isComposing
+      ) {
+        event.preventDefault();
+        handleSendClick();
+        return;
+      }
+
+      if (event.key === "Tab") {
+        setPersistentFocus(false);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        setPersistentFocus(false);
+        if (typeof window === "undefined") {
+          event.currentTarget.blur();
+          return;
+        }
+        window.requestAnimationFrame(() => {
+          event.currentTarget.blur();
+        });
+      }
+    },
+    [handleSendClick, setPersistentFocus]
+  );
+
+  const handleAttachmentRemoveClick = useCallback(
+    (attachmentId: string) => {
+      onDraftAttachmentRemove(attachmentId);
+      setPersistentFocus(true);
+      focusTextarea();
+    },
+    [focusTextarea, onDraftAttachmentRemove, setPersistentFocus]
+  );
 
   const renderMessage = useCallback(
     (message: ChatMessage) => {
@@ -526,6 +701,7 @@ function ChatWindowSurface({
 
   return (
     <div
+      ref={containerRef}
       role="dialog"
       aria-label={`${thread.nodeLabel} chat`}
       style={{
@@ -616,6 +792,7 @@ function ChatWindowSurface({
             aria-label="Attach files"
             style={{ ...accessoryButtonStyle, background: SECONDARY_COLOR }}
             onClick={handleFileButton}
+            onMouseDown={handleAccessoryMouseDown}
             onMouseEnter={handleSecondaryEnter}
             onMouseLeave={handleSecondaryLeave}
           >
@@ -624,9 +801,12 @@ function ChatWindowSurface({
           <textarea
             ref={textareaRef}
             placeholder="Type here…"
-            style={textareaStyle}
+            style={computedTextareaStyle}
             value={thread.draft}
             onChange={(event) => onDraftChange(event.target.value)}
+            onFocus={handleTextareaFocus}
+            onBlur={handleTextareaBlur}
+            onKeyDown={handleTextareaKeyDown}
             aria-multiline="true"
             spellCheck
           />
@@ -641,6 +821,7 @@ function ChatWindowSurface({
             }}
             disabled={thread.isSending || (thread.draft.trim().length === 0 && thread.draftAttachments.length === 0)}
             onClick={handleSendClick}
+            onMouseDown={handleAccessoryMouseDown}
             onMouseEnter={handlePrimaryEnter}
             onMouseLeave={handlePrimaryLeave}
           >
@@ -668,7 +849,8 @@ function ChatWindowSurface({
                 <span style={{ opacity: 0.75 }}>{formatFileSize(attachment.size)}</span>
                 <button
                   type="button"
-                  onClick={() => onDraftAttachmentRemove(attachment.id)}
+                  onClick={() => handleAttachmentRemoveClick(attachment.id)}
+                  onMouseDown={handleAccessoryMouseDown}
                   style={{
                     background: "transparent",
                     border: "none",

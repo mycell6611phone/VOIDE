@@ -565,16 +565,19 @@ function ChatWindowSurface({
 
   const handleTextareaKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (
-        event.key === "Enter" &&
-        !event.shiftKey &&
-        !event.altKey &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.isComposing
-      ) {
-        event.preventDefault();
-        handleSendClick();
+      if (event.key === "Enter" && !event.isComposing) {
+        const shouldSubmit =
+          !event.shiftKey &&
+          !event.altKey &&
+          (event.metaKey || event.ctrlKey);
+
+        if (shouldSubmit) {
+          event.preventDefault();
+          handleSendClick();
+          return;
+        }
+
+        setPersistentFocus(true);
         return;
       }
 
@@ -909,7 +912,6 @@ function ChatWindowSurface({
 
 function FloatingChatWindow() {
   const { overlayRef } = useCanvasBoundary();
-  const activeNodeId = useChatStore((state) => state.activeNodeId);
   const flowAcceptsInput = useChatStore((state) => state.flowAcceptsInput);
   const closeChat = useChatStore((state) => state.closeChat);
   const minimizeChat = useChatStore((state) => state.minimizeChat);
@@ -919,11 +921,14 @@ function FloatingChatWindow() {
   const setScrollState = useChatStore((state) => state.setScrollState);
   const updateGeometry = useChatStore((state) => state.updateGeometry);
   const sendDraft = useChatStore((state) => state.sendDraft);
-  const getThread = useChatStore((state) => state.getThread);
-
-  const thread = useMemo(
-    () => (activeNodeId ? getThread(activeNodeId) ?? null : null),
-    [activeNodeId, getThread]
+  const thread = useChatStore(
+    useCallback((state) => {
+      const nodeId = state.activeNodeId;
+      if (!nodeId) {
+        return null;
+      }
+      return state.threads[nodeId] ?? null;
+    }, [])
   );
 
   const handleExpand = useCallback(() => {

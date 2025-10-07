@@ -1,7 +1,7 @@
-Module Details: 
+Module Details:
 
 Module | line location
-Prompt    8 to 39 
+Prompt    8 to 39
 Log      42 to 82
 Debate   86 to 142
 LLM     146 to 221
@@ -82,7 +82,6 @@ Log Module Blueprint:
    The module does not alter the data it receives; it only logs a copy and passes the data unchanged to downstream modules (if any).
 
    Multiple Log modules can be used in a flow as needed for capturing different streams or subsets of data.
-
 ----------------------------------------------------------
 
 Debate Module Blueprint:
@@ -142,7 +141,6 @@ Debate Module Blueprint:
    When executed, the Debate module applies the selected debate prompt and format to the input data, and passes the output downstream to the next module (LLM, Debate, or otherwise).
 
    Each Debate module operates independently based on its configuration, allowing flexible debate structures and chaining.
-
 ------------------------------------------------------------------------
 
 LLM Module Blueprint:
@@ -221,3 +219,311 @@ LLM Module Blueprint:
 
    General Rule: No hard errors or broken connections. Any unsupported input is embedded as text into the prompt, so VOIDE always preserves user intent and workflow integrity.
 
+===============================================================================
+TITLE: VOIDE Backend Architecture (Modular Nodes + Protobuf)
+===============================================================================
+
+## 0) Repo map (authoritative paths)
+- Engine orchestration: `packages/main/src/orchestrator/engine.ts`
+- IPC bridge (renderer↔main): `packages/preload/dist/preload.js`
+- Shared types: `packages/shared/src/types.ts`
+- Flow JSON schema: `packages/schemas/dist/flows/schema/flow.schema.json`
+
+These files define flow validation, orchestration, and IPC exposure.
+
+---
+
+## 1) Overview
+VOIDE is a visual AI workflow builder. Users design LLM pipelines by dragging nodes (modules) on a canvas and wiring ports. The backend executes the flow graph defined by the canvas.
+
+Pipeline lifecycle:
+Canvas (UI Graph / Flow JSON)
+↓
+Engine (orchestration in engine.ts)
+↓
+Node Registry (dynamic node definitions)
+↓
+Workers (Piscina) for heavy compute
+↓
+DB (runs, payloads, logs)
+
+---
+
+## 2) Flow and Types (what the system validates)
+- Flow objects must conform to `flow.schema.json` (`id`, `version`, `nodes`, `edges`).
+- Each node has `in` and `out` arrays of ports with `types: string[]`.
+- The runtime payload union is in `packages/shared/src/types.ts` (`PayloadT`).
+
+Compatibility note for Protobuf transport:
+- Option A: wrap protobuf bytes as a `PayloadT.file` with `mime: "application/x-protobuf"`.
+- Option B: extend `PayloadT` with a binary variant (documented here for future use).
+
+Example (documentation only, not a code change):
+```ts
+// Conceptual extension
+export type PayloadT =
+  | { kind: 'text'; text: string }
+  | { kind: 'json'; value: unknown }
+  | { kind: 'messages'; messages: { role: 'system'|'user'|'assistant'; content: string }[] }
+  | { kind: 'vector'; values: number[] }
+  | { kind: 'file'; path: string; mime: string }
+  | { kind: 'binary'; bytes: Uint8Array; mime?: string }; // optional future addition
+```
+
+## 3) Engine (`packages/main/src/orchestrator/engine.ts`)
+
+Responsibilities:
+
+- Load and validate flows.
+- Compute topological order.
+- Execute nodes, dispatching per type (LLM, embeddings, etc.) via Piscina pools.
+- Persist run logs and payloads to the DB.
+- Expose `getNodeCatalog()` via IPC for the renderer palette.
+
+Engine remains orchestration-only when using the node registry.
+
+Lifecycle:
+Flow JSON → topo order → execute node(type, params, inputs) → store payloads/logs → continue
+
+## 4) Modular Node Registry (target design)
+
+Purpose: add new node types by dropping a file; no engine edits.
+
+Document the registry interface (for `packages/main/src/orchestrator/nodeRegistry.ts`):
+
+```ts
+export interface NodeModule {
+  type: string;                 // unique node type id
+  inputs: string[];             // input port names
+  outputs: string[];            // output port names
+  run: (ctx: {
+    get: (portKey: string) => Promise<unknown[]>; // read upstream payloads
+    put: (port: string, payload: unknown) => Promise<void>; // emit downstream
+    params: Record<string, unknown>;
+  }) => Promise<void>;
+}
+
+const registry = new Map<string, NodeModule>();
+
+export function registerNode(node: NodeModule) { registry.set(node.type, node); }
+export function getNode(type: string) { return registry.get(type); }
+export function listNodes() {
+  return Array.from(registry.values()).map(n => ({
+    type: n.type,
+    in: n.inputs.map(p => ({ port: p, types: ["protobuf","json","text"] })),
+    out: n.outputs.map(p => ({ port: p, types: ["protobuf","json","text"] })),
+  }));
+}
+```
+
+Auto-load all nodes at startup (conceptual pattern):
+
+```ts
+import fs from "fs";
+import path from "path";
+
+const nodesPath = path.join(__dirname, "../nodes");
+if (fs.existsSync(nodesPath)) {
+  for (const file of fs.readdirSync(nodesPath)) {
+    if (/\.(cjs|mjs|js)$/i.test(file)) {
+      await import(path.join(nodesPath, file)); // each file calls registerNode(...)
+    }
+  }
+}
+```
+
+Engine integration with the registry (conceptual):
+
+```ts
+// engine.ts
+import { getNode, listNodes } from "./nodeRegistry";
+
+export function getNodeCatalog() { return listNodes(); }
+
+async function executeNode(st, node) {
+  const mod = getNode(node.type);
+  if (!mod) throw new Error(`Unknown node type: ${node.type}`);
+
+  const ctx = {
+    get: async (portKey: string) => st.values.get(portKey) ?? [],
+    put: async (port: string, payload: unknown) => {
+      const key = `${node.id}:${port}`;
+      const arr = st.values.get(key) ?? [];
+      arr.push(payload);
+      st.values.set(key, arr);
+    },
+    params: node.params ?? {},
+  };
+
+  await mod.run(ctx);
+}
+```
+
+## 5) Ports and Node Catalog aligned with the UI palette
+
+Declare nodes and ports so the renderer palette and backend agree. Accept `["protobuf","json","text"]` for flexibility:
+
+```ts
+// Example shape of listNodes() output (documentation)
+[
+  { type: "ui",
+    in:  [{ port: "response_in", types: ["protobuf","json","text"] }],
+    out: [{ port: "user_message", types: ["protobuf","json","text"] }] },
+
+  { type: "llm",
+    in:  [{ port: "model_input", types: ["protobuf","json","text"] }],
+    out: [{ port: "model_output", types: ["protobuf","json","text"] }] },
+
+  { type: "prompt",
+    in:  [{ port: "in", types: ["protobuf","json","text"] }],
+    out: [{ port: "out", types: ["protobuf","json","text"] }] },
+
+  { type: "memory",
+    in: [
+      { port: "memory_base", types: ["protobuf","json"] },
+      { port: "save_data",   types: ["protobuf","json","text"] }
+    ],
+    out: [{ port: "retrieved_memory", types: ["protobuf","json","text"] }] },
+
+  { type: "debate",
+    in:  [{ port: "configurable_in", types: ["protobuf","json","text"] }],
+    out: [{ port: "configurable_out", types: ["protobuf","json","text"] }] },
+
+  { type: "log",
+    in:  [{ port: "input", types: ["protobuf","json","text"] }],
+    out: [] },
+
+  { type: "cache",
+    in: [
+      { port: "pass_through", types: ["protobuf","json","text"] },
+      { port: "save_input",   types: ["protobuf","json","text"] }
+    ],
+    out: [{ port: "cached_output", types: ["protobuf","json","text"] }] },
+
+  { type: "divider",
+    in:  [{ port: "in", types: ["protobuf","json","text"] }],
+    out: [
+      { port: "and_out", types: ["protobuf","json","text"] },
+      { port: "or_out",  types: ["protobuf","json","text"] }
+    ] },
+
+  { type: "loop",
+    in:  [{ port: "in", types: ["protobuf","json","text"] }],
+    out: [
+      { port: "body", types: ["protobuf","json","text"] },
+      { port: "out",  types: ["protobuf","json","text"] }
+    ] }
+]
+```
+
+## 6) Protobuf usage and decoding (module-local)
+
+Rule: inter-node transport may use protobuf. Each node decodes/encodes locally.
+
+Decoder pattern (documentation):
+
+```ts
+function decodeInput(x: unknown) {
+  // Option A: protobuf carried as PayloadT.file
+  if (typeof x === 'object' && x && (x as any).kind === 'file' && (x as any).mime === 'application/x-protobuf') {
+    // read bytes from file path or buffer according to your implementation
+    // return MyProtoMessage.decode(bytes).toJSON();
+  }
+  // Option B: extended PayloadT.binary
+  if (typeof x === 'object' && x && (x as any).kind === 'binary') {
+    // return MyProtoMessage.decode((x as any).bytes).toJSON();
+  }
+  if (typeof x === 'string') {
+    try { return JSON.parse(x); } catch { return { text: x }; }
+  }
+  return x; // already JSON or object
+}
+```
+
+LLM input/output expectations:
+
+- Input: JSON or text; protobuf schema can wrap messages, system prompt, temperature, etc.
+- Output: JSON or text; modules may re-encode to protobuf for downstream.
+
+## 7) Workers (Piscina) and heavy compute
+
+Heavy tasks run in worker threads. The engine already uses Piscina.
+
+Example (documentation):
+
+```ts
+const poolLLM = new Piscina({ filename: path.join(__dirname, "../../workers/dist/llm.js") });
+const result = await poolLLM.run({ params, prompt, modelFile });
+```
+
+Nodes that need workers call the pool inside their `run()`.
+
+## 8) Persistence and logging
+
+The engine records run logs and payloads to the DB.
+
+Persisted payloads remain PayloadT-compatible (file path or JSON), regardless of wire format.
+
+## 9) Adding a new node (minimal steps)
+
+1. Create `packages/main/src/nodes/<type>.ts`.
+2. Import and call `registerNode({...})` with type, inputs, outputs, and `run()`.
+3. Ensure auto-loader imports the file at startup.
+4. If using protobuf, include the `.proto` reference and local decoding logic.
+5. No changes to `engine.ts` or IPC required.
+
+## 10) Example node stubs (documentation)
+
+UI node:
+
+```ts
+registerNode({
+  type: "ui",
+  inputs: ["response_in"],
+  outputs: ["user_message"],
+  async run({ get, put, params }) {
+    // Bridge renderer user input to PayloadT, emit on "user_message"
+  }
+});
+```
+
+LLM node:
+
+```ts
+registerNode({
+  type: "llm",
+  inputs: ["model_input"],
+  outputs: ["model_output"],
+  async run({ get, put, params }) {
+    // Decode input (protobuf/json/text), call worker, emit result
+  }
+});
+```
+
+Divider (AND/OR):
+
+```ts
+registerNode({
+  type: "divider",
+  inputs: ["in"],
+  outputs: ["and_out","or_out"],
+  async run({ get, put, params }) {
+    // Route per params.mode ('and' | 'or')
+  }
+});
+```
+
+## 11) Compatibility with existing catalog
+
+The repo currently exposes legacy node types in `getNodeCatalog()`.
+This document describes the target modular palette-aligned nodes: `ui`, `llm`, `prompt`, `memory`, `debate`, `log`, `cache`, `divider`, `loop`.
+Aligning backend to this document means updating `getNodeCatalog()` to return the registry’s `listNodes()` output.
+
+## 12) Summary
+
+- Engine orchestrates; registry defines nodes; nodes are drop-in files.
+- Inter-node transport supports protobuf; modules decode locally.
+- Workers handle heavy compute; DB stores outputs/logs.
+- Adding a node requires a single file that registers itself; no engine edits.
+
+End of document.

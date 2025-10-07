@@ -685,31 +685,93 @@ export async function getLastRunPayloads(runId: string) {
 }
 
 export function getNodeCatalog() {
-  const placeholder = (type: string) => ({
-    type,
-    in: [{ port: "in", types: ["text", "json"] }],
-    out: [{ port: "out", types: ["text", "json"] }],
-  });
-
   return [
-    placeholder("ui"),
+    // 1. UI module — protobuf input/output
+    {
+      type: "ui",
+      in: [{ port: "response_in", types: ["protobuf"] }],
+      out: [{ port: "user_message", types: ["protobuf"] }],
+    },
+
+    // 2. LLM module — protobuf input/output
     {
       type: "llm",
-      in: [{ port: "prompt", types: ["text"] }],
-      out: [{ port: "completion", types: ["text"] }],
+      in: [
+        {
+          port: "model_input",
+          types: ["protobuf"],
+          description:
+            "Receives protobuf message containing prompt and parameters. Module decodes message to JSON internally.",
+        },
+      ],
+      out: [
+        {
+          port: "model_output",
+          types: ["protobuf"],
+          description:
+            "Outputs protobuf message containing model response. Module encodes JSON/text output back to protobuf.",
+        },
+      ],
     },
-    placeholder("prompt"),
-    placeholder("memory"),
-    placeholder("debate"),
-    placeholder("log"),
-    placeholder("cache"),
-    placeholder("divider"),
+
+    // 3. Prompt module — protobuf in/out
+    {
+      type: "prompt",
+      in: [{ port: "in", types: ["protobuf"] }],
+      out: [{ port: "out", types: ["protobuf"] }],
+    },
+
+    // 4. Memory module — two protobuf inputs, one protobuf output
+    {
+      type: "memory",
+      in: [
+        { port: "memory_base", types: ["protobuf"] },
+        { port: "save_data", types: ["protobuf"] },
+      ],
+      out: [{ port: "retrieved_memory", types: ["protobuf"] }],
+    },
+
+    // 5. Debate module — configurable protobuf ports
+    {
+      type: "debate",
+      in: [{ port: "configurable_in", types: ["protobuf"] }],
+      out: [{ port: "configurable_out", types: ["protobuf"] }],
+    },
+
+    // 6. Log module — one protobuf input, no output
+    {
+      type: "log",
+      in: [{ port: "input", types: ["protobuf"] }],
+      out: [],
+    },
+
+    // 7. Cache module — two protobuf inputs, one protobuf output
+    {
+      type: "cache",
+      in: [
+        { port: "pass_through", types: ["protobuf"] },
+        { port: "save_input", types: ["protobuf"] },
+      ],
+      out: [{ port: "cached_output", types: ["protobuf"] }],
+    },
+
+    // 8. Divider module — one protobuf input, two protobuf outputs (AND/OR gate)
+    {
+      type: "divider",
+      in: [{ port: "in", types: ["protobuf"] }],
+      out: [
+        { port: "and_out", types: ["protobuf"] },
+        { port: "or_out", types: ["protobuf"] },
+      ],
+    },
+
+    // 9. Loop module — protobuf multi-output structure
     {
       type: "loop",
-      in: [{ port: "in", types: ["text"] }],
+      in: [{ port: "in", types: ["protobuf"] }],
       out: [
-        { port: "body", types: ["text"] },
-        { port: "out", types: ["text"] },
+        { port: "body", types: ["protobuf"] },
+        { port: "out", types: ["protobuf"] },
       ],
     },
   ];

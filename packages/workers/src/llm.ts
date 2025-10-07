@@ -19,9 +19,19 @@ export default async function run(job: LLMJob) {
   const { params, prompt, modelFile } = job;
   const t0 = Date.now();
   let text = "";
-  if (params.adapter === "mock") text = await runMock(prompt);
-  else if (params.adapter === "gpt4all") text = await runGpt4All({ modelFile, prompt, maxTokens: params.maxTokens, temperature: params.temperature });
-  else if (params.adapter === "llama.cpp") text = await runLlamaCpp({ modelFile, prompt, maxTokens: params.maxTokens, temperature: params.temperature, runtime: params.runtime as RuntimeProfile });
+  switch (params.adapter) {
+    case "mock":
+      text = await runMock(prompt);
+      break;
+    case "gpt4all":
+      text = await runGpt4All({ modelFile, prompt, maxTokens: params.maxTokens, temperature: params.temperature });
+      break;
+    case "llama.cpp":
+      text = await runLlamaCpp({ modelFile, prompt, maxTokens: params.maxTokens, temperature: params.temperature, runtime: params.runtime as RuntimeProfile });
+      break;
+    default:
+      throw new Error(`Unknown adapter "${params.adapter}" requested.`);
+  }
   const dt = Date.now() - t0;
   return { text, tokens: tokensOf(text), latencyMs: dt };
 }

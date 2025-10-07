@@ -65,4 +65,4 @@ turbo/*
 ,pdf
 dist/
 **/dist/
-*.tsbuildinfo
+

@@ -8,6 +8,7 @@ import { initDB, closeDB } from './services/db.js';
 import { registerHandlers } from './ipc/handlers.js';
 import { shutdownOrchestrator } from './orchestrator/engine.js';
 import { initTelemetry, shutdownTelemetry } from './services/telemetry.js';
+import { CHAT_SERVER_PORT, startChatServer, stopChatServer } from './services/chatServer.js';
 
 const DEFAULT_RENDERER_DEV_PORT = 5173;
 
@@ -50,6 +51,11 @@ async function performGracefulShutdown() {
         shutdownTelemetry();
       } catch (error) {
         console.error("Failed to shutdown telemetry:", error);
+      }
+      try {
+        await stopChatServer();
+      } catch (error) {
+        console.error("Failed to stop chat server:", error);
       }
       try {
         await closeDB();
@@ -121,6 +127,13 @@ function blockNetworkRequests() {
       if (url.startsWith('ws://localhost') || url.startsWith('wss://localhost')) {
         return callback({ cancel: false });
       }
+    }
+
+    const chatBase = `http://127.0.0.1:${CHAT_SERVER_PORT}`;
+    const chatLocalhost = `http://localhost:${CHAT_SERVER_PORT}`;
+    const chatSecureLocalhost = `https://localhost:${CHAT_SERVER_PORT}`;
+    if (url.startsWith(chatBase) || url.startsWith(chatLocalhost) || url.startsWith(chatSecureLocalhost)) {
+      return callback({ cancel: false });
     }
 
     // default: block
@@ -213,6 +226,11 @@ async function createChatWindow() {
 app.whenReady().then(async () => {
   blockNetworkRequests();
   initTelemetry();
+  try {
+    await startChatServer();
+  } catch (error) {
+    console.error("Failed to start chat server:", error);
+  }
   await initDB().catch(() => {}); // keep free-mode resilient
   setupIPC();
   registerHandlers({

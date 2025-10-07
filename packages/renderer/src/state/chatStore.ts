@@ -5,6 +5,11 @@ import {
   type WindowGeometry,
   type WindowSize
 } from "../components/contextWindowUtils";
+import {
+  fetchChatHistory,
+  sendChatMessage,
+  type ChatApiMessage
+} from "../lib/chatApi";
 
 export type ChatRole = "user" | "assistant" | "system";
 
@@ -24,6 +29,8 @@ export interface ChatMessage {
   createdAt: number;
   attachments: ChatAttachment[];
   streaming?: boolean;
+  senderId?: string;
+  direction?: "incoming" | "outgoing";
 }
 
 export interface DraftAttachment extends ChatAttachment {
@@ -40,7 +47,10 @@ export interface ChatThreadState {
   scrollTop: number;
   stickToBottom: boolean;
   open: boolean;
-  streamingMessageId: string | null;
+  minimized: boolean;
+  isSending: boolean;
+  loadingHistory: boolean;
+  hasLoadedHistory: boolean;
   notice: string | null;
 }
 
@@ -56,26 +66,24 @@ interface ChatStore {
   readonly flowAcceptsInput: boolean;
   openChat: (options: OpenChatOptions) => void;
   closeChat: (nodeId?: string) => void;
+  minimizeChat: (nodeId: string) => void;
   setDraft: (nodeId: string, draft: string) => void;
   addDraftAttachments: (nodeId: string, files: File[]) => void;
   removeDraftAttachment: (nodeId: string, attachmentId: string) => void;
   clearDraft: (nodeId: string) => void;
   setScrollState: (nodeId: string, scrollTop: number, stickToBottom: boolean) => void;
   updateGeometry: (nodeId: string, geometry: WindowGeometry) => void;
-  sendDraft: (nodeId: string) => boolean;
-  sendActiveDraft: () => boolean;
-  appendAssistantResponse: (
-    nodeId: string,
-    content: string,
-    attachments?: ChatAttachment[]
-  ) => void;
-  completeStreaming: (nodeId: string, messageId: string, content: string) => void;
+  sendDraft: (nodeId: string) => Promise<boolean>;
+  sendActiveDraft: () => Promise<boolean>;
+  loadHistory: (nodeId: string) => Promise<void>;
   getThread: (nodeId: string) => ChatThreadState | undefined;
   hasOpenChat: () => boolean;
   setFlowAcceptsInput: (value: boolean) => void;
 }
 
-const DEFAULT_WINDOW_SIZE: WindowSize = { width: 420, height: 520 };
+export const MAX_CHAT_WINDOW_WIDTH = 500;
+
+const DEFAULT_WINDOW_SIZE: WindowSize = { width: 420, height: 540 };
 
 const DEFAULT_GEOMETRY: WindowGeometry = {
   position: { x: 0, y: 0 },
@@ -83,8 +91,6 @@ const DEFAULT_GEOMETRY: WindowGeometry = {
 };
 
 const FLOW_INACTIVE_NOTICE = "Flow is paused. Start the run to accept new input.";
-
-const pendingResponseTimers = new Map<string, number>();
 
 const createId = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -99,9 +105,19 @@ const cloneGeometry = (geometry: WindowGeometry | undefined): WindowGeometry => 
     y: geometry?.position.y ?? DEFAULT_GEOMETRY.position.y
   },
   size: {
-    width: geometry?.size.width ?? DEFAULT_WINDOW_SIZE.width,
+    width: Math.min(geometry?.size.width ?? DEFAULT_WINDOW_SIZE.width, MAX_CHAT_WINDOW_WIDTH),
     height: geometry?.size.height ?? DEFAULT_WINDOW_SIZE.height
   }
+});
+
+const mapApiMessage = (message: ChatApiMessage): ChatMessage => ({
+  id: message.id || createId(),
+  role: message.direction === "outgoing" ? "user" : "assistant",
+  content: message.content ?? "",
+  createdAt: Number.isFinite(message.timestamp) ? message.timestamp : Date.now(),
+  attachments: [],
+  senderId: message.sender_id,
+  direction: message.direction,
 });
 
 const createAttachmentFromFile = (file: File): DraftAttachment => ({
@@ -149,22 +165,12 @@ const ensureThreadState = (
     scrollTop: 0,
     stickToBottom: true,
     open: false,
-    streamingMessageId: null,
+    minimized: false,
+    isSending: false,
+    loadingHistory: false,
+    hasLoadedHistory: false,
     notice: null
   };
-};
-
-const buildAssistantReply = (prompt: string, attachments: ChatAttachment[]): string => {
-  if (prompt.trim().length === 0 && attachments.length > 0) {
-    return "I've received the files you attached. I'll review them and respond soon.";
-  }
-
-  if (prompt.trim().length === 0) {
-    return "I'm ready whenever you are. Send a prompt from the canvas Play control.";
-  }
-
-  const shortened = prompt.trim().slice(0, 280);
-  return `I see: "${shortened}${prompt.trim().length > 280 ? "…" : ""}"\nI'll run that through the flow and let you know what I find.`;
 };
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -174,13 +180,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   openChat: ({ nodeId, nodeLabel, geometry }) => {
     set((state) => {
       const base = ensureThreadState(state.threads, nodeId, nodeLabel, geometry);
-      const threads = { ...state.threads, [nodeId]: { ...base, open: true } };
+      const threads = {
+        ...state.threads,
+        [nodeId]: {
+          ...base,
+          open: true,
+          minimized: false,
+          notice: null,
+        },
+      };
 
       return {
         threads,
         activeNodeId: nodeId
       };
     });
+    void get().loadHistory(nodeId);
   },
   closeChat: (nodeId) => {
     set((state) => {
@@ -194,10 +209,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         return state;
       }
 
-      const updated: ChatThreadState = { ...thread, open: false };
+      const updated: ChatThreadState = {
+        ...thread,
+        open: false,
+        minimized: false,
+        draft: "",
+        draftAttachments: [],
+        isSending: false,
+      };
       return {
         threads: { ...state.threads, [targetId]: updated },
         activeNodeId: state.activeNodeId === targetId ? null : state.activeNodeId
+      };
+    });
+  },
+  minimizeChat: (nodeId) => {
+    set((state) => {
+      const thread = state.threads[nodeId];
+      if (!thread) {
+        return state;
+      }
+
+      const updated: ChatThreadState = {
+        ...thread,
+        open: false,
+        minimized: true,
+      };
+
+      return {
+        threads: { ...state.threads, [nodeId]: updated },
+        activeNodeId: state.activeNodeId === nodeId ? null : state.activeNodeId,
       };
     });
   },
@@ -300,7 +341,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
 
       const rect = state.threads[nodeId].geometry;
-      const nextGeometry = clampGeometry(geometry, {
+      const sanitized: WindowGeometry = {
+        position: { ...geometry.position },
+        size: {
+          width: Math.min(geometry.size.width, MAX_CHAT_WINDOW_WIDTH),
+          height: geometry.size.height,
+        },
+      };
+
+      const nextGeometry = clampGeometry(sanitized, {
         width: Number.MAX_SAFE_INTEGER,
         height: Number.MAX_SAFE_INTEGER
       });
@@ -322,7 +371,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       };
     });
   },
-  sendDraft: (nodeId) => {
+  sendDraft: async (nodeId) => {
     const state = get();
     const thread = state.threads[nodeId];
     if (!thread) {
@@ -344,16 +393,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       role: "user",
       content: draftText,
       createdAt: timestamp,
-      attachments
-    };
-
-    const assistantPlaceholder: ChatMessage = {
-      id: createId(),
-      role: "assistant",
-      content: "",
-      createdAt: Date.now(),
-      attachments: [],
-      streaming: true
+      attachments,
+      senderId: "user",
+      direction: "outgoing",
     };
 
     set({ flowAcceptsInput: false });
@@ -366,112 +408,153 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
       const nextThread: ChatThreadState = {
         ...current,
-        messages: [...current.messages, userMessage, assistantPlaceholder],
+        messages: [...current.messages, userMessage],
         draft: "",
         draftAttachments: [],
         stickToBottom: true,
-        streamingMessageId: assistantPlaceholder.id,
-        notice: null
+        isSending: true,
+        notice: null,
       };
 
       return {
         threads: {
           ...prev.threads,
-          [nodeId]: nextThread
-        }
+          [nodeId]: nextThread,
+        },
       };
     });
 
-    const timerKey = `${nodeId}:${assistantPlaceholder.id}`;
-    if (pendingResponseTimers.has(timerKey)) {
-      const existingTimer = pendingResponseTimers.get(timerKey);
-      if (typeof existingTimer === "number") {
-        window.clearTimeout(existingTimer);
-      }
+    try {
+      const messages = await sendChatMessage(nodeId, draftText);
+      set((prev) => {
+        const current = prev.threads[nodeId];
+        if (!current) {
+          return prev;
+        }
+
+        const converted = messages.map(mapApiMessage);
+        const sorted = converted.sort((a, b) => a.createdAt - b.createdAt);
+
+        return {
+          threads: {
+            ...prev.threads,
+            [nodeId]: {
+              ...current,
+              messages: sorted,
+              isSending: false,
+              stickToBottom: true,
+            },
+          },
+          flowAcceptsInput: true,
+        };
+      });
+      return true;
+    } catch (error) {
+      set((prev) => {
+        const current = prev.threads[nodeId];
+        if (!current) {
+          return prev;
+        }
+
+        return {
+          threads: {
+            ...prev.threads,
+            [nodeId]: {
+              ...current,
+              messages: current.messages.filter((message) => message.id !== userMessage.id),
+              draft: draftText,
+              draftAttachments: thread.draftAttachments,
+              isSending: false,
+              notice: `Failed to send message: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          },
+          flowAcceptsInput: true,
+        };
+      });
+      return false;
     }
-
-    const timer = window.setTimeout(() => {
-      const content = buildAssistantReply(draftText, attachments);
-      get().completeStreaming(nodeId, assistantPlaceholder.id, content);
-    }, 1200);
-
-    pendingResponseTimers.set(timerKey, timer);
-
-    return true;
   },
-  sendActiveDraft: () => {
+  sendActiveDraft: async () => {
     const state = get();
     if (!state.activeNodeId) {
       return false;
     }
     return state.sendDraft(state.activeNodeId);
   },
-  appendAssistantResponse: (nodeId, content, attachments = []) => {
-    set((state) => {
-      const thread = state.threads[nodeId];
-      if (!thread) {
-        return state;
+  loadHistory: async (nodeId) => {
+    const state = get();
+    const thread = state.threads[nodeId];
+    if (!thread) {
+      return;
+    }
+
+    if (thread.loadingHistory) {
+      return;
+    }
+
+    set((prev) => {
+      const current = prev.threads[nodeId];
+      if (!current) {
+        return prev;
       }
 
-      const withoutStreaming = thread.messages.filter(
-        (message) => message.id !== thread.streamingMessageId
-      );
-
-      const assistantMessage: ChatMessage = {
-        id: createId(),
-        role: "assistant",
-        content,
-        createdAt: Date.now(),
-        attachments
-      };
-
-      return {
-        threads: {
-          ...state.threads,
-          [nodeId]: {
-            ...thread,
-            messages: [...withoutStreaming, assistantMessage],
-            streamingMessageId: null
-          }
-        }
-      };
-    });
-    set({ flowAcceptsInput: true });
-  },
-  completeStreaming: (nodeId, messageId, content) => {
-    set((state) => {
-      const thread = state.threads[nodeId];
-      if (!thread) {
-        return state;
-      }
-
-      const messages = thread.messages.map((message) =>
-        message.id === messageId
-          ? { ...message, content, streaming: false, createdAt: Date.now() }
-          : message
-      );
-
-      const timerKey = `${nodeId}:${messageId}`;
-      const existing = pendingResponseTimers.get(timerKey);
-      if (typeof existing === "number") {
-        window.clearTimeout(existing);
-        pendingResponseTimers.delete(timerKey);
+      if (current.hasLoadedHistory && current.messages.length > 0) {
+        return prev;
       }
 
       return {
         threads: {
-          ...state.threads,
-          [nodeId]: {
-            ...thread,
-            messages,
-            streamingMessageId:
-              thread.streamingMessageId === messageId ? null : thread.streamingMessageId
-          }
-        }
+          ...prev.threads,
+          [nodeId]: { ...current, loadingHistory: true, notice: null },
+        },
       };
     });
 
-    set({ flowAcceptsInput: true });
+    try {
+      const history = await fetchChatHistory(nodeId);
+      set((prev) => {
+        const current = prev.threads[nodeId];
+        if (!current) {
+          return prev;
+        }
+
+        const converted = history.map(mapApiMessage);
+        const sorted = converted.sort((a, b) => a.createdAt - b.createdAt);
+
+        return {
+          threads: {
+            ...prev.threads,
+            [nodeId]: {
+              ...current,
+              messages: sorted,
+              loadingHistory: false,
+              hasLoadedHistory: true,
+              stickToBottom: true,
+            },
+          },
+        };
+      });
+    } catch (error) {
+      set((prev) => {
+        const current = prev.threads[nodeId];
+        if (!current) {
+          return prev;
+        }
+
+        return {
+          threads: {
+            ...prev.threads,
+            [nodeId]: {
+              ...current,
+              loadingHistory: false,
+              notice: `Failed to load chat history: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            },
+          },
+        };
+      });
+    }
   },
   getThread: (nodeId) => get().threads[nodeId],
   hasOpenChat: () => {

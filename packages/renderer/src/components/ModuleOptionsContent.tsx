@@ -45,7 +45,8 @@ const containerStyle: React.CSSProperties = {
   gap: 14,
   fontFamily: "Inter, system-ui, sans-serif",
   fontSize: 14,
-  color: "#0f172a"
+  color: "#0f172a",
+  position: "relative"
 };
 
 const headingStyle: React.CSSProperties = {
@@ -161,6 +162,287 @@ const promptTextareaStyle: React.CSSProperties = {
   resize: "none" as const,
   minHeight: 112
 };
+
+const labelRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8
+};
+
+const promptActionsRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8
+};
+
+const promptHelpButtonStyle: React.CSSProperties = {
+  width: 22,
+  height: 22,
+  borderRadius: "50%",
+  border: "1px solid #cbd5f5",
+  background: "#e2e8f0",
+  color: "#1f2937",
+  fontWeight: 700,
+  fontSize: 12,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  transition: "background 0.2s ease, border-color 0.2s ease"
+};
+
+const inlineExamplesWrapperStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6
+};
+
+const inlineExampleLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#64748b",
+  textTransform: "uppercase",
+  letterSpacing: 0.4
+};
+
+const inlineExamplesListStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap" as const,
+  gap: 8
+};
+
+const inlineExampleButtonStyle: React.CSSProperties = {
+  borderRadius: 999,
+  border: "1px solid #cbd5f5",
+  background: "#ffffff",
+  padding: "6px 10px",
+  fontSize: 12,
+  color: "#0f172a",
+  cursor: "pointer",
+  lineHeight: 1.3,
+  transition: "background 0.2s ease, border-color 0.2s ease",
+  textAlign: "left" as const
+};
+
+const helpModalOverlayStyle: React.CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 50
+};
+
+const helpModalBackdropStyle: React.CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  background: "rgba(15, 23, 42, 0.45)"
+};
+
+const helpModalContentStyle: React.CSSProperties = {
+  position: "relative",
+  background: "#ffffff",
+  borderRadius: 16,
+  padding: "20px 22px",
+  boxShadow: "0 24px 44px rgba(15, 23, 42, 0.32)",
+  width: "min(460px, 100%)",
+  maxHeight: "80%",
+  overflowY: "auto",
+  display: "flex",
+  flexDirection: "column",
+  gap: 16
+};
+
+const helpModalHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12
+};
+
+const helpModalTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 18,
+  fontWeight: 700,
+  color: "#0f172a"
+};
+
+const helpModalCloseButtonStyle: React.CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: "#0f172a",
+  cursor: "pointer",
+  fontSize: 16,
+  fontWeight: 600,
+  padding: 4,
+  borderRadius: 6,
+  transition: "background 0.2s ease"
+};
+
+const helpModalListStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 12
+};
+
+const helpModalExampleStyle: React.CSSProperties = {
+  borderRadius: 12,
+  border: "1px solid #e2e8f0",
+  background: "#f8fafc",
+  padding: "14px 16px",
+  display: "flex",
+  flexDirection: "column",
+  gap: 10
+};
+
+const helpModalExampleHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#0f172a"
+};
+
+const helpModalSourceStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#475569"
+};
+
+const helpModalPromptStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 13,
+  color: "#0f172a",
+  lineHeight: 1.45
+};
+
+const helpModalActionsStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 8
+};
+
+const helpModalCopyButtonStyle: React.CSSProperties = {
+  borderRadius: 999,
+  border: "1px solid #cbd5f5",
+  background: "#ffffff",
+  padding: "6px 10px",
+  fontSize: 12,
+  color: "#1f2937",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  transition: "background 0.2s ease, border-color 0.2s ease"
+};
+
+const helpModalCopiedBadgeStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#16a34a"
+};
+
+const INLINE_PROMPT_EXAMPLES = [
+  "You are a helpful AI assistant.",
+  "Audit this flow against Nielsen Norman Group heuristics and recommend the top improvement."
+] as const;
+
+interface PromptHelpExample {
+  id: string;
+  source: string;
+  votes: string;
+  text: string;
+}
+
+const PROMPT_HELP_EXAMPLES: PromptHelpExample[] = [
+  {
+    id: "nng",
+    source: "Nielsen Norman Group",
+    votes: "+1",
+    text: "Outline three usability heuristics from Nielsen Norman Group that this flow should reinforce, then recommend one action item." 
+  },
+  {
+    id: "uxse",
+    source: "User Experience Stack Exchange",
+    votes: "+3",
+    text: "Synthesize consensus advice from User Experience Stack Exchange on reducing onboarding friction and draft a coaching message for the builder." 
+  },
+  {
+    id: "patternfly",
+    source: "patternfly.org",
+    votes: "+3",
+    text: "Translate patternfly.org design guidelines into a checklist the agent can follow while evaluating interface nodes." 
+  },
+  {
+    id: "gravity-ui",
+    source: "Gravity UI",
+    votes: "+3",
+    text: "Summarize Gravity UI layout principles and suggest how to apply them when arranging downstream response cards." 
+  }
+];
+
+interface PromptExamplesModalProps {
+  examples: PromptHelpExample[];
+  onClose: () => void;
+  onCopy: (exampleId: string, text: string) => Promise<void> | void;
+  copiedExampleId: string | null;
+}
+
+function PromptExamplesModal({
+  examples,
+  onClose,
+  onCopy,
+  copiedExampleId,
+}: PromptExamplesModalProps) {
+  return (
+    <div style={helpModalOverlayStyle} role="dialog" aria-modal="true" aria-labelledby="prompt-help-modal-title" data-testid="prompt-help-modal">
+      <div style={helpModalBackdropStyle} onClick={onClose} />
+      <div style={helpModalContentStyle}>
+        <div style={helpModalHeaderStyle}>
+          <h5 id="prompt-help-modal-title" style={helpModalTitleStyle}>
+            Prompt Examples
+          </h5>
+          <button
+            type="button"
+            onClick={onClose}
+            style={helpModalCloseButtonStyle}
+            aria-label="Close prompt examples"
+          >
+            ×
+          </button>
+        </div>
+        <div style={helpModalListStyle}>
+          {examples.map((example) => (
+            <div key={example.id} style={helpModalExampleStyle}>
+              <div style={helpModalExampleHeaderStyle}>
+                <span>{example.source}</span>
+                <span style={helpModalSourceStyle}>{example.votes}</span>
+              </div>
+              <p style={helpModalPromptStyle}>{example.text}</p>
+              <div style={helpModalActionsStyle}>
+                {copiedExampleId === example.id ? (
+                  <span style={helpModalCopiedBadgeStyle}>Copied!</span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => onCopy(example.id, example.text)}
+                  style={helpModalCopyButtonStyle}
+                  aria-label={`Copy prompt from ${example.source}`}
+                >
+                  <span aria-hidden="true">📋</span>
+                  Copy
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const paramsPreviewStyle: React.CSSProperties = {
   background: "#f8fafc",
@@ -345,12 +627,52 @@ function PromptOptions({
     () => normalizePromptParams(params),
     [params]
   );
+  const [localPrompt, setLocalPrompt] = React.useState<NormalizedPromptParams>(normalized);
+  const [isHelpOpen, setIsHelpOpen] = React.useState(false);
+  const [copiedExampleId, setCopiedExampleId] = React.useState<string | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const restoreFocusRef = React.useRef(false);
   const selectionRangeRef = React.useRef<{ start: number; end: number } | null>(
     null
   );
   const radioGroupName = React.useId();
+
+  React.useEffect(() => {
+    setLocalPrompt((current) => {
+      if (
+        current.text === normalized.text &&
+        current.preset === normalized.preset &&
+        current.to === normalized.to
+      ) {
+        return current;
+      }
+      return normalized;
+    });
+  }, [normalized.text, normalized.preset, normalized.to]);
+
+  React.useEffect(() => {
+    if (!copiedExampleId) {
+      return;
+    }
+    const timeout = window.setTimeout(() => setCopiedExampleId(null), 1800);
+    return () => window.clearTimeout(timeout);
+  }, [copiedExampleId]);
+
+  React.useEffect(() => {
+    if (!isHelpOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setIsHelpOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isHelpOpen]);
 
   React.useLayoutEffect(() => {
     if (!textareaRef.current) {
@@ -377,7 +699,7 @@ function PromptOptions({
       restoreFocusRef.current = false;
       selectionRangeRef.current = null;
     }
-  }, [normalized.text]);
+  }, [localPrompt.text]);
 
   React.useEffect(() => {
     if (!params) {
@@ -397,83 +719,193 @@ function PromptOptions({
     onUpdate((previous) => producePromptParams(previous, normalized));
   }, [params, normalized.text, normalized.preset, normalized.to, onUpdate]);
 
-  const handlePresetSelect = (presetId: string) => {
-    const resolved =
-      presetId in PROMPT_PRESET_MAP ? presetId : DEFAULT_PROMPT_PRESET_ID;
-    const preset = PROMPT_PRESET_MAP[resolved];
-    const nextText =
-      resolved === "custom"
-        ? normalized.text
-        : preset?.defaultText ?? normalized.text;
+  const updatePromptText = React.useCallback(
+    (
+      nextText: string,
+      options?: { start?: number | null; end?: number | null; preserveFocus?: boolean }
+    ) => {
+      const preserveFocus = options?.preserveFocus ?? false;
+      if (preserveFocus) {
+        const start =
+          typeof options?.start === "number" && Number.isFinite(options.start)
+            ? options.start
+            : nextText.length;
+        const end =
+          typeof options?.end === "number" && Number.isFinite(options.end)
+            ? options.end
+            : start;
+        restoreFocusRef.current = true;
+        selectionRangeRef.current = { start, end };
+      } else {
+        restoreFocusRef.current = false;
+        selectionRangeRef.current = null;
+      }
 
-    onUpdate((previous) =>
-      producePromptParams(previous, {
+      setLocalPrompt((current) => {
+        let candidatePreset =
+          current.preset in PROMPT_PRESET_MAP
+            ? current.preset
+            : DEFAULT_PROMPT_PRESET_ID;
+
+        const trimmed = nextText.trim();
+        const presetText =
+          candidatePreset !== "custom"
+            ? PROMPT_PRESET_MAP[candidatePreset]?.defaultText.trim() ?? ""
+            : "";
+
+        if (candidatePreset !== "custom" && trimmed !== presetText) {
+          candidatePreset = "custom";
+        }
+
+        if (candidatePreset === "custom") {
+          const inferred = inferPromptPresetFromText(nextText);
+          if (inferred && trimmed === inferred.defaultText.trim()) {
+            candidatePreset = inferred.id;
+          }
+        }
+
+        const nextState: NormalizedPromptParams = {
+          text: nextText,
+          preset: candidatePreset,
+          to: current.to,
+        };
+
+        if (
+          current.text === nextState.text &&
+          current.preset === nextState.preset &&
+          current.to === nextState.to
+        ) {
+          return current;
+        }
+
+        onUpdate((previous) => producePromptParams(previous, nextState));
+        return nextState;
+      });
+    },
+    [onUpdate]
+  );
+
+  const handlePresetSelect = (presetId: string) => {
+    setLocalPrompt((current) => {
+      const resolved =
+        presetId in PROMPT_PRESET_MAP ? presetId : DEFAULT_PROMPT_PRESET_ID;
+      const preset = PROMPT_PRESET_MAP[resolved];
+      const nextText =
+        resolved === "custom"
+          ? current.text
+          : preset?.defaultText ?? current.text;
+
+      if (resolved !== "custom") {
+        restoreFocusRef.current = true;
+        const caret = nextText.length;
+        selectionRangeRef.current = { start: caret, end: caret };
+      } else {
+        restoreFocusRef.current = false;
+        selectionRangeRef.current = null;
+      }
+
+      const nextState: NormalizedPromptParams = {
         text: nextText,
         preset: resolved,
-        to: normalized.to,
-      })
-    );
+        to: current.to,
+      };
+
+      if (
+        current.text === nextState.text &&
+        current.preset === nextState.preset &&
+        current.to === nextState.to
+      ) {
+        return current;
+      }
+
+      onUpdate((previous) => producePromptParams(previous, nextState));
+      return nextState;
+    });
   };
 
   const handlePlacementChange = (value: PromptPlacement) => {
-    onUpdate((previous) =>
-      producePromptParams(previous, {
-        text: normalized.text,
-        preset: normalized.preset,
+    setLocalPrompt((current) => {
+      if (current.to === value) {
+        return current;
+      }
+
+      const nextState: NormalizedPromptParams = {
+        text: current.text,
+        preset: current.preset,
         to: value,
-      })
-    );
+      };
+
+      if (
+        current.text === nextState.text &&
+        current.preset === nextState.preset &&
+        current.to === nextState.to
+      ) {
+        return current;
+      }
+
+      onUpdate((previous) => producePromptParams(previous, nextState));
+      return nextState;
+    });
   };
 
   const handleTextChange = (
     event: React.ChangeEvent<HTMLTextAreaElement>
   ) => {
     const { value, selectionStart, selectionEnd } = event.target;
-    if (document.activeElement === event.target) {
-      restoreFocusRef.current = true;
-      const start =
-        typeof selectionStart === "number" && Number.isFinite(selectionStart)
-          ? selectionStart
-          : value.length;
-      const end =
-        typeof selectionEnd === "number" && Number.isFinite(selectionEnd)
-          ? selectionEnd
-          : start;
-      selectionRangeRef.current = { start, end };
-    } else {
-      restoreFocusRef.current = false;
-      selectionRangeRef.current = null;
-    }
+    const isActive = document.activeElement === event.target;
+    const startValue =
+      typeof selectionStart === "number" && Number.isFinite(selectionStart)
+        ? selectionStart
+        : value.length;
+    const endValue =
+      typeof selectionEnd === "number" && Number.isFinite(selectionEnd)
+        ? selectionEnd
+        : startValue;
 
-    let candidatePreset =
-      normalized.preset in PROMPT_PRESET_MAP
-        ? normalized.preset
-        : DEFAULT_PROMPT_PRESET_ID;
-    const trimmed = value.trim();
-    const presetText =
-      candidatePreset !== "custom"
-        ? PROMPT_PRESET_MAP[candidatePreset]?.defaultText.trim() ?? ""
-        : "";
-
-    if (candidatePreset !== "custom" && trimmed !== presetText) {
-      candidatePreset = "custom";
-    }
-
-    if (candidatePreset === "custom") {
-      const inferred = inferPromptPresetFromText(value);
-      if (inferred && trimmed === inferred.defaultText.trim()) {
-        candidatePreset = inferred.id;
-      }
-    }
-
-    onUpdate((previous) =>
-      producePromptParams(previous, {
-        text: value,
-        preset: candidatePreset,
-        to: normalized.to,
-      })
-    );
+    updatePromptText(value, {
+      start: isActive ? startValue : undefined,
+      end: isActive ? endValue : undefined,
+      preserveFocus: isActive,
+    });
   };
+
+  const handleInlineExampleSelect = (example: string) => {
+    updatePromptText(example, {
+      start: 0,
+      end: example.length,
+      preserveFocus: true,
+    });
+  };
+
+  const handleCopyExample = React.useCallback(
+    async (exampleId: string, text: string) => {
+      try {
+        if (
+          typeof navigator !== "undefined" &&
+          navigator.clipboard &&
+          typeof navigator.clipboard.writeText === "function"
+        ) {
+          await navigator.clipboard.writeText(text);
+        } else if (typeof document !== "undefined") {
+          const helper = document.createElement("textarea");
+          helper.value = text;
+          helper.setAttribute("readonly", "");
+          helper.style.position = "absolute";
+          helper.style.left = "-9999px";
+          document.body.appendChild(helper);
+          helper.select();
+          document.execCommand("copy");
+          document.body.removeChild(helper);
+        }
+        setCopiedExampleId(exampleId);
+      } catch (error) {
+        // Swallow clipboard errors; we simply do not show the copied badge.
+      }
+    },
+    []
+  );
+
+  const handleHelpClose = () => setIsHelpOpen(false);
 
   return (
     <>
@@ -481,7 +913,7 @@ function PromptOptions({
         <span style={labelStyle}>Prompt Preset</span>
         <div style={promptPresetListStyle}>
           {PROMPT_PRESETS.map((preset) => {
-            const active = normalized.preset === preset.id;
+            const active = localPrompt.preset === preset.id;
             return (
               <button
                 key={preset.id}
@@ -511,18 +943,18 @@ function PromptOptions({
               type="radio"
               name={radioGroupName}
               value="user"
-              checked={normalized.to === "user"}
+              checked={localPrompt.to === "user"}
               onChange={() => handlePlacementChange("user")}
               style={promptRadioInputStyle}
             />
-            Inject as user message
+              Inject as user message
           </label>
           <label style={promptRadioLabelStyle}>
             <input
               type="radio"
               name={radioGroupName}
               value="system"
-              checked={normalized.to === "system"}
+              checked={localPrompt.to === "system"}
               onChange={() => handlePlacementChange("system")}
               style={promptRadioInputStyle}
             />
@@ -532,18 +964,56 @@ function PromptOptions({
       </div>
 
       <div style={fieldStyle}>
-        <span style={labelStyle}>Prompt Text</span>
+        <div style={labelRowStyle}>
+          <span style={labelStyle}>Prompt Text</span>
+          <div style={promptActionsRowStyle}>
+            <button
+              type="button"
+              style={promptHelpButtonStyle}
+              onClick={() => setIsHelpOpen(true)}
+              aria-label="Open prompt help"
+              aria-haspopup="dialog"
+              aria-expanded={isHelpOpen}
+            >
+              ?
+            </button>
+          </div>
+        </div>
         <textarea
           ref={textareaRef}
           style={promptTextareaStyle}
-          value={normalized.text}
+          value={localPrompt.text}
           onChange={handleTextChange}
-          placeholder="Describe the instructions to inject before the LLM runs"
+          placeholder="Custom prompt here.."
         />
+        <div style={inlineExamplesWrapperStyle}>
+          <span style={inlineExampleLabelStyle}>Inline Examples</span>
+          <div style={inlineExamplesListStyle}>
+            {INLINE_PROMPT_EXAMPLES.map((example) => (
+              <button
+                key={example}
+                type="button"
+                style={inlineExampleButtonStyle}
+                onClick={() => handleInlineExampleSelect(example)}
+                data-testid="prompt-inline-example"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        </div>
         <span style={helperStyle}>
           The textarea expands automatically as you type.
         </span>
       </div>
+      {isHelpOpen ? (
+        <PromptExamplesModal
+          examples={PROMPT_HELP_EXAMPLES}
+          onClose={handleHelpClose}
+          onCopy={handleCopyExample}
+          copiedExampleId={copiedExampleId}
+        />
+      ) : null}
     </>
   );
 }

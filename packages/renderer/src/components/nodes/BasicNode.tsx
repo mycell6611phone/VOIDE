@@ -32,6 +32,7 @@ import {
 } from "../../state/portActivityStore";
 import {
   DEFAULT_CHAT_WINDOW_SIZE,
+  MAX_CHAT_WINDOW_WIDTH,
   useChatStore
 } from "../../state/chatStore";
 import {
@@ -714,7 +715,11 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         const overlayRect = overlayRef.current?.getBoundingClientRect();
         const nodeRect = event.currentTarget.getBoundingClientRect();
         const existing = getThread(data.id);
-        const size = existing?.geometry?.size ?? { ...DEFAULT_CHAT_WINDOW_SIZE };
+        const baseSize = existing?.geometry?.size ?? { ...DEFAULT_CHAT_WINDOW_SIZE };
+        const size = {
+          width: Math.min(baseSize.width, MAX_CHAT_WINDOW_WIDTH),
+          height: baseSize.height
+        };
         let geometry: WindowGeometry = existing?.geometry ?? {
           position: { x: 0, y: 0 },
           size: { ...size }

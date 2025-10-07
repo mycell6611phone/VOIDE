@@ -1,5 +1,5 @@
 import React, { type MutableRefObject } from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Position, ReactFlowProvider, type NodeProps } from "reactflow";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import * as matchers from "@testing-library/jest-dom/matchers";
@@ -251,7 +251,7 @@ describe("BasicNode edit menu", () => {
     fireEvent.click(nodeLabel, { button: 0 });
 
     const textarea = await screen.findByPlaceholderText(
-      "Describe the instructions to inject before the LLM runs"
+      "Custom prompt here.."
     );
 
     textarea.focus();
@@ -266,6 +266,125 @@ describe("BasicNode edit menu", () => {
     await waitFor(() => {
       expect(document.activeElement).toBe(textarea);
     });
+  });
+
+  it("surfaces exactly two inline prompt examples and applies the selection", async () => {
+    const node = useFlowStore.getState().flow.nodes[0];
+
+    useFlowStore.setState((state) => ({
+      ...state,
+      flow: {
+        ...state.flow,
+        nodes: state.flow.nodes.map((entry) =>
+          entry.id === node.id
+            ? {
+                ...entry,
+                params: {
+                  ...(entry.params ?? {}),
+                  moduleKey: "prompt",
+                  text: "",
+                  preset: "custom",
+                },
+              }
+            : entry
+        ),
+      },
+    }));
+
+    renderNode(node);
+
+    fireEvent.click(screen.getByText("Prompt Node"), { button: 0 });
+
+    const textarea = await screen.findByPlaceholderText("Custom prompt here..");
+    const inlineExamples = await screen.findAllByTestId("prompt-inline-example");
+    expect(inlineExamples).toHaveLength(2);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "You are a helpful AI assistant.",
+      })
+    );
+
+    await waitFor(() => {
+      expect(textarea.value).toBe("You are a helpful AI assistant.");
+    });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(textarea);
+    });
+  });
+
+  it("opens the prompt help modal and copies an example", async () => {
+    const node = useFlowStore.getState().flow.nodes[0];
+
+    useFlowStore.setState((state) => ({
+      ...state,
+      flow: {
+        ...state.flow,
+        nodes: state.flow.nodes.map((entry) =>
+          entry.id === node.id
+            ? {
+                ...entry,
+                params: {
+                  ...(entry.params ?? {}),
+                  moduleKey: "prompt",
+                  text: "",
+                  preset: "custom",
+                },
+              }
+            : entry
+        ),
+      },
+    }));
+
+    renderNode(node);
+
+    fireEvent.click(screen.getByText("Prompt Node"), { button: 0 });
+
+    await screen.findByPlaceholderText("Custom prompt here..");
+
+    const helpButton = screen.getByRole("button", { name: "Open prompt help" });
+
+    const originalClipboard = (navigator as any).clipboard;
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    (navigator as any).clipboard = { writeText };
+
+    try {
+      fireEvent.click(helpButton);
+
+      const modal = await screen.findByTestId("prompt-help-modal");
+      expect(modal).toBeInTheDocument();
+
+      const copyButton = within(modal).getByRole("button", {
+        name: "Copy prompt from Nielsen Norman Group",
+      });
+
+      fireEvent.click(copyButton);
+
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith(
+          "Outline three usability heuristics from Nielsen Norman Group that this flow should reinforce, then recommend one action item."
+        );
+      });
+
+      await waitFor(() => {
+        expect(within(modal).getByText("Copied!")).toBeInTheDocument();
+      });
+
+      fireEvent.click(
+        within(modal).getByRole("button", { name: "Close prompt examples" })
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId("prompt-help-modal")).not.toBeInTheDocument();
+      });
+    } finally {
+      if (originalClipboard === undefined) {
+        delete (navigator as any).clipboard;
+      } else {
+        (navigator as any).clipboard = originalClipboard;
+      }
+    }
   });
 
   it("toggles input orientation through the edit menu", async () => {

@@ -500,7 +500,7 @@ export function PromptModuleNode({
               ref={textareaRef}
               value={draft.text}
               onChange={(event) => handleTextChange(event.target.value)}
-              placeholder="Describe the instructions to inject before the LLM runs"
+              placeholder="Custom prompt here.."
               style={textareaStyle}
             />
             <div style={helperTextStyle}>

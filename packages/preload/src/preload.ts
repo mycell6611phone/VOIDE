@@ -13,7 +13,8 @@ import {
 
 const api = {
   validateFlow: (flow: Flow) => ipcRenderer.invoke(flowValidate.name, flow),
-  runFlow: (flow: Flow) => ipcRenderer.invoke(flowRun.name, flow),
+  runFlow: (flow: Flow, inputs: Record<string, unknown> = {}) =>
+    ipcRenderer.invoke(flowRun.name, { flow, inputs }),
   ensureModel: (modelId: string) => ipcRenderer.invoke(modelEnsure.name, { modelId }),
   getVersion: () => ipcRenderer.invoke(appGetVersion.name),
   onTelemetry: (cb: (ev: TelemetryPayload) => void) => {

@@ -539,7 +539,7 @@ const handleNodeContextMenu = useCallback(
           autoPanOnNodeDrag={false}
           autoPanOnConnect={false}
           panOnDrag={true}
-          panOnScroll
+          panOnScroll={false}
           zoomOnScroll
           zoomOnPinch
           zoomOnDoubleClick={false}

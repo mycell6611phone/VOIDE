@@ -56,7 +56,10 @@ export type FlowValidateRes = z.infer<typeof flowValidate.response>;
 
 export const flowRun = {
   name: "flow:run",
-  request: Flow,
+  request: z.object({
+    flow: Flow,
+    inputs: z.record(z.any()).default({})
+  }),
   response: z.object({ runId: z.string() })
 };
 

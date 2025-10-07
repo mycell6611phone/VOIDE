@@ -3,7 +3,7 @@ import type { TelemetryPayload } from "@voide/ipc";
 
 export interface VoideApi {
   getNodeCatalog: () => Promise<Array<{ type: string; in: PortSpec[]; out: PortSpec[] }>>;
-  runFlow: (flow: FlowDef) => Promise<{ runId: string }>;
+  runFlow: (flow: FlowDef, inputs?: Record<string, unknown>) => Promise<{ runId: string }>;
   stopFlow: (runId: string) => Promise<{ ok: boolean }>;
   openFlow: () => Promise<{ flow: FlowDef } | null>;
   saveFlow: (flow: FlowDef) => Promise<void>;
@@ -82,7 +82,7 @@ function createFallbackVoide(): VoideApi {
       console.info("[voide-mock] Using mock node catalog (renderer running outside Electron)");
       return mockCatalog;
     },
-    async runFlow(flow) {
+    async runFlow(flow, inputs = {}) {
       const runId = `mock-run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
       const payloads: RunPayloadRecord[] = flow.nodes.flatMap((node) =>
         node.out.map((outPort) => ({
@@ -91,6 +91,14 @@ function createFallbackVoide(): VoideApi {
           payload: { kind: "json", value: { message: `Mock payload from ${node.name || node.id}` } }
         }))
       );
+      Object.entries(inputs ?? {}).forEach(([nodeId, value]) => {
+        const textValue = typeof value === "string" ? value : JSON.stringify(value);
+        payloads.push({
+          nodeId,
+          port: "conversation",
+          payload: { kind: "text", text: textValue }
+        });
+      });
       runs.set(runId, payloads);
       console.info(`[voide-mock] Pretending to run flow '${flow.id}' → ${runId}`);
       globalThis.setTimeout(() => {

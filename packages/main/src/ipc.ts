@@ -51,9 +51,9 @@ export function setupIPC() {
   ipcMain.handle("voide:getNodeCatalog", async () => getNodeCatalog());
   ipcMain.handle("voide:getLastRunPayloads", async (_e, runId: string) => getLastRunPayloads(runId));
 
-  ipcMain.handle("voide:runFlow", async (_e, args: { flow: unknown }) => {
+  ipcMain.handle("voide:runFlow", async (_e, args: { flow: unknown; inputs?: Record<string, unknown> }) => {
     const flow = args.flow as FlowDef;
-    return runFlow(flow);
+    return runFlow(flow, args.inputs ?? {});
   });
 
   ipcMain.handle("voide:stopFlow", async (_e, { runId }: { runId: string }) => stopFlow(runId));

@@ -535,10 +535,31 @@ export const useFlowStore = create<S>((set, get) => ({
     }
 
     const snapshot = cloneValue(compiled);
+    const interfaceNodes = snapshot.nodes.filter((node) => {
+      const moduleKey = (node.params as { moduleKey?: unknown } | undefined)?.moduleKey;
+      return typeof moduleKey === "string" && moduleKey === "interface";
+    });
+    const chatState = useChatStore.getState();
+    const runtimeInputs: Record<string, unknown> = {};
+    interfaceNodes.forEach((node) => {
+      const thread = chatState.getThread(node.id);
+      if (!thread) {
+        return;
+      }
+      const lastUserMessage = [...thread.messages]
+        .reverse()
+        .find((message) => message.role === "user" && message.content.trim().length > 0);
+      if (lastUserMessage) {
+        runtimeInputs[node.id] = lastUserMessage.content;
+      }
+    });
+    if (Object.keys(runtimeInputs).length > 0) {
+      snapshot.runtimeInputs = { ...(snapshot.runtimeInputs ?? {}), ...runtimeInputs };
+    }
     set({ runStatus: "running", runError: null });
 
     try {
-      const { runId } = await voide.runFlow(snapshot);
+      const { runId } = await voide.runFlow(snapshot, runtimeInputs);
       set({ activeRunId: runId, lastRunId: runId });
       const outputs = await voide.getLastRunPayloads(runId);
       const copiedOutputs = cloneValue(outputs);
@@ -549,12 +570,6 @@ export const useFlowStore = create<S>((set, get) => ({
         lastRunOutputs: copiedOutputs,
         lastRunCompletedAt: Date.now(),
         lastRunId: runId,
-      });
-
-      const interfaceNodes = snapshot.nodes.filter((node) => {
-        const moduleKey = (node.params as { moduleKey?: unknown } | undefined)
-          ?.moduleKey;
-        return typeof moduleKey === "string" && moduleKey === "interface";
       });
 
       if (interfaceNodes.length > 0) {

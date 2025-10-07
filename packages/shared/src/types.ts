@@ -33,6 +33,12 @@ export interface FlowDef {
   prompts?: unknown;
   models?: unknown;
   profiles?: unknown;
+  /**
+   * Optional runtime inputs keyed by node id. Interface/chat modules populate this
+   * map so execution engines can seed initial payloads for the corresponding
+   * outbound ports.
+   */
+  runtimeInputs?: Record<string, unknown>;
 }
 
 export type RuntimeProfile = 'CPU' | 'CUDA';

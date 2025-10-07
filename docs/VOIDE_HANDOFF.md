@@ -25,7 +25,7 @@
 ## UI ↔ Engine Integration Points
 
 - `ipcClient.validateFlow(flow)` validates the current canvas envelope against IPC `flowValidate` before build/run.【F:packages/renderer/src/lib/ipcClient.ts†L43-L45】
-- `ipcClient.runFlow(flow)` forwards the assembled flow to the executor channel exposed by the preload bridge.【F:packages/renderer/src/lib/ipcClient.ts†L43-L46】
+- `ipcClient.runFlow(flow, inputs?)` forwards the assembled flow and optional runtime inputs to the executor channel exposed by the preload bridge.【F:packages/renderer/src/lib/ipcClient.ts†L43-L52】
 - `ipcClient.onTelemetry(cb)` subscribes renderer listeners to runtime telemetry frames.【F:packages/renderer/src/lib/ipcClient.ts†L47-L53】
 - `MainWorkspace.handleRun` (exported via `App.tsx`) wires the Run button to `ipcClient.runFlow` after optional chat drafting.【F:packages/renderer/src/App.tsx†L38-L47】
 - `PropertiesPanel` exposes a `Validate` button that dispatches `ipcClient.validateFlow` and surfaces the result.【F:packages/renderer/src/components/PropertiesPanel.tsx†L6-L26】

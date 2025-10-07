@@ -34,9 +34,16 @@ describe("flow schemas", () => {
     expect(() => flowValidate.request.parse({})).toThrow();
   });
 
-  it("run response parses", () => {
-    const r = { runId: "123" };
-    expect(flowRun.response.parse(r)).toEqual(r);
+  it("run request + response parse", () => {
+    const payload = flowRun.request.parse({ flow: sampleFlow, inputs: { ui: "hi" } });
+    expect(payload.flow).toEqual(sampleFlow);
+    expect(payload.inputs).toEqual({ ui: "hi" });
+
+    const withDefaultInputs = flowRun.request.parse({ flow: sampleFlow });
+    expect(withDefaultInputs.inputs).toEqual({});
+
+    const response = { runId: "123" };
+    expect(flowRun.response.parse(response)).toEqual(response);
   });
 
   it("validate response enforces error arrays", () => {

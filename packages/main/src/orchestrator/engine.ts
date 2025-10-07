@@ -17,6 +17,7 @@ type RunState = {
   iter: Map<string, number>;
   values: Map<string, PayloadT[]>;
   pktSeq: number;
+  runtimeInputs: Record<string, unknown>;
 };
 
 const runs = new Map<string, RunState>();
@@ -32,6 +33,32 @@ const PiscinaCtor = Piscina as any;
 const poolLLM = new PiscinaCtor({ filename: path.join(__dirname, "../../../workers/dist/llm.js") });
 const poolEmbed = new PiscinaCtor({ filename: path.join(__dirname, "../../../workers/dist/embed.js") });
 
+function seedRuntimeInputs(st: RunState) {
+  const entries = Object.entries(st.runtimeInputs ?? {});
+  if (entries.length === 0) {
+    return;
+  }
+  entries.forEach(([nodeId, raw]) => {
+    try {
+      const node = nodeById(st.flow, nodeId);
+      const text = typeof raw === "string" ? raw : JSON.stringify(raw);
+      const payload: PayloadT = { kind: "text", text };
+      const outPorts = Array.isArray(node.out) ? node.out : [];
+      outPorts.forEach((outPort) => {
+        const key = portKey(node.id, outPort.port);
+        st.values.set(key, [payload]);
+        st.flow.edges
+          .filter((edge) => edge.from[0] === node.id && edge.from[1] === outPort.port)
+          .forEach((edge) => {
+            st.frontier.add(edge.to[0]);
+          });
+      });
+    } catch (error) {
+      console.warn("Failed to seed runtime input", nodeId, error);
+    }
+  });
+}
+
 function nodeById(flow: FlowDef, id: string): NodeDef {
   const n = flow.nodes.find(n => n.id === id);
   if (!n) throw new Error(`node ${id} not found`);
@@ -39,11 +66,21 @@ function nodeById(flow: FlowDef, id: string): NodeDef {
 }
 function portKey(nid: string, port: string) { return `${nid}:${port}`; }
 
-export async function runFlow(flow: FlowDef) {
+export async function runFlow(flow: FlowDef, inputs: Record<string, unknown> = {}) {
   const runId = uuidv4();
   const order = topoOrder(flow);
   const f0 = new Frontier(order.filter(id => flow.edges.every(e => e.to[0] !== id)));
-  const st: RunState = { runId, flow, frontier: f0, halted: false, iter: new Map(), values: new Map(), pktSeq: 0 };
+  const st: RunState = {
+    runId,
+    flow,
+    frontier: f0,
+    halted: false,
+    iter: new Map(),
+    values: new Map(),
+    pktSeq: 0,
+    runtimeInputs: inputs,
+  };
+  seedRuntimeInputs(st);
   runs.set(runId, st);
   await createRun(runId, flow.id);
   updateRunStatus(runId, "running");

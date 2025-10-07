@@ -1,7 +1,6 @@
 import * as React from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import GraphCanvas from "../GraphCanvas";
 
 vi.mock("reactflow", () => {
   const useNodesState = (initialNodes: any[]) => {
@@ -16,19 +15,21 @@ vi.mock("reactflow", () => {
     return [edges, setEdges, onEdgesChange];
   };
 
-  const ReactFlow = ({ nodes, onNodeContextMenu, children }: any) => (
-    <div data-testid="reactflow">
-      {nodes.map((node: any) => (
-        <div
-          key={node.id}
-          data-node-id={node.id}
-          onContextMenu={(event) => onNodeContextMenu?.(event, node)}
-        >
-          {node.data.name}
-        </div>
-      ))}
-      {children}
-    </div>
+  const ReactFlow = vi.fn(
+    ({ nodes, onNodeContextMenu, children }: any) => (
+      <div data-testid="reactflow">
+        {nodes.map((node: any) => (
+          <div
+            key={node.id}
+            data-node-id={node.id}
+            onContextMenu={(event) => onNodeContextMenu?.(event, node)}
+          >
+            {node.data.name}
+          </div>
+        ))}
+        {children}
+      </div>
+    )
   );
 
   return {
@@ -43,7 +44,16 @@ vi.mock("reactflow", () => {
   };
 });
 
+import ReactFlow from "reactflow";
+import GraphCanvas from "../GraphCanvas";
+
 describe("GraphCanvas context menu", () => {
+  const ReactFlowMock = vi.mocked(ReactFlow);
+
+  beforeEach(() => {
+    ReactFlowMock.mockClear();
+  });
+
   const createRect = (left: number, top: number, width: number, height: number) => ({
     x: left,
     y: top,
@@ -90,6 +100,22 @@ describe("GraphCanvas context menu", () => {
 
     expect(left + rect.left).toBeCloseTo(432);
     expect(top + rect.top).toBeCloseTo(372);
+  });
+
+  it("enables mouse wheel zooming on the canvas", async () => {
+    render(<GraphCanvas />);
+
+    await screen.findAllByTestId("reactflow");
+
+    expect(ReactFlowMock).toHaveBeenCalled();
+
+    const lastCall = ReactFlowMock.mock.calls.at(-1);
+    expect(lastCall).toBeTruthy();
+
+    const props = lastCall?.[0] ?? {};
+    expect(props.zoomOnScroll).toBe(true);
+    expect(props.panOnScroll).toBe(false);
+    expect(props.zoomOnPinch).toBe(true);
   });
 });
 

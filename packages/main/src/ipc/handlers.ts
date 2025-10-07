@@ -33,7 +33,7 @@ export function registerHandlers(deps: HandlerDeps) {
     const parsed = flowRun.request.safeParse(payload);
     if (!parsed.success) return formatError(parsed.error.flatten());
     try {
-      const out = await runFlow(parsed.data as any);
+      const out = await runFlow(parsed.data.flow as any, parsed.data.inputs ?? {});
       return flowRun.response.parse(out);
     } catch (err) {
       return formatError(err);

@@ -119,7 +119,6 @@ const textareaStyle: React.CSSProperties = {
   fontSize: 14,
   lineHeight: "20px",
   resize: "none",
-  outline: "none",
   overflow: "hidden",
   boxShadow: "inset 0 1px 2px rgba(15, 23, 42, 0.08)",
 };

@@ -1,6 +1,8 @@
 import { create } from "zustand";
-import type { EdgeDef, FlowDef, NodeDef } from "@voide/shared";
+import type { EdgeDef, FlowDef, NodeDef, PayloadT } from "@voide/shared";
 import { createInitialFlow } from "../constants/mockLayout";
+import { voide } from "../voide";
+import { useChatStore } from "./chatStore";
 
 const POSITION_KEY = "__position";
 
@@ -19,6 +21,112 @@ const cloneValue = <T,>(value: T): T => {
     return structuredClone(value);
   }
   return JSON.parse(JSON.stringify(value)) as T;
+};
+
+type BuildStatus = "idle" | "building" | "success" | "error";
+type RunStatus = "idle" | "running" | "success" | "error";
+
+type RunPayloadRecord = { nodeId: string; port: string; payload: PayloadT };
+
+const indentBlock = (text: string): string => {
+  const safe = text && text.trim().length > 0 ? text : "(no payload)";
+  return safe
+    .split(/\r?\n/)
+    .map((line) => `  ${line}`)
+    .join("\n");
+};
+
+const formatPayload = (payload: PayloadT): string => {
+  switch (payload.kind) {
+    case "text":
+      return payload.text ?? "";
+    case "json":
+      try {
+        return JSON.stringify(payload.value, null, 2);
+      } catch (error) {
+        return String(payload.value ?? "");
+      }
+    case "messages":
+      return payload.messages
+        .map((entry) => `${entry.role}: ${entry.content}`)
+        .join("\n");
+    case "vector": {
+      const formatted = payload.values
+        .slice(0, 8)
+        .map((value) =>
+          Number.isFinite(value) ? Number(value).toFixed(3) : String(value)
+        )
+        .join(", ");
+      return `[${formatted}${
+        payload.values.length > 8 ? ", …" : ""
+      }]`;
+    }
+    case "file":
+      return `File: ${payload.path} (${payload.mime})`;
+    case "code":
+      return `Language: ${payload.language}\n${payload.text}`;
+    case "metrics":
+      return JSON.stringify(payload.data, null, 2);
+    default:
+      return "";
+  }
+};
+
+const summarizeOutputs = (
+  flow: FlowDef,
+  outputs: RunPayloadRecord[],
+  targetNodeId: string
+): string => {
+  if (!outputs || outputs.length === 0) {
+    return "Run completed with no payloads returned.";
+  }
+
+  const outputsByNode = new Map<string, RunPayloadRecord[]>();
+  for (const record of outputs) {
+    const bucket = outputsByNode.get(record.nodeId);
+    if (bucket) {
+      bucket.push(record);
+    } else {
+      outputsByNode.set(record.nodeId, [record]);
+    }
+  }
+
+  const incomingEdges = flow.edges.filter((edge) => edge.to[0] === targetNodeId);
+  const relevantRecords: RunPayloadRecord[] = [];
+
+  for (const edge of incomingEdges) {
+    const candidates = outputsByNode.get(edge.from[0]);
+    if (!candidates) {
+      continue;
+    }
+    for (const record of candidates) {
+      if (record.port === edge.from[1]) {
+        relevantRecords.push(record);
+      }
+    }
+  }
+
+  if (relevantRecords.length === 0) {
+    const direct = outputsByNode.get(targetNodeId);
+    if (direct && direct.length > 0) {
+      relevantRecords.push(...direct);
+    }
+  }
+
+  const records = relevantRecords.length > 0 ? relevantRecords : outputs;
+
+  if (records.length === 0) {
+    return "Run completed with no payloads returned.";
+  }
+
+  return records
+    .map((record) => {
+      const node = flow.nodes.find((entry) => entry.id === record.nodeId);
+      const label = node?.name?.trim() || record.nodeId;
+      const formattedPayload = indentBlock(formatPayload(record.payload));
+      return `${label} → ${record.port}\n${formattedPayload}`;
+    })
+    .join("\n\n");
 };
 
 const readNodePosition = (node: NodeDef) => {
@@ -159,6 +267,16 @@ export const deriveLLMDisplayName = (
 
 interface S {
   flow: FlowDef;
+  compiledFlow: FlowDef | null;
+  buildStatus: BuildStatus;
+  buildError: string | null;
+  lastBuildAt: number | null;
+  runStatus: RunStatus;
+  runError: string | null;
+  activeRunId: string | null;
+  lastRunId: string | null;
+  lastRunCompletedAt: number | null;
+  lastRunOutputs: RunPayloadRecord[];
   setFlow: (f: FlowDef) => void;
   addNode: (node: NodeDef) => void;
   updateNodeParams: (
@@ -180,16 +298,41 @@ interface S {
   pasteClipboard: (
     preferredKind?: ClipboardItem["kind"]
   ) => NodeDef | EdgeDef | null;
+  buildFlow: () => Promise<{ ok: boolean; error?: string }>;
+  runBuiltFlow: () => Promise<{ ok: boolean; runId?: string; error?: string }>;
+  stopActiveRun: () => Promise<{ ok: boolean; error?: string }>;
 }
 export const useFlowStore = create<S>((set, get) => ({
   flow: createInitialFlow(),
-  setFlow: (f: FlowDef) => set({ flow: f }),
+  compiledFlow: null,
+  buildStatus: "idle",
+  buildError: null,
+  lastBuildAt: null,
+  runStatus: "idle",
+  runError: null,
+  activeRunId: null,
+  lastRunId: null,
+  lastRunCompletedAt: null,
+  lastRunOutputs: [],
+  setFlow: (f: FlowDef) =>
+    set({
+      flow: f,
+      compiledFlow: null,
+      buildStatus: "idle",
+      buildError: null,
+      runStatus: "idle",
+      runError: null,
+      activeRunId: null,
+    }),
   addNode: (node: NodeDef) =>
     set((state) => ({
       flow: {
         ...state.flow,
         nodes: [...state.flow.nodes, node]
-      }
+      },
+      compiledFlow: null,
+      buildStatus: "idle",
+      buildError: null,
     })),
   updateNodeParams: (nodeId, updater) =>
     set((state) => ({
@@ -226,7 +369,10 @@ export const useFlowStore = create<S>((set, get) => ({
             params: nextParams
           };
         })
-      }
+      },
+      compiledFlow: null,
+      buildStatus: "idle",
+      buildError: null,
     })),
   catalog: [],
   setCatalog: (c: any[]) => set({ catalog: c }),
@@ -262,7 +408,10 @@ export const useFlowStore = create<S>((set, get) => ({
           ...state.flow,
           nodes,
           edges
-        }
+        },
+        compiledFlow: null,
+        buildStatus: "idle",
+        buildError: null,
       };
     }),
   copyEdge: (edgeId: string) => {
@@ -286,7 +435,10 @@ export const useFlowStore = create<S>((set, get) => ({
         flow: {
           ...state.flow,
           edges: state.flow.edges.filter((edge) => edge.id !== edgeId)
-        }
+        },
+        compiledFlow: null,
+        buildStatus: "idle",
+        buildError: null,
       };
     }),
   pasteClipboard: (preferredKind) => {
@@ -315,7 +467,10 @@ export const useFlowStore = create<S>((set, get) => ({
         flow: {
           ...state.flow,
           nodes: [...state.flow.nodes, nextNode]
-        }
+        },
+        compiledFlow: null,
+        buildStatus: "idle",
+        buildError: null,
       }));
       return nextNode;
     }
@@ -335,10 +490,115 @@ export const useFlowStore = create<S>((set, get) => ({
         flow: {
           ...state.flow,
           edges: [...state.flow.edges, nextEdge]
-        }
+        },
+        compiledFlow: null,
+        buildStatus: "idle",
+        buildError: null,
       }));
       return nextEdge;
     }
     return null;
+  },
+  buildFlow: async () => {
+    const snapshot = cloneValue(get().flow);
+    set({ buildStatus: "building", buildError: null });
+    try {
+      const validation = await voide.validateFlow(snapshot);
+      if (!validation?.ok) {
+        const message = Array.isArray(validation?.errors)
+          ? validation.errors.map((entry) => String(entry)).join("\n") ||
+            "Flow validation failed."
+          : "Flow validation failed.";
+        set({ buildStatus: "error", buildError: message });
+        return { ok: false, error: message };
+      }
+      await voide.saveFlow(snapshot);
+      set({
+        compiledFlow: snapshot,
+        buildStatus: "success",
+        buildError: null,
+        lastBuildAt: Date.now(),
+      });
+      return { ok: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      set({ buildStatus: "error", buildError: message });
+      return { ok: false, error: message };
+    }
+  },
+  runBuiltFlow: async () => {
+    const compiled = get().compiledFlow;
+    if (!compiled) {
+      const message = "Build the flow before running it.";
+      set({ runStatus: "error", runError: message });
+      return { ok: false, error: message };
+    }
+
+    const snapshot = cloneValue(compiled);
+    set({ runStatus: "running", runError: null });
+
+    try {
+      const { runId } = await voide.runFlow(snapshot);
+      set({ activeRunId: runId, lastRunId: runId });
+      const outputs = await voide.getLastRunPayloads(runId);
+      const copiedOutputs = cloneValue(outputs);
+      set({
+        runStatus: "success",
+        runError: null,
+        activeRunId: null,
+        lastRunOutputs: copiedOutputs,
+        lastRunCompletedAt: Date.now(),
+        lastRunId: runId,
+      });
+
+      const interfaceNodes = snapshot.nodes.filter((node) => {
+        const moduleKey = (node.params as { moduleKey?: unknown } | undefined)
+          ?.moduleKey;
+        return typeof moduleKey === "string" && moduleKey === "interface";
+      });
+
+      if (interfaceNodes.length > 0) {
+        const chatStore = useChatStore.getState();
+        interfaceNodes.forEach((node) => {
+          const summary = summarizeOutputs(snapshot, copiedOutputs, node.id);
+          try {
+            chatStore.addRunResultMessage(
+              node.id,
+              node.name || node.id,
+              summary
+            );
+          } catch (error) {
+            console.warn("Failed to append run result to chat", error);
+          }
+        });
+      }
+
+      return { ok: true, runId };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      set({ runStatus: "error", runError: message, activeRunId: null });
+      return { ok: false, error: message };
+    }
+  },
+  stopActiveRun: async () => {
+    const runId = get().activeRunId;
+    if (!runId) {
+      return { ok: false, error: "No active run to stop." };
+    }
+
+    try {
+      const result = await voide.stopFlow(runId);
+      if (result?.ok) {
+        set({ activeRunId: null, runStatus: "idle", runError: null });
+        return { ok: true };
+      }
+      const message = "Failed to stop run.";
+      set({ activeRunId: null, runStatus: "error", runError: message });
+      return { ok: false, error: message };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      set({ activeRunId: null, runStatus: "error", runError: message });
+      return { ok: false, error: message };
+    }
   }
 }));

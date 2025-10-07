@@ -1,14 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import GraphCanvas from "./components/GraphCanvas";
 import RunControls from "./components/RunControls";
 import Palette from "./components/Palette";
-import ChatInterface from "./components/ChatInterface";
 import { useFlowStore } from "./state/flowStore";
 import { voide } from "./voide";
+import GlobalStyles from "./components/GlobalStyles";
 
 function App() {
-  const { flow, setCatalog } = useFlowStore();
-  const [runId, setRunId] = useState<string | null>(null);
+  const setCatalog = useFlowStore((state) => state.setCatalog);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,16 +30,9 @@ function App() {
         height: "100vh",
       }}
     >
+      <GlobalStyles />
       <div style={{ gridColumn: "1 / -1", width: "100%", height: "100%" }}>
-        <RunControls
-          onRun={async () => {
-            const r = await voide.runFlow(flow);
-            setRunId(r.runId);
-          }}
-          onStop={async () => {
-            if (runId) await voide.stopFlow(runId);
-          }}
-        />
+        <RunControls />
       </div>
       <div
         style={{

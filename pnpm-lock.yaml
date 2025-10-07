@@ -204,12 +204,6 @@ importers:
         specifier: 1.6.0
         version: 1.6.0(@types/node@24.3.0)(jsdom@24.1.0)
 
-  packages/telemetryd:
-    dependencies:
-      '@voide/shared':
-        specifier: workspace:*
-        version: link:../shared
-
   packages/schemas: {}
 
   packages/shared:
@@ -221,6 +215,12 @@ importers:
       ts-proto:
         specifier: ^1.169.0
         version: 1.181.2
+
+  packages/telemetryd:
+    dependencies:
+      '@voide/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/workers: {}
 

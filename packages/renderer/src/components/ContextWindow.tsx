@@ -26,6 +26,13 @@ const handleBaseStyle: React.CSSProperties = {
   zIndex: 2,
 };
 
+let windowZIndexCounter = 240;
+
+const nextWindowZIndex = () => {
+  windowZIndexCounter += 1;
+  return windowZIndexCounter;
+};
+
 function getBoundsFromRef(ref: React.RefObject<HTMLDivElement> | null): Bounds {
   const rect = ref?.current?.getBoundingClientRect();
   if (!rect) {
@@ -63,6 +70,13 @@ export default function ContextWindow({
   const [visible, setVisible] = useState(open);
   const closeTimerRef = useRef<number>();
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const [zIndex, setZIndex] = useState(() => nextWindowZIndex());
+
+  useEffect(() => {
+    if (open) {
+      setZIndex(nextWindowZIndex());
+    }
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -119,6 +133,8 @@ export default function ContextWindow({
     (event: React.MouseEvent<HTMLDivElement>) => {
       event.preventDefault();
       event.stopPropagation();
+
+      setZIndex(nextWindowZIndex());
 
       const startX = event.clientX;
       const startY = event.clientY;
@@ -298,7 +314,7 @@ export default function ContextWindow({
     minHeight: minimized ? HEADER_HEIGHT : resolvedMinSize.height,
     display: visible ? "block" : "none",
     pointerEvents: "auto",
-    zIndex: 30,
+    zIndex,
     transition: "width 140ms ease, height 140ms ease",
     overflow: "visible",
   };
@@ -357,18 +373,24 @@ export default function ContextWindow({
     display: minimized ? "none" : "block",
   };
 
+  const bringToFront = useCallback(() => {
+    setZIndex(nextWindowZIndex());
+  }, []);
+
   const stopPointerPropagation = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      bringToFront();
       event.stopPropagation();
     },
-    [],
+    [bringToFront],
   );
 
   const stopMousePropagation = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
+      bringToFront();
       event.stopPropagation();
     },
-    [],
+    [bringToFront],
   );
 
   const stopWheelPropagation = useCallback(

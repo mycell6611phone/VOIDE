@@ -51,45 +51,47 @@ export const mockLayoutFlow: FlowDef = {
       out: [{ port: "response", types: text }]
     },
     {
-      id: "memory-primary",
+      id: "cache-primary",
       type: "module",
-      name: "Memory",
+      name: "Cache",
       params: {
         __position: { x: 1020, y: 360 },
-        mode: "append",
-        moduleKey: "memory"
+        strategy: "reuse",
+        ttl: 900,
+        moduleKey: "cache"
       },
       in: [
-        { port: "search", types: text },
-        { port: "write", types: text }
+        { port: "lookup", types: text },
+        { port: "store", types: text }
       ],
-      out: [{ port: "attach", types: text }]
+      out: [{ port: "result", types: text }]
     }
   ],
   edges: [
     {
       id: "edge-ui-prompt",
       from: ["ui-entry", "conversation"],
-      to: ["prompt-main", "context"],
-      label: "primary"
+      to: ["prompt-main", "context"]
+    },
+    {
+      id: "edge-ui-cache",
+      from: ["ui-entry", "conversation"],
+      to: ["cache-primary", "lookup"]
     },
     {
       id: "edge-prompt-llm",
       from: ["prompt-main", "prompt"],
-      to: ["llm-primary", "prompt"],
-      label: "draft"
+      to: ["llm-primary", "prompt"]
     },
     {
-      id: "edge-llm-memory",
+      id: "edge-llm-cache",
       from: ["llm-primary", "response"],
-      to: ["memory-primary", "write"],
-      label: "completion"
+      to: ["cache-primary", "store"]
     },
     {
-      id: "edge-memory-ui",
-      from: ["memory-primary", "attach"],
-      to: ["ui-entry", "feedback"],
-      label: "memory"
+      id: "edge-cache-ui",
+      from: ["cache-primary", "result"],
+      to: ["ui-entry", "feedback"]
     }
   ],
   prompts: { packs: [] },

@@ -43,6 +43,12 @@ import {
   recordOutputPortActivity
 } from "../state/portActivityStore";
 import { voide } from "../voide";
+import TelemetryEdge from "./edges/TelemetryEdge";
+import {
+  markEdgeError,
+  recordEdgeTransferError,
+  recordEdgeTransferSuccess
+} from "../state/edgeActivityStore";
 
 const POSITION_KEY = "__position";
 const CONTEXT_WINDOW_DEFAULT_SIZE: WindowSize = { width: 320, height: 260 };
@@ -84,7 +90,7 @@ const toReactFlowEdge = (edge: EdgeDef): Edge => ({
   target: edge.to[0],
   sourceHandle: `${edge.from[0]}:${edge.from[1]}`,
   targetHandle: `${edge.to[0]}:${edge.to[1]}`,
-  label: edge.label ?? ""
+  type: "telemetry"
 });
 
 export default function GraphCanvas() {
@@ -170,6 +176,11 @@ export default function GraphCanvas() {
     flow.edges.map(toReactFlowEdge)
   );
 
+  const edgeTypes = useMemo(
+    () => ({ telemetry: TelemetryEdge }),
+    []
+  );
+
   useEffect(() => {
     setNodes(flow.nodes.map(toReactFlowNode));
   }, [flow.nodes, setNodes]);
@@ -190,18 +201,33 @@ export default function GraphCanvas() {
       if (payload.type !== "edge_transfer") {
         return;
       }
-      const edges = edgesRef.current;
-      const match = edges.find((edge) => edge.id === payload.edgeId);
-      if (!match) {
+      if (payload.type === "edge_transfer") {
+        const edges = edgesRef.current;
+        const match = edges.find((edge) => edge.id === payload.edgeId);
+        if (!match) {
+          return;
+        }
+        const [sourceNode, sourcePort] = match.from;
+        const [targetNode, targetPort] = match.to;
+        if (sourceNode && sourcePort) {
+          recordOutputPortActivity(sourceNode, sourcePort);
+        }
+        if (targetNode && targetPort) {
+          recordInputPortActivity(targetNode, targetPort);
+        }
+        recordEdgeTransferSuccess(match.id);
         return;
       }
-      const [sourceNode, sourcePort] = match.from;
-      const [targetNode, targetPort] = match.to;
-      if (sourceNode && sourcePort) {
-        recordOutputPortActivity(sourceNode, sourcePort);
+
+      if (payload.type === "error") {
+        const relatedEdges = edgesRef.current.filter((edge) => edge.from[0] === payload.nodeId);
+        relatedEdges.forEach((edge) => markEdgeError(edge.id));
+        return;
       }
-      if (targetNode && targetPort) {
-        recordInputPortActivity(targetNode, targetPort);
+
+      if (payload.type === "operation_progress" && payload.status === "error") {
+        const relatedEdges = edgesRef.current.filter((edge) => edge.from[0] === payload.nodeId);
+        relatedEdges.forEach((edge) => recordEdgeTransferError(edge.id));
       }
     };
 
@@ -281,7 +307,7 @@ export default function GraphCanvas() {
         target: connection.target,
         sourceHandle: connection.sourceHandle,
         targetHandle: connection.targetHandle,
-        label: ""
+        type: "telemetry"
       };
 
       setEdges((existing) => addEdge(newEdge, existing));
@@ -502,6 +528,8 @@ const handleNodeContextMenu = useCallback(
           onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          defaultEdgeOptions={{ type: "telemetry" }}
           onNodeContextMenu={handleNodeContextMenu}
           onEdgeContextMenu={handleEdgeContextMenu}
           onPaneClick={handlePaneClick}
@@ -510,6 +538,13 @@ const handleNodeContextMenu = useCallback(
           proOptions={{ hideAttribution: true }}
           autoPanOnNodeDrag={false}
           autoPanOnConnect={false}
+          panOnDrag={true}
+          panOnScroll
+          zoomOnScroll
+          zoomOnPinch
+          zoomOnDoubleClick={false}
+          minZoom={0.1}
+          maxZoom={2.4}
           style={{
             flex: 1,
             width: "100%",

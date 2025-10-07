@@ -79,6 +79,7 @@ interface ChatStore {
   getThread: (nodeId: string) => ChatThreadState | undefined;
   hasOpenChat: () => boolean;
   setFlowAcceptsInput: (value: boolean) => void;
+  addRunResultMessage: (nodeId: string, nodeLabel: string, content: string) => void;
 }
 
 export const MAX_CHAT_WINDOW_WIDTH = 500;
@@ -330,6 +331,42 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           ...state.threads,
           [nodeId]: { ...thread, scrollTop, stickToBottom }
         }
+      };
+    });
+  },
+  addRunResultMessage: (nodeId, nodeLabel, content) => {
+    const timestamp = Date.now();
+    const message: ChatMessage = {
+      id: createId(),
+      role: "assistant",
+      content,
+      createdAt: timestamp,
+      attachments: [],
+      senderId: "flow",
+      direction: "incoming",
+    };
+
+    set((state) => {
+      const base = ensureThreadState(state.threads, nodeId, nodeLabel);
+      const nextThread: ChatThreadState = {
+        ...base,
+        nodeLabel,
+        messages: [...base.messages, message],
+        open: true,
+        minimized: false,
+        hasLoadedHistory: true,
+        loadingHistory: false,
+        isSending: false,
+        stickToBottom: true,
+        notice: null,
+      };
+
+      return {
+        threads: {
+          ...state.threads,
+          [nodeId]: nextThread,
+        },
+        activeNodeId: nodeId,
       };
     });
   },

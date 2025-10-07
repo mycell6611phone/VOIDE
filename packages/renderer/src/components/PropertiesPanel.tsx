@@ -23,8 +23,10 @@ export default function PropertiesPanel() {
     <div style={{ padding: 12, borderLeft: "1px solid #eee" }}>
       <h3>Flow</h3>
       <form onSubmit={handleSubmit(onSubmit)}>
-        <label>Id</label><input {...register("id")} />
-        <label>Version</label><input {...register("version")} />
+        <label>Id</label>
+        <input {...register("id")} spellCheck />
+        <label>Version</label>
+        <input {...register("version")} spellCheck />
         <button type="submit">Save</button>
       </form>
       <hr />

@@ -7,7 +7,7 @@ export const EDIT_MENU_ITEMS = [
   "Reverse Inputs",
   "Delete"
 ] as const;
-export type EditMenuItemLabel = (typeof EDIT_MENU_ITEMS)[number];
+export type EditMenuItemLabel = (typeof EDIT_MENU_ITEMS)[number] | "Flip Save Connector";
 
 export const EDIT_MENU_WIDTH = 176;
 export const EDIT_MENU_HEIGHT = 232;

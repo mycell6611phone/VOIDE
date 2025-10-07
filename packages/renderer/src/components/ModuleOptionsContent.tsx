@@ -163,6 +163,8 @@ const promptTextareaStyle: React.CSSProperties = {
   minHeight: 112
 };
 
+const PROMPT_PLACEHOLDER_TEXT = "Custom prompt here..";
+
 const labelRowStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -630,11 +632,13 @@ function PromptOptions({
   const [localPrompt, setLocalPrompt] = React.useState<NormalizedPromptParams>(normalized);
   const [isHelpOpen, setIsHelpOpen] = React.useState(false);
   const [copiedExampleId, setCopiedExampleId] = React.useState<string | null>(null);
+  const [promptFocused, setPromptFocused] = React.useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const restoreFocusRef = React.useRef(false);
   const selectionRangeRef = React.useRef<{ start: number; end: number } | null>(
     null
   );
+  const syncingParamsRef = React.useRef(false);
   const radioGroupName = React.useId();
 
   React.useEffect(() => {
@@ -719,6 +723,36 @@ function PromptOptions({
     onUpdate((previous) => producePromptParams(previous, normalized));
   }, [params, normalized.text, normalized.preset, normalized.to, onUpdate]);
 
+  React.useEffect(() => {
+    const isSynced =
+      localPrompt.text === normalized.text &&
+      localPrompt.preset === normalized.preset &&
+      localPrompt.to === normalized.to;
+
+    if (isSynced) {
+      syncingParamsRef.current = false;
+      return;
+    }
+
+    if (syncingParamsRef.current) {
+      return;
+    }
+
+    syncingParamsRef.current = true;
+    try {
+      onUpdate((previous) => producePromptParams(previous, localPrompt));
+    } catch (error) {
+      syncingParamsRef.current = false;
+      throw error;
+    }
+  }, [
+    localPrompt,
+    normalized.text,
+    normalized.preset,
+    normalized.to,
+    onUpdate,
+  ]);
+
   const updatePromptText = React.useCallback(
     (
       nextText: string,
@@ -778,11 +812,10 @@ function PromptOptions({
           return current;
         }
 
-        onUpdate((previous) => producePromptParams(previous, nextState));
         return nextState;
       });
     },
-    [onUpdate]
+    []
   );
 
   const handlePresetSelect = (presetId: string) => {
@@ -818,7 +851,6 @@ function PromptOptions({
         return current;
       }
 
-      onUpdate((previous) => producePromptParams(previous, nextState));
       return nextState;
     });
   };
@@ -843,7 +875,6 @@ function PromptOptions({
         return current;
       }
 
-      onUpdate((previous) => producePromptParams(previous, nextState));
       return nextState;
     });
   };
@@ -906,6 +937,10 @@ function PromptOptions({
   );
 
   const handleHelpClose = () => setIsHelpOpen(false);
+
+  const promptHasText = localPrompt.text.trim().length > 0;
+  const promptPlaceholder =
+    promptFocused || promptHasText ? "" : PROMPT_PLACEHOLDER_TEXT;
 
   return (
     <>
@@ -984,7 +1019,10 @@ function PromptOptions({
           style={promptTextareaStyle}
           value={localPrompt.text}
           onChange={handleTextChange}
-          placeholder="Custom prompt here.."
+          onFocus={() => setPromptFocused(true)}
+          onBlur={() => setPromptFocused(false)}
+          spellCheck
+          placeholder={promptPlaceholder}
         />
         <div style={inlineExamplesWrapperStyle}>
           <span style={inlineExampleLabelStyle}>Inline Examples</span>
@@ -1177,6 +1215,7 @@ function renderDividerOptions(
           style={inputStyle}
           value={label}
           onChange={(event) => updateParamValue(onUpdate, "label", event.target.value)}
+          spellCheck
         />
       </div>
 
@@ -1218,6 +1257,7 @@ function renderToolOptions(
             updateParamValue(onUpdate, "toolName", event.target.value.trim())
           }
           placeholder="calculator"
+          spellCheck
         />
         <span style={helperStyle}>
           Must match a tool published in the workspace adapters.
@@ -1233,6 +1273,7 @@ function renderToolOptions(
             updateParamValue(onUpdate, "arguments", event.target.value)
           }
           placeholder='{"query":"2+2"}'
+          spellCheck
         />
       </div>
     </>
@@ -1268,6 +1309,7 @@ function renderLogOptions(
           value={notes}
           onChange={(event) => updateParamValue(onUpdate, "notes", event.target.value)}
           placeholder="Describe what should be logged from this node"
+          spellCheck
         />
       </div>
     </>
@@ -1292,6 +1334,7 @@ function renderInterfaceOptions(
           style={inputStyle}
           value={title}
           onChange={(event) => updateParamValue(onUpdate, "title", event.target.value)}
+          spellCheck
         />
       </div>
 
@@ -1303,6 +1346,7 @@ function renderInterfaceOptions(
           onChange={(event) =>
             updateParamValue(onUpdate, "placeholder", event.target.value)
           }
+          spellCheck
         />
       </div>
     </>

@@ -22,6 +22,7 @@ import {
   CONTEXT_WINDOW_MIN_HEIGHT,
   CONTEXT_WINDOW_MIN_WIDTH,
   CONTEXT_WINDOW_PADDING,
+  clampGeometry,
   constrainRectToBounds,
   type WindowGeometry
 } from "../contextWindowUtils";
@@ -37,6 +38,7 @@ import {
   readNodeOrientation,
   toggleNodeOrientationParams
 } from "./orientation";
+import { ensurePortTelemetryStyles } from "./portVisuals";
 
 const containerStyle: React.CSSProperties = {
   width: 216,
@@ -79,13 +81,15 @@ const handleStyle: React.CSSProperties = {
 const inputHandleHighlight: React.CSSProperties = {
   background: "#38bdf8",
   border: "2px solid #bae6fd",
-  boxShadow: "0 0 0 4px rgba(56, 189, 248, 0.35)"
+  boxShadow: "0 0 0 4px rgba(56, 189, 248, 0.35)",
+  animation: "voide-port-input-pulse 1.4s ease-out 1"
 };
 
 const outputHandleHighlight: React.CSSProperties = {
   background: "#f97316",
   border: "2px solid #fed7aa",
-  boxShadow: "0 0 0 4px rgba(249, 115, 22, 0.35)"
+  boxShadow: "0 0 0 4px rgba(249, 115, 22, 0.35)",
+  animation: "voide-port-output-pulse 1.4s ease-out 1"
 };
 
 const portLabelContainerStyle: React.CSSProperties = {
@@ -157,6 +161,67 @@ const fieldGroupStyle: React.CSSProperties = {
   flexDirection: "column",
   gap: 4
 };
+
+const helpButtonStyle: React.CSSProperties = {
+  width: 24,
+  height: 24,
+  borderRadius: "50%",
+  border: "2px solid #fecaca",
+  background: "#ffe4e6",
+  color: "#be123c",
+  fontSize: 13,
+  fontWeight: 700,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  transition: "background 0.2s ease, border-color 0.2s ease"
+};
+
+const helpSectionStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6
+};
+
+const helpSectionTitleStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  color: "#9f1239"
+};
+
+const helpListStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  margin: 0,
+  paddingLeft: 16
+};
+
+const helpListItemStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#7f1d1d",
+  lineHeight: 1.4
+};
+
+const helpEmptyStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#b91c1c"
+};
+
+const HELP_WINDOW_DEFAULT_SIZE: WindowGeometry["size"] = {
+  width: 280,
+  height: 220
+};
+const HELP_WINDOW_OFFSET = 24;
+
+interface HelpWindowState {
+  open: boolean;
+  minimized: boolean;
+  geometry: WindowGeometry;
+}
 
 const checkboxWrapperStyle: React.CSSProperties = {
   display: "flex",
@@ -563,6 +628,10 @@ const computeInitialWindowRect = (
 };
 
 export default function LLMNode({ data }: NodeProps<NodeDef>) {
+  useEffect(() => {
+    ensurePortTelemetryStyles();
+  }, []);
+
   const inputs = data.in ?? [];
   const outputs = data.out ?? [];
   const orientation = useMemo(
@@ -657,6 +726,14 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
   const params = (data.params ?? {}) as Record<string, unknown>;
   const canPasteNode = clipboardItem?.kind === "node";
   const canToggleOrientation = inputs.length > 0 || outputs.length > 0;
+  const [helpWindow, setHelpWindow] = useState<HelpWindowState>(() => ({
+    open: false,
+    minimized: false,
+    geometry: {
+      position: { x: 0, y: 0 },
+      size: { ...HELP_WINDOW_DEFAULT_SIZE }
+    }
+  }));
 
   const updateParams = useCallback(
     (updates: Record<string, unknown>) => {
@@ -733,6 +810,8 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       minP: profile.minP
     });
   }, [params.modelId, params.model_id, selectedModel, updateParams]);
+
+  const helpOutputs = useMemo(() => outputs, [outputs]);
 
   const adapterValue =
     typeof params.adapter === "string"
@@ -842,6 +921,74 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
       });
     },
     [updateParams]
+  );
+
+  const handleHelpUpdateGeometry = useCallback(
+    (geometry: WindowGeometry) => {
+      setHelpWindow((previous) => {
+        if (!canvasRect) {
+          return { ...previous, geometry };
+        }
+        const clamped = clampGeometry(geometry, {
+          width: canvasRect.width,
+          height: canvasRect.height
+        });
+        return { ...previous, geometry: clamped };
+      });
+    },
+    [canvasRect]
+  );
+
+  const handleHelpClose = useCallback(() => {
+    setHelpWindow((previous) => ({ ...previous, open: false, minimized: false }));
+  }, []);
+
+  const handleHelpToggleMinimize = useCallback(() => {
+    setHelpWindow((previous) => ({
+      ...previous,
+      open: true,
+      minimized: !previous.minimized
+    }));
+  }, []);
+
+  const handleHelpButtonClick = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      const anchorRect = event.currentTarget.getBoundingClientRect();
+      setHelpWindow((previous) => {
+        const size = previous.geometry.size ?? { ...HELP_WINDOW_DEFAULT_SIZE };
+        const rect = canvasRect;
+        if (!rect) {
+          return {
+            ...previous,
+            open: true,
+            minimized: false,
+            geometry: {
+              position: { x: 0, y: 0 },
+              size: { ...size }
+            }
+          };
+        }
+        const position = {
+          x: anchorRect.left - rect.left + anchorRect.width / 2 - size.width / 2,
+          y: anchorRect.bottom - rect.top + HELP_WINDOW_OFFSET
+        };
+        const geometry = clampGeometry(
+          {
+            position,
+            size: { ...size }
+          },
+          { width: rect.width, height: rect.height }
+        );
+        return {
+          ...previous,
+          open: true,
+          minimized: false,
+          geometry
+        };
+      });
+    },
+    [canvasRect]
   );
 
   const handleBackendChange = useCallback(
@@ -1286,7 +1433,26 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
           );
         })}
 
-        <span style={nodeTitleStyle}>{nodeTitle}</span>
+        <span
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 6
+          }}
+        >
+          <span style={nodeTitleStyle}>{nodeTitle}</span>
+          <button
+            type="button"
+            style={helpButtonStyle}
+            onClick={handleHelpButtonClick}
+            aria-label={`Open help for ${nodeTitle}`}
+            aria-haspopup="dialog"
+            aria-expanded={helpWindow.open}
+          >
+            ?
+          </button>
+        </span>
 
         {inputs.length > 0 ? (
           <div style={inputLabelStyle} aria-hidden="true">
@@ -1590,6 +1756,57 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
           </div>
         </ContextWindow>
       )}
+      <ContextWindow
+        title={`${nodeTitle} Help`}
+        open={helpWindow.open}
+        position={helpWindow.geometry.position}
+        size={helpWindow.geometry.size}
+        minimized={helpWindow.minimized}
+        onRequestClose={handleHelpClose}
+        onToggleMinimize={handleHelpToggleMinimize}
+        onUpdate={handleHelpUpdateGeometry}
+        minSize={{ width: 240, height: 180 }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#9f1239" }}>
+            LLM I/O Overview
+          </div>
+          <div style={helpSectionStyle}>
+            <span style={helpSectionTitleStyle}>Inputs</span>
+            {inputs.length > 0 ? (
+              <ul style={helpListStyle}>
+                {inputs.map((port) => (
+                  <li key={port.port} style={helpListItemStyle}>
+                    <strong>{port.port}</strong>
+                    {Array.isArray(port.types) && port.types.length > 0
+                      ? ` – ${port.types.join(", ")}`
+                      : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span style={helpEmptyStyle}>No upstream input required.</span>
+            )}
+          </div>
+          <div style={helpSectionStyle}>
+            <span style={helpSectionTitleStyle}>Outputs</span>
+            {helpOutputs.length > 0 ? (
+              <ul style={helpListStyle}>
+                {helpOutputs.map((port) => (
+                  <li key={port.port} style={helpListItemStyle}>
+                    <strong>{port.port}</strong>
+                    {Array.isArray(port.types) && port.types.length > 0
+                      ? ` – ${port.types.join(", ")}`
+                      : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span style={helpEmptyStyle}>No outputs emitted.</span>
+            )}
+          </div>
+        </div>
+      </ContextWindow>
     </>
   );
 }

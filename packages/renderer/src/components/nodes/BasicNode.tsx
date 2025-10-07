@@ -36,9 +36,49 @@ import {
   useChatStore
 } from "../../state/chatStore";
 import {
+  NODE_ORIENTATION_PARAM_KEY,
   readNodeOrientation,
   toggleNodeOrientationParams
 } from "./orientation";
+import { ensurePortTelemetryStyles } from "./portVisuals";
+
+const MEMORY_SAVE_POSITION_PARAM_KEY = "__memorySaveConnectorPosition";
+
+type MemorySavePosition = "top" | "bottom";
+
+const readMemorySavePosition = (params: unknown): MemorySavePosition => {
+  if (!params || typeof params !== "object") {
+    return "top";
+  }
+  const record = params as Record<string, unknown>;
+  const raw = record[MEMORY_SAVE_POSITION_PARAM_KEY];
+  if (raw === "bottom") {
+    return "bottom";
+  }
+  return "top";
+};
+
+const applyMemorySavePosition = (
+  previous: Record<string, unknown> | undefined,
+  position: MemorySavePosition
+): Record<string, unknown> => {
+  const base =
+    previous && typeof previous === "object"
+      ? { ...previous }
+      : ({} as Record<string, unknown>);
+
+  if (position === "top") {
+    delete base[MEMORY_SAVE_POSITION_PARAM_KEY];
+    if (base[NODE_ORIENTATION_PARAM_KEY] === "reversed") {
+      delete base[NODE_ORIENTATION_PARAM_KEY];
+    }
+    return base;
+  }
+
+  base[MEMORY_SAVE_POSITION_PARAM_KEY] = position;
+  base[NODE_ORIENTATION_PARAM_KEY] = "reversed";
+  return base;
+};
 
 const containerStyle: React.CSSProperties = {
   width: 156,
@@ -50,8 +90,10 @@ const containerStyle: React.CSSProperties = {
   color: "#111827",
   fontWeight: 600,
   display: "flex",
+  flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
+  gap: 6,
   textAlign: "center",
   position: "relative",
   boxShadow: "0 4px 8px rgba(15, 23, 42, 0.08)"
@@ -70,13 +112,15 @@ const handleStyle: React.CSSProperties = {
 const inputHandleHighlight: React.CSSProperties = {
   background: "#38bdf8",
   border: "2px solid #bae6fd",
-  boxShadow: "0 0 0 4px rgba(56, 189, 248, 0.35)"
+  boxShadow: "0 0 0 4px rgba(56, 189, 248, 0.35)",
+  animation: "voide-port-input-pulse 1.4s ease-out 1"
 };
 
 const outputHandleHighlight: React.CSSProperties = {
   background: "#f97316",
   border: "2px solid #fed7aa",
-  boxShadow: "0 0 0 4px rgba(249, 115, 22, 0.35)"
+  boxShadow: "0 0 0 4px rgba(249, 115, 22, 0.35)",
+  animation: "voide-port-output-pulse 1.4s ease-out 1"
 };
 
 const portLabelBaseStyle: React.CSSProperties = {
@@ -88,6 +132,62 @@ const portLabelBaseStyle: React.CSSProperties = {
   pointerEvents: "none",
   transform: "translateY(-50%)",
   transition: "color 0.2s ease"
+};
+
+const nodeTitleStyle: React.CSSProperties = {
+  fontSize: 16,
+  fontWeight: 700,
+  lineHeight: 1.1,
+  color: "#0f172a"
+};
+
+const helpButtonStyle: React.CSSProperties = {
+  width: 22,
+  height: 22,
+  borderRadius: "999px",
+  border: "1px solid #cbd5f5",
+  background: "#e0f2fe",
+  color: "#0369a1",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+  transition: "background 0.2s ease, border-color 0.2s ease"
+};
+
+const helpSectionStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6
+};
+
+const helpSectionTitleStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: 0.5,
+  textTransform: "uppercase",
+  color: "#0f172a"
+};
+
+const helpListStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  margin: 0,
+  paddingLeft: 16
+};
+
+const helpListItemStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#334155",
+  lineHeight: 1.4
+};
+
+const helpEmptyStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#64748b"
 };
 
 const inputLabelHighlight: React.CSSProperties = {
@@ -137,6 +237,8 @@ const moduleDefaultSizes: Record<ModuleCategory, WindowSize> = {
 };
 
 const fallbackSize: WindowSize = { width: 320, height: 260 };
+const HELP_WINDOW_DEFAULT_SIZE: WindowSize = { width: 260, height: 220 };
+const WINDOW_OPEN_OFFSET = 24;
 
 const getDefaultSize = (category: ModuleCategory | null): WindowSize =>
   (category ? moduleDefaultSizes[category] : fallbackSize) ?? fallbackSize;
@@ -208,6 +310,12 @@ interface MemorySubWindowState {
 
 type MemorySubWindowMap = Record<MemorySubMenuKey, MemorySubWindowState>;
 
+interface HelpWindowState {
+  open: boolean;
+  minimized: boolean;
+  geometry: WindowGeometry;
+}
+
 const createMemorySubWindowMap = (size: WindowSize): MemorySubWindowMap => {
   const halfSize: WindowSize = {
     width: Math.max(1, Math.round(size.width / 2)),
@@ -229,6 +337,10 @@ const createMemorySubWindowMap = (size: WindowSize): MemorySubWindowMap => {
 };
 
 export default function BasicNode({ data }: NodeProps<NodeDef>) {
+  useEffect(() => {
+    ensurePortTelemetryStyles();
+  }, []);
+
   const inputs = data.in ?? [];
   const outputs = data.out ?? [];
   const { overlayRef } = useCanvasBoundary();
@@ -236,11 +348,41 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
     () => readNodeOrientation(data.params),
     [data.params]
   );
-  const inputHandlePosition =
-    orientation === "reversed" ? Position.Right : Position.Left;
-  const outputHandlePosition =
-    orientation === "reversed" ? Position.Left : Position.Right;
+  const nodeLabel = data.name ?? data.id ?? "Module";
   const moduleCategory = useMemo(() => deriveModuleCategory(data), [data]);
+  const isMemoryModule = moduleCategory === "memory";
+  const memorySavePosition = useMemo<MemorySavePosition>(
+    () => (isMemoryModule ? readMemorySavePosition(data.params) : "top"),
+    [data.params, isMemoryModule]
+  );
+  const effectiveOrientation =
+    isMemoryModule && memorySavePosition === "bottom" ? "reversed" : orientation;
+  const inputHandlePosition =
+    effectiveOrientation === "reversed" ? Position.Right : Position.Left;
+  const outputHandlePosition =
+    effectiveOrientation === "reversed" ? Position.Left : Position.Right;
+  const memorySavePort = useMemo(
+    () => {
+      if (!isMemoryModule) {
+        return null;
+      }
+      return (
+        outputs.find(
+          (port) =>
+            typeof port?.port === "string" && port.port.toLowerCase() === "save"
+        ) ?? null
+      );
+    },
+    [isMemoryModule, outputs]
+  );
+  const effectiveOutputs = useMemo(
+    () => (memorySavePort ? outputs.filter((port) => port !== memorySavePort) : outputs),
+    [memorySavePort, outputs]
+  );
+  const helpOutputs = useMemo(
+    () => (memorySavePort ? [...effectiveOutputs, memorySavePort] : effectiveOutputs),
+    [effectiveOutputs, memorySavePort]
+  );
   const defaultSize = useMemo(() => getDefaultSize(moduleCategory), [moduleCategory]);
   const inputStatuses = usePortActivityStore(
     useCallback(
@@ -255,10 +397,20 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
   const outputStatuses = usePortActivityStore(
     useCallback(
       (state) =>
-        outputs.map((port) =>
+        effectiveOutputs.map((port) =>
           selectPortStatus(state, portActivityKey(data.id, port.port))
         ) as PortActivityStatus[],
-      [data.id, outputs]
+      [data.id, effectiveOutputs]
+    ),
+    shallow
+  );
+  const savePortStatus = usePortActivityStore(
+    useCallback(
+      (state) =>
+        memorySavePort
+          ? selectPortStatus(state, portActivityKey(data.id, memorySavePort.port))
+          : "idle",
+      [data.id, memorySavePort]
     ),
     shallow
   );
@@ -273,6 +425,14 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
   const [memorySubWindows, setMemorySubWindows] = useState<MemorySubWindowMap>(
     () => createMemorySubWindowMap(defaultSize)
   );
+  const [helpWindow, setHelpWindow] = useState<HelpWindowState>(() => ({
+    open: false,
+    minimized: false,
+    geometry: {
+      position: { x: 0, y: 0 },
+      size: { ...HELP_WINDOW_DEFAULT_SIZE }
+    }
+  }));
   const menuGeometry = menuState.geometry;
   const menuPosition = menuGeometry.position;
   const menuSize = menuGeometry.size;
@@ -462,10 +622,21 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
 
         if (anchorRect) {
           const anchorLeft = anchorRect.left - rect.left;
+          const anchorRight = anchorRect.right - rect.left;
           const anchorTop = anchorRect.top - rect.top;
-          const anchorCenterX = anchorLeft + anchorRect.width / 2;
           const anchorCenterY = anchorTop + anchorRect.height / 2;
-          targetX = anchorCenterX - width / 2;
+          const maxX = rect.width - width - CONTEXT_WINDOW_PADDING;
+          let candidateX = anchorRight + WINDOW_OPEN_OFFSET;
+          if (candidateX > maxX) {
+            candidateX = anchorLeft - WINDOW_OPEN_OFFSET - width;
+          }
+          if (candidateX < CONTEXT_WINDOW_PADDING) {
+            candidateX = Math.max(
+              CONTEXT_WINDOW_PADDING,
+              Math.min(anchorLeft, maxX)
+            );
+          }
+          targetX = candidateX;
           targetY = anchorCenterY - height / 2;
         } else if (typeof clientX === "number" && typeof clientY === "number") {
           const pointerX = clientX - rect.left;
@@ -492,6 +663,72 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
           open: true,
           minimized: false,
           geometry: nextGeometry
+        };
+      });
+    },
+    [overlayRef]
+  );
+
+  const handleHelpUpdateGeometry = useCallback(
+    (geometry: WindowGeometry) => {
+      setHelpWindow((previous) => ({
+        ...previous,
+        geometry: clampWithCanvas(geometry)
+      }));
+    },
+    [clampWithCanvas]
+  );
+
+  const handleHelpClose = useCallback(() => {
+    setHelpWindow((previous) => ({ ...previous, open: false, minimized: false }));
+  }, []);
+
+  const handleHelpToggleMinimize = useCallback(() => {
+    setHelpWindow((previous) => ({
+      ...previous,
+      open: true,
+      minimized: !previous.minimized
+    }));
+  }, []);
+
+  const handleHelpButtonClick = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      setHelpWindow((previous) => {
+        const overlayRect = overlayRef.current?.getBoundingClientRect();
+        const anchorRect = event.currentTarget.getBoundingClientRect();
+        const size = previous.geometry.size ?? { ...HELP_WINDOW_DEFAULT_SIZE };
+
+        if (!overlayRect) {
+          return {
+            ...previous,
+            open: true,
+            minimized: false,
+            geometry: {
+              position: { x: 0, y: 0 },
+              size
+            }
+          };
+        }
+
+        const relativeLeft = anchorRect.left - overlayRect.left;
+        const relativeTop = anchorRect.top - overlayRect.top;
+        const targetGeometry = clampGeometry(
+          {
+            position: {
+              x: relativeLeft + anchorRect.width / 2 - size.width / 2,
+              y: relativeTop + anchorRect.height + 16
+            },
+            size
+          },
+          { width: overlayRect.width, height: overlayRect.height }
+        );
+
+        return {
+          ...previous,
+          open: true,
+          minimized: false,
+          geometry: targetGeometry
         };
       });
     },
@@ -603,7 +840,6 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
   );
 
   const canPasteNode = clipboard?.kind === "node";
-  const canToggleOrientation = inputs.length > 0 || outputs.length > 0;
 
   const handleEditMenuSelect = useCallback(
     (label: EditMenuItemLabel) => {
@@ -637,6 +873,16 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
           }
           break;
         }
+        case "Flip Save Connector": {
+          if (!isMemoryModule) {
+            break;
+          }
+          const nextPosition = memorySavePosition === "top" ? "bottom" : "top";
+          updateNodeParams(data.id, (previous) =>
+            applyMemorySavePosition(previous, nextPosition)
+          );
+          break;
+        }
         case "Reverse Inputs": {
           updateNodeParams(data.id, (previous) =>
             toggleNodeOrientationParams(previous)
@@ -659,22 +905,37 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
     ]
   );
 
+  const menuLabels = useMemo<EditMenuItemLabel[]>(() => {
+    const filtered = EDIT_MENU_ITEMS.filter((label) =>
+      isMemoryModule ? label !== "Reverse Inputs" : true
+    ) as EditMenuItemLabel[];
+    if (isMemoryModule && memorySavePort) {
+      const deleteIndex = filtered.indexOf("Delete");
+      const insertIndex = deleteIndex === -1 ? filtered.length : deleteIndex;
+      return [
+        ...filtered.slice(0, insertIndex),
+        "Flip Save Connector",
+        ...filtered.slice(insertIndex)
+      ];
+    }
+    return filtered;
+  }, [isMemoryModule, memorySavePort]);
+
+  const canReverseOrientation = inputs.length > 0 || outputs.length > 0;
+
   const editMenuItems = useMemo(
     () =>
-      EDIT_MENU_ITEMS.map((label) => {
-        const disabled =
+      menuLabels.map((label) => ({
+        label,
+        disabled:
           label === "Paste"
             ? !canPasteNode
             : label === "Reverse Inputs"
-              ? !canToggleOrientation
-              : false;
-        return {
-          label,
-          disabled,
-          onSelect: () => handleEditMenuSelect(label)
-        };
-      }),
-    [canPasteNode, canToggleOrientation, handleEditMenuSelect]
+              ? !canReverseOrientation
+              : false,
+        onSelect: () => handleEditMenuSelect(label)
+      })),
+    [canPasteNode, canReverseOrientation, handleEditMenuSelect, menuLabels]
   );
 
   useEffect(() => {
@@ -783,7 +1044,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
     <>
       <div
         style={containerStyle}
-        data-voide-io-orientation={orientation}
+        data-voide-io-orientation={effectiveOrientation}
         onClick={shouldRenderMenu ? handlePrimaryClick : undefined}
         onContextMenu={shouldRenderMenu ? handleContextMenu : undefined}
       >
@@ -824,9 +1085,71 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
             </React.Fragment>
           );
         })}
-        <span>{data.name}</span>
-        {outputs.map((port, index) => {
-          const top = computeOffset(index, outputs.length);
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 4
+          }}
+        >
+          <span style={nodeTitleStyle}>{data.name}</span>
+          <button
+            type="button"
+            style={helpButtonStyle}
+            onClick={handleHelpButtonClick}
+            aria-label={`Open help for ${nodeLabel}`}
+            aria-haspopup="dialog"
+            aria-expanded={helpWindow.open}
+          >
+            ?
+          </button>
+        </div>
+        {memorySavePort ? (
+          <React.Fragment key="memory-save">
+            <Handle
+              type="source"
+              position={memorySavePosition === "top" ? Position.Top : Position.Bottom}
+              id={`${data.id}:${memorySavePort.port}`}
+              data-voide-port-id={`${data.id}:${memorySavePort.port}`}
+              data-voide-port-role="output"
+              data-voide-port-state={savePortStatus}
+              style={{
+                ...handleStyle,
+                ...(resolveHandleHighlight(savePortStatus) ?? {}),
+                left: "50%",
+                transform:
+                  memorySavePosition === "top"
+                    ? "translate(-50%, -50%)"
+                    : "translate(-50%, 50%)",
+              }}
+            />
+            <span
+              data-voide-port-label
+              data-voide-port-role="output"
+              data-voide-port-state={savePortStatus}
+              style={{
+                position: "absolute",
+                left: "50%",
+                transform:
+                  memorySavePosition === "top"
+                    ? "translate(-50%, -140%)"
+                    : "translate(-50%, 140%)",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 0.6,
+                textTransform: "uppercase",
+                color: "#475569",
+                pointerEvents: "none",
+                ...(resolveLabelHighlight(savePortStatus) ?? {}),
+              }}
+            >
+              save
+            </span>
+          </React.Fragment>
+        ) : null}
+        {effectiveOutputs.map((port, index) => {
+          const top = computeOffset(index, effectiveOutputs.length);
           const status: PortActivityStatus = outputStatuses[index] ?? "idle";
           const handleHighlight = resolveHandleHighlight(status);
           const labelHighlight = resolveLabelHighlight(status);
@@ -865,7 +1188,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
       </div>
       {shouldRenderMenu ? (
         <ContextWindow
-          title={`${data.name} Options`}
+          title={`${nodeLabel} Options`}
           open={menuState.open}
           position={menuState.geometry.position}
           size={menuState.geometry.size}
@@ -893,7 +1216,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
             return (
               <ContextWindow
                 key={`${data.id}-${menu.key}`}
-                title={`${data.name} • ${menu.label}`}
+          title={`${nodeLabel} • ${menu.label}`}
                 open={subWindow.open}
                 position={subWindow.geometry.position}
                 size={subWindow.geometry.size}
@@ -908,6 +1231,58 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
             );
           })
         : null}
+      <ContextWindow
+        key={`${data.id}-help`}
+        title={`${nodeLabel} Help`}
+        open={helpWindow.open}
+        position={helpWindow.geometry.position}
+        size={helpWindow.geometry.size}
+        minimized={helpWindow.minimized}
+        onRequestClose={handleHelpClose}
+        onToggleMinimize={handleHelpToggleMinimize}
+        onUpdate={handleHelpUpdateGeometry}
+        minSize={{ width: 220, height: 180 }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+            I/O Overview
+          </div>
+          <div style={helpSectionStyle}>
+            <span style={helpSectionTitleStyle}>Inputs</span>
+            {inputs.length > 0 ? (
+              <ul style={helpListStyle}>
+                {inputs.map((port) => (
+                  <li key={port.port} style={helpListItemStyle}>
+                    <strong>{port.port}</strong>
+                    {Array.isArray(port.types) && port.types.length > 0
+                      ? ` – ${port.types.join(", ")}`
+                      : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span style={helpEmptyStyle}>No inputs required.</span>
+            )}
+          </div>
+          <div style={helpSectionStyle}>
+            <span style={helpSectionTitleStyle}>Outputs</span>
+            {helpOutputs.length > 0 ? (
+              <ul style={helpListStyle}>
+                {helpOutputs.map((port) => (
+                  <li key={port.port} style={helpListItemStyle}>
+                    <strong>{port.port}</strong>
+                    {Array.isArray(port.types) && port.types.length > 0
+                      ? ` – ${port.types.join(", ")}`
+                      : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span style={helpEmptyStyle}>No outputs produced.</span>
+            )}
+          </div>
+        </div>
+      </ContextWindow>
       {editMenu ? (
         <EditMenu
           position={{ left: editMenu.left, top: editMenu.top }}

@@ -20,7 +20,7 @@ import RunControls from "../RunControls";
 import { useFlowStore } from "../../state/flowStore";
 import { createInitialFlow } from "../../constants/mockLayout";
 
-const renderControls = () => render(<RunControls onRun={() => undefined} />);
+const renderControls = () => render(<RunControls />);
 
 const createFileList = (file: File): FileList =>
   ({
@@ -30,14 +30,33 @@ const createFileList = (file: File): FileList =>
   } as unknown as FileList);
 
 const exitAppMock = vi.fn().mockResolvedValue({ ok: true });
+let buildFlowMock: ReturnType<typeof vi.fn>;
+let runBuiltFlowMock: ReturnType<typeof vi.fn>;
+let stopActiveRunMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   const initialFlow = createInitialFlow();
+  buildFlowMock = vi.fn().mockResolvedValue({ ok: true });
+  runBuiltFlowMock = vi.fn().mockResolvedValue({ ok: true });
+  stopActiveRunMock = vi.fn().mockResolvedValue({ ok: true });
   useFlowStore.setState({
     flow: initialFlow,
+    compiledFlow: null,
+    buildStatus: "idle",
+    buildError: null,
+    lastBuildAt: null,
+    runStatus: "idle",
+    runError: null,
+    activeRunId: null,
+    lastRunId: null,
+    lastRunCompletedAt: null,
+    lastRunOutputs: [],
     catalog: [],
     activeTool: "select",
-    clipboard: null
+    clipboard: null,
+    buildFlow: buildFlowMock,
+    runBuiltFlow: runBuiltFlowMock,
+    stopActiveRun: stopActiveRunMock,
   });
   exitAppMock.mockReset();
   (window as unknown as { voide?: { exitApp: typeof exitAppMock } }).voide = {
@@ -206,9 +225,9 @@ describe("RunControls file menu", () => {
     fireEvent.click(trigger);
 
     const navigation = screen.getByRole("navigation");
-    const playButton = screen.getByRole("button", { name: "Play" });
-    playButton.focus();
-    fireEvent.blur(navigation, { relatedTarget: playButton });
+    const buildButton = screen.getByRole("button", { name: "Build project" });
+    buildButton.focus();
+    fireEvent.blur(navigation, { relatedTarget: buildButton });
 
     await waitFor(() => {
       expect(screen.queryByTestId("file-menu-panel")).not.toBeInTheDocument();
@@ -273,5 +292,102 @@ describe("RunControls file menu", () => {
     expect(
       screen.getByText(/Current: GPU with 8 cores/, { selector: "div" })
     ).toBeTruthy();
+  });
+});
+
+describe("RunControls actions", () => {
+  it("invokes buildFlow when Build button is pressed", async () => {
+    renderControls();
+
+    const buildButton = screen.getByRole("button", { name: "Build project" });
+    fireEvent.click(buildButton);
+
+    await waitFor(() => {
+      expect(buildFlowMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("disables Play until a flow has been compiled", () => {
+    const view = renderControls();
+    const playButton = screen.getByRole("button", { name: "Play" });
+    expect(playButton).toBeDisabled();
+
+    useFlowStore.setState({
+      compiledFlow: createInitialFlow(),
+      buildStatus: "success",
+      runStatus: "idle",
+    });
+    view.rerender(<RunControls />);
+
+    expect(screen.getByRole("button", { name: "Play" })).not.toBeDisabled();
+  });
+
+  it("runs the compiled flow when Play is clicked", async () => {
+    const view = renderControls();
+    useFlowStore.setState({
+      compiledFlow: createInitialFlow(),
+      buildStatus: "success",
+      runStatus: "idle",
+    });
+    view.rerender(<RunControls />);
+
+    const playButton = screen.getByRole("button", { name: "Play" });
+    fireEvent.click(playButton);
+
+    await waitFor(() => {
+      expect(runBuiltFlowMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("stops an active run", async () => {
+    const view = renderControls();
+    useFlowStore.setState({ activeRunId: "run-1", runStatus: "running" });
+    view.rerender(<RunControls />);
+
+    const stopButton = screen.getByRole("button", { name: "Stop" });
+    expect(stopButton).not.toBeDisabled();
+    fireEvent.click(stopButton);
+
+    await waitFor(() => {
+      expect(stopActiveRunMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("shows build and run status text", () => {
+    const view = renderControls();
+    useFlowStore.setState({
+      buildStatus: "error",
+      buildError: "Validation failed",
+      runStatus: "success",
+      runError: null,
+    });
+    view.rerender(<RunControls />);
+
+    const status = screen.getByTestId("run-controls-status");
+    expect(status).toHaveTextContent(/Build: Needs attention/);
+    expect(status).toHaveTextContent(/Run: Completed/);
+    expect(status).toHaveTextContent(/Validation failed/);
+  });
+});
+
+describe("RunControls help menu", () => {
+  it("opens the help modal with the selected section", () => {
+    renderControls();
+
+    const helpButton = screen.getByRole("button", { name: /Help/ });
+    fireEvent.click(helpButton);
+
+    const instructionsItem = screen.getByRole("menuitem", {
+      name: /Instructions/,
+    });
+    fireEvent.click(instructionsItem);
+
+    const modal = screen.getByTestId("help-modal");
+    expect(modal).toBeInTheDocument();
+    expect(modal).toHaveTextContent(/Build the current graph/);
+
+    const closeButton = screen.getByRole("button", { name: /Close help dialog/ });
+    fireEvent.click(closeButton);
+    expect(screen.queryByTestId("help-modal")).not.toBeInTheDocument();
   });
 });

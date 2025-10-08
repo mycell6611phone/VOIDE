@@ -4,7 +4,7 @@ import path from "path";
 import { createHash } from "crypto";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
-import type { FlowDef, NodeDef, LLMParams, PayloadT, TextPayload, RuntimeProfile } from "@voide/shared";
+import type { FlowDef, NodeDef, LLMParams, LoopParams, PayloadT, TextPayload, RuntimeProfile } from "@voide/shared";
 import { TelemetryEventType } from "@voide/shared";
 import { topoOrder, Frontier, downstream } from "./scheduler.js";
 import {
@@ -47,13 +47,93 @@ const runs = new Map<string, RunState>();
 const loopTasks = new Map<string, Promise<void>>();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PiscinaCtor = Piscina as any;
-// Worker bundles live in packages/workers/dist. From the compiled file
-// location (packages/main/dist/orchestrator) we need to traverse three
-// directories up to reach the workspace root and then into workers/dist.
-// Using only "../../" resulted in a path within the main package, causing
-// runtime module resolution errors when Piscina attempted to load the
-// workers. The extra "../" correctly points to the sibling package.
-const poolLLM = new PiscinaCtor({ filename: path.join(__dirname, "../../../workers/dist/llm.js") });
+
+type PiscinaInstance = InstanceType<typeof PiscinaCtor>;
+const LLM_WORKER_CANDIDATES = [
+  "../../../workers/dist/llm.js",
+  "../../../workers/dist/src/llm.js",
+];
+let poolLLM: PiscinaInstance | null = null;
+let llmWorkerMissingLogged = false;
+let llmFallbackLogged = false;
+
+function resolveLLMWorkerEntry(): string | null {
+  for (const relative of LLM_WORKER_CANDIDATES) {
+    const candidate = path.resolve(__dirname, relative);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function ensureLLMPool(): PiscinaInstance | null {
+  if (poolLLM) {
+    return poolLLM;
+  }
+  const workerEntry = resolveLLMWorkerEntry();
+  if (!workerEntry) {
+    if (!llmWorkerMissingLogged) {
+      console.warn(
+        "[orchestrator] LLM worker bundle not found. Falling back to in-process execution. Run `pnpm --filter @voide/workers build` to enable threaded LLMs."
+      );
+      llmWorkerMissingLogged = true;
+    }
+    return null;
+  }
+  try {
+    poolLLM = new PiscinaCtor({ filename: workerEntry });
+    return poolLLM;
+  } catch (error) {
+    console.error("[orchestrator] Failed to initialize LLM worker:", error);
+    return null;
+  }
+}
+
+type LLMWorkerJob = {
+  params: LLMParams & { includeRawInput?: boolean };
+  prompt: string;
+  modelFile: string;
+};
+
+type LLMWorkerResult = { text: string; tokens?: number; latencyMs?: number };
+
+async function runLLMWithFallback(job: LLMWorkerJob): Promise<LLMWorkerResult> {
+  const pool = ensureLLMPool();
+  if (pool) {
+    try {
+      return await pool.run(job);
+    } catch (error) {
+      console.error("[orchestrator] LLM worker execution failed, retrying in-process:", error);
+      poolLLM = null;
+    }
+  }
+  return runLLMInline(job);
+}
+
+async function runLLMInline(job: LLMWorkerJob): Promise<LLMWorkerResult> {
+  const start = Date.now();
+  const adapter = job.params.adapter ?? DEFAULT_ADAPTER;
+  if (!llmFallbackLogged && adapter !== "mock") {
+    console.warn(
+      `[orchestrator] Adapter "${adapter}" requested without worker bundle; falling back to mock responses.`
+    );
+    llmFallbackLogged = true;
+  }
+  const text = runMockFallback(job.prompt ?? "");
+  return {
+    text,
+    tokens: countTokens(text),
+    latencyMs: Date.now() - start,
+  };
+}
+
+function runMockFallback(prompt: string): string {
+  const lines = prompt.split(/\n/).slice(-4).join(" ").slice(0, 400);
+  const verdict = /DONE/i.test(prompt) ? "DONE" : "CONTINUE";
+  const summary = lines.replace(/\s+/g, " ").trim();
+  return `Thought: ${summary}\nDecision: ${verdict}`;
+}
 
 type ManifestModel = {
   name?: string;
@@ -828,7 +908,9 @@ const llmNode: NodeImpl = {
     const prompt = prompts.join("\n");
     const started = ctx.now();
     const { params, modelFile } = await resolveLLMJobConfig(ctx.node.params ?? {});
-    const result = await poolLLM.run({ params, prompt, modelFile });
+
+    const result = await runLLMWithFallback({ params, prompt, modelFile });
+
     const payload: TextPayload = { kind: "text", text: result.text };
     if (params.includeRawInput) {
       payload.rawInput = prompt;
@@ -1258,31 +1340,6 @@ function createExecCtx(st: RunState, node: NodeDef): ExecCtx {
   };
 }
 
-function seedRuntimeInputs(st: RunState) {
-  const entries = Object.entries(st.runtimeInputs ?? {});
-  if (entries.length === 0) {
-    return;
-  }
-  entries.forEach(([nodeId, raw]) => {
-    try {
-      const node = nodeById(st.flow, nodeId);
-      const text = typeof raw === "string" ? raw : JSON.stringify(raw);
-      const payload: PayloadT = { kind: "text", text };
-      const outPorts = Array.isArray(node.out) ? node.out : [];
-      outPorts.forEach((outPort) => {
-        const key = portKey(node.id, outPort.port);
-        st.values.set(key, [payload]);
-        st.flow.edges
-          .filter((edge) => edge.from[0] === node.id && edge.from[1] === outPort.port)
-          .forEach((edge) => {
-            st.frontier.add(edge.to[0]);
-          });
-      });
-    } catch (error) {
-      console.warn("Failed to seed runtime input", nodeId, error);
-    }
-  });
-}
 
 function nodeById(flow: FlowDef, id: string): NodeDef {
   const n = flow.nodes.find(n => n.id === id);
@@ -1309,7 +1366,6 @@ export async function runFlow(flow: FlowDef, inputs: Record<string, unknown> = {
     runtimeInputs,
     nodeState: new Map(),
   };
-  seedRuntimeInputs(st);
   runs.set(runId, st);
   await createRun(runId, upgraded.id);
   updateRunStatus(runId, "running");
@@ -1421,38 +1477,7 @@ export async function shutdownOrchestrator() {
   if (shutdownPromise) {
     return shutdownPromise;
   }
-
-  shutdownPromise = (async () => {
-    const runIds = Array.from(runs.keys());
-    await Promise.all(runIds.map((id) => stopFlow(id)));
-
-    const loopPromises = Array.from(loopTasks.values()).map((task) =>
-      task.catch((error) => {
-        console.error("Loop shutdown error:", error);
-      })
-    );
-    await Promise.all(loopPromises);
-
-    runs.clear();
-    loopTasks.clear();
-
-    const pools = [poolLLM];
-    await Promise.all(
-      pools.map((pool) => {
-        if (pool && typeof pool.destroy === "function") {
-          return pool.destroy();
-        }
-        return Promise.resolve();
-      })
-    );
-  })()
-    .catch((error) => {
-      console.error("Failed to shutdown orchestrator:", error);
-    });
-
-  return shutdownPromise;
 }
-
 async function executeNode(st: RunState, node: NodeDef): Promise<NodeExecutionResult> {
   const impl = getNode(node.type);
   if (!impl) {

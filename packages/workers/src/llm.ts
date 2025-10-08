@@ -1,9 +1,24 @@
 // @ts-nocheck
 import type { LLMParams, RuntimeProfile } from "@voide/shared";
 
-import { runLlamaCpp } from "../../adapters/dist/llamaCpp.js";
-import { runGpt4All } from "../../adapters/dist/gpt4all.js";
-import { runMock } from "../../adapters/dist/mock.js";
+const llamaCppModuleUrl = new URL("../../../adapters/dist/src/llamaCpp.js", import.meta.url);
+const gpt4AllModuleUrl = new URL("../../../adapters/dist/src/gpt4all.js", import.meta.url);
+
+let llamaModulePromise: Promise<any> | null = null;
+function loadLlamaAdapter() {
+  if (!llamaModulePromise) {
+    llamaModulePromise = import(llamaCppModuleUrl.href);
+  }
+  return llamaModulePromise;
+}
+
+let gpt4AllModulePromise: Promise<any> | null = null;
+function loadGpt4AllAdapter() {
+  if (!gpt4AllModulePromise) {
+    gpt4AllModulePromise = import(gpt4AllModuleUrl.href);
+  }
+  return gpt4AllModulePromise;
+}
 
 interface LLMJob {
   params: LLMParams;
@@ -25,13 +40,23 @@ export default async function run(job: LLMJob) {
   }
   switch (adapter) {
     case "mock":
-      text = await runMock(prompt);
-      break;
+      throw new Error("Mock adapter is disabled. Configure a real LLM adapter such as 'gpt4all' or 'llama.cpp'.");
     case "gpt4all":
-      text = await runGpt4All({ modelFile, prompt, maxTokens: params.maxTokens, temperature: params.temperature });
+      text = await (await loadGpt4AllAdapter()).runGpt4All({
+        modelFile,
+        prompt,
+        maxTokens: params.maxTokens,
+        temperature: params.temperature,
+      });
       break;
     case "llama.cpp":
-      text = await runLlamaCpp({ modelFile, prompt, maxTokens: params.maxTokens, temperature: params.temperature, runtime: params.runtime as RuntimeProfile });
+      text = await (await loadLlamaAdapter()).runLlamaCpp({
+        modelFile,
+        prompt,
+        maxTokens: params.maxTokens,
+        temperature: params.temperature,
+        runtime: params.runtime as RuntimeProfile,
+      });
       break;
     default:
       throw new Error(`Unknown adapter "${adapter}" requested.`);

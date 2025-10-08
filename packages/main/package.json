@@ -20,6 +20,9 @@
     "keytar": "^7.9.0",
     "piscina": "4.6.1",
     "uuid": "9.0.1"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.1"
   }
 }
 

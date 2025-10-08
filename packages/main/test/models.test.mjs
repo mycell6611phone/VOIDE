@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import fs from "fs";
 import path from "path";
 import { createHash } from "crypto";
-import { getModelRegistry, installModel } from "../dist/services/models.js";
+import { register } from "node:module";
+
+register("ts-node/esm", import.meta.url);
+
+const { getModelRegistry, installModel } = await import(
+  "../src/services/models.ts"
+);
 
 function sha256(content) {
   return createHash("sha256").update(content).digest("hex");

@@ -1,12 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { register } from "node:module";
 
-import {
+register("ts-node/esm", import.meta.url);
+
+const {
   CHAT_SERVER_PORT,
   startChatServer,
   stopChatServer,
-} from "../dist/services/chatServer.js";
-import { chatSessions } from "../dist/services/chatSession.js";
+} = await import("../src/services/chatServer.ts");
+const { chatSessions } = await import("../src/services/chatSession.ts");
 
 const BASE_URL = `http://127.0.0.1:${CHAT_SERVER_PORT}`;
 

@@ -1,13 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { parseFlow } from "../dist/flow/schema.js";
+import { parseFlow } from "../src/flow/schema.js";
 import { compile } from "../src/build/compiler";
 import * as pb from "../src/proto/voide/v1/flow";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as fs from "fs/promises";
 import * as path from "path";
+import * as os from "os";
 
 const exec = promisify(execFile);
+const CLI_TIMEOUT = 20_000;
 
 const sample = {
   id: "f1",
@@ -30,8 +32,11 @@ const sample = {
   extra: { foo: 1 },
 };
 
-const cli = path.resolve(__dirname, "..", "dist", "cli.js");
+const coreRoot = path.resolve(__dirname, "..");
+const cliEntry = path.join(coreRoot, "src", "cli.ts");
 const nodeBin = process.execPath;
+const nodeLoaderArgs = ["--loader", "ts-node/esm", cliEntry];
+const execOptions = { cwd: coreRoot } as const;
 
 describe("flow schema", () => {
   it("round-trip preserves unknown fields", () => {
@@ -55,25 +60,29 @@ describe("flow schema", () => {
   });
 
   it("cli validate success and failure", async () => {
-    const tmp = await fs.mkdtemp("flow-");
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "flow-"));
     const good = path.join(tmp, "good.flow.json");
     await fs.writeFile(good, JSON.stringify(sample));
-    await exec(nodeBin, [cli, "validate", good]);
+    await exec(nodeBin, [...nodeLoaderArgs, "validate", good], execOptions);
 
     const bad = path.join(tmp, "bad.flow.json");
     await fs.writeFile(bad, JSON.stringify({ nodes: [], edges: [] }));
     await expect(
-      exec(nodeBin, [cli, "validate", bad]),
+      exec(nodeBin, [...nodeLoaderArgs, "validate", bad], execOptions),
     ).rejects.toHaveProperty("code", 1);
-  });
+  }, CLI_TIMEOUT);
 
   it("cli pack produces output", async () => {
-    const tmp = await fs.mkdtemp("flow-");
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "flow-"));
     const src = path.join(tmp, "pack.flow.json");
     await fs.writeFile(src, JSON.stringify(sample));
     const out = path.join(tmp, "pack.flow.pb");
-    await exec(nodeBin, [cli, "pack", src, "--out", out]);
+    await exec(
+      nodeBin,
+      [...nodeLoaderArgs, "pack", src, "--out", out],
+      execOptions,
+    );
     const buf = await fs.readFile(out);
     expect(buf.length).toBeGreaterThan(0);
-  });
+  }, CLI_TIMEOUT);
 });

@@ -635,12 +635,69 @@ export default function RunControls() {
       const label = pendingDirectorySelection.current;
 
       if (label && files && files.length > 0) {
-        const selectedFile = files[0];
-        const relativePath =
-          (selectedFile as File & { webkitRelativePath?: string })
-            .webkitRelativePath ?? selectedFile.name;
-        const directoryName = relativePath.split("/")[0] ?? relativePath;
+        const selectedFile = files[0] as File & {
+          webkitRelativePath?: string;
+          path?: string;
+        };
+        const relativePath = selectedFile.webkitRelativePath ?? selectedFile.name;
+        const normalizedRelative = relativePath.replace(/^[/\\]+/, "");
+        const directoryName = normalizedRelative.split(/[\\/]/)[0] ?? normalizedRelative;
         console.info(`Selected ${label}: ${directoryName}`);
+
+        if (label === "LLM Storage Folder") {
+          const filePath = typeof selectedFile.path === "string" ? selectedFile.path : "";
+          let selectedDirectoryPath: string | null = null;
+
+          if (filePath) {
+            const sanitizedFilePath = filePath.replace(/\\/g, "/");
+            const normalizedRelativeForward = normalizedRelative.replace(/\\/g, "/");
+            if (
+              normalizedRelativeForward &&
+              sanitizedFilePath.endsWith(normalizedRelativeForward) &&
+              filePath.length >= normalizedRelativeForward.length
+            ) {
+              selectedDirectoryPath = filePath
+                .slice(0, filePath.length - normalizedRelativeForward.length)
+                .replace(/[\\/]+$/, "");
+            }
+            if (!selectedDirectoryPath) {
+              const lastSeparatorIndex = Math.max(
+                filePath.lastIndexOf("/"),
+                filePath.lastIndexOf("\\")
+              );
+              if (lastSeparatorIndex >= 0) {
+                selectedDirectoryPath = filePath.slice(0, lastSeparatorIndex).replace(/[\\/]+$/, "");
+              } else {
+                selectedDirectoryPath = filePath;
+              }
+            }
+          }
+
+          if (!selectedDirectoryPath) {
+            selectedDirectoryPath = directoryName;
+          }
+
+          if (selectedDirectoryPath) {
+            const secretSetter = (
+              window as unknown as {
+                voide?: {
+                  secretSet?: (scope: string, key: string, value: string) => unknown;
+                };
+              }
+            ).voide?.secretSet;
+            if (typeof secretSetter === "function") {
+              Promise.resolve(
+                secretSetter("paths", "modelsDir", selectedDirectoryPath)
+              )
+                .then(() => {
+                  console.info(`Saved models directory: ${selectedDirectoryPath}`);
+                })
+                .catch((error) => {
+                  console.error("Failed to persist models directory:", error);
+                });
+            }
+          }
+        }
       } else if (label) {
         console.info(`No directory selected for ${label}.`);
       }

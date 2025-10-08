@@ -30,6 +30,7 @@ const createFileList = (file: File): FileList =>
   } as unknown as FileList);
 
 const exitAppMock = vi.fn().mockResolvedValue({ ok: true });
+const secretSetMock = vi.fn().mockResolvedValue({ ok: true });
 let buildFlowMock: ReturnType<typeof vi.fn>;
 let runBuiltFlowMock: ReturnType<typeof vi.fn>;
 let stopActiveRunMock: ReturnType<typeof vi.fn>;
@@ -59,8 +60,10 @@ beforeEach(() => {
     stopActiveRun: stopActiveRunMock,
   });
   exitAppMock.mockReset();
-  (window as unknown as { voide?: { exitApp: typeof exitAppMock } }).voide = {
-    exitApp: exitAppMock
+  secretSetMock.mockReset();
+  (window as unknown as { voide?: { exitApp: typeof exitAppMock; secretSet: typeof secretSetMock } }).voide = {
+    exitApp: exitAppMock,
+    secretSet: secretSetMock
   };
 });
 
@@ -267,6 +270,52 @@ describe("RunControls file menu", () => {
     await waitFor(() => {
       expect(infoSpy).toHaveBeenCalledWith("Selected LLM Storage Folder: llm-storage");
     });
+  });
+
+  it("persists the selected LLM storage directory", async () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    renderControls();
+
+    const trigger = screen.getByRole("button", { name: "File" });
+    fireEvent.click(trigger);
+
+    const workingButton = screen.getByRole("menuitem", {
+      name: /Working Directory/
+    });
+    fireEvent.click(workingButton);
+
+    const directoryInput = screen.getByTestId(
+      "file-menu-directory-input"
+    ) as HTMLInputElement;
+
+    const option = screen.getByRole("menuitem", { name: /LLM Storage Folder/ });
+    fireEvent.click(option);
+
+    const directoryFile = new File(["model"], "model.bin");
+    Object.defineProperty(directoryFile, "webkitRelativePath", {
+      value: "llm-storage/model.bin"
+    });
+    Object.defineProperty(directoryFile, "path", {
+      value: "/Users/voide/llm-storage/model.bin"
+    });
+
+    fireEvent.change(directoryInput, {
+      target: { files: createFileList(directoryFile) }
+    });
+
+    await waitFor(() => {
+      expect(secretSetMock).toHaveBeenCalledWith(
+        "paths",
+        "modelsDir",
+        "/Users/voide/llm-storage"
+      );
+    });
+
+    expect(infoSpy).toHaveBeenCalledWith("Saved models directory: /Users/voide/llm-storage");
+    expect(errorSpy).not.toHaveBeenCalled();
+    infoSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it("allows compute selection of accelerator and cores", () => {

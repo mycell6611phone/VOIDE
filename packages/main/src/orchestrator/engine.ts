@@ -7,6 +7,7 @@ import type { FlowDef, NodeDef, LLMParams, LoopParams, PayloadT, TextPayload, Ru
 import { TelemetryEventType } from "@voide/shared";
 import { topoOrder, Frontier, downstream } from "./scheduler.js";
 import { getModelRegistry } from "../services/models.js";
+import { getSecretsService } from "../services/secrets.js";
 import { recordRunLog, createRun, updateRunStatus, savePayload, getPayloadsForRun } from "../services/db.js";
 import { emitSchedulerTelemetry } from "../services/telemetry.js";
 
@@ -409,7 +410,16 @@ async function resolveModelFilePath(
   manifestModel: ManifestModel | null,
   adapter: LLMParams["adapter"]
 ): Promise<string> {
-  const baseDir = path.join(homeDir(), ".voide", "models");
+  const secrets = getSecretsService();
+  let baseDir = path.join(homeDir(), ".voide", "models");
+  try {
+    const { value } = await secrets.get("paths", "modelsDir");
+    if (typeof value === "string" && value.trim()) {
+      baseDir = path.resolve(value);
+    }
+  } catch (error) {
+    console.warn("Failed to read models directory secret, falling back to default:", error);
+  }
   const candidates: string[] = [];
   if (registryModel?.id && registryModel.filename) {
     candidates.push(path.join(baseDir, registryModel.id, registryModel.filename));
@@ -886,10 +896,20 @@ async function executeNode(st: RunState, node: NodeDef): Promise<Array<[string, 
     console.info(
       `[orchestrator] Invoking adapter ${mergedParams.adapter} (runtime=${mergedParams.runtime}, maxTokens=${mergedParams.maxTokens}, temperature=${mergedParams.temperature}) for model ${mergedParams.modelId} on node ${node.id}`
     );
+    let modelsBase = process.cwd();
+    try {
+      const { value } = await getSecretsService().get("paths", "modelsDir");
+      if (typeof value === "string" && value.trim()) {
+        modelsBase = value;
+      }
+    } catch (error) {
+      console.warn("Failed to read models directory secret during execution, using cwd:", error);
+    }
+    const modelPath = path.resolve(modelsBase, modelFile ?? "");
     const result = await poolLLM.run({
       params: mergedParams,
       prompt,
-      modelFile,
+      modelFile: modelPath,
     });
     const includeRawInput = mergedParams.includeRawInput === true;
     const payload: TextPayload = { kind: "text", text: result.text };

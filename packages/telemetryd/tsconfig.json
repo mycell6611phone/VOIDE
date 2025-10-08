@@ -3,6 +3,9 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true,
+    "composite": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "types": ["node"],

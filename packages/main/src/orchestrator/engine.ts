@@ -242,8 +242,6 @@ function normalizeAdapter(value: unknown): LLMParams["adapter"] | undefined {
       return "llama.cpp";
     case "gpt4all":
       return "gpt4all";
-    case "mock":
-      return "mock";
     default:
       return undefined;
   }
@@ -442,10 +440,6 @@ async function resolveModelFilePath(
     }
   }
 
-  if (adapter === "mock") {
-    return manifestModel?.filename ?? registryModel?.filename ?? "";
-  }
-
   const modelName = manifestModel?.name ?? registryModel?.name ?? "selected model";
   throw new Error(`Model file for "${modelName}" not found. Install the model before running this node.`);
 }
@@ -534,6 +528,11 @@ async function resolveLLMJobConfig(rawParams: Record<string, unknown>): Promise<
   const typeKey = normalizeKey(typeof typeSource === "string" ? typeSource : undefined) ?? "";
   const fallbackAdapter = TYPE_ADAPTER_OVERRIDES[typeKey] ?? DEFAULT_ADAPTER;
   const finalAdapter = paramAdapter ?? registryDefaults.adapter ?? manifestAdapter ?? registryBackendAdapter ?? fallbackAdapter;
+  if (finalAdapter === "mock") {
+    throw new Error(
+      `The mock adapter for model "${modelLabel}" has been disabled. Choose a llama.cpp or gpt4all configuration instead.`
+    );
+  }
   if (!finalAdapter) {
     throw new Error(`No adapter configured for model "${modelLabel}".`);
   }

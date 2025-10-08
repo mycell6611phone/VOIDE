@@ -41,7 +41,7 @@ export const mockLayoutFlow: FlowDef = {
       name: "LLAMA3.1 8B",
       params: {
         __position: { x: 720, y: 360 },
-        adapter: "llama_cpp",
+        adapter: "llama.cpp",
         modelId: "model:llama3.1-8b.Q4_K_M",
         runtime: "CPU",
         temperature: 0.2,

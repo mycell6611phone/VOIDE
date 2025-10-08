@@ -13,7 +13,6 @@ export interface VoideApi {
 }
 
 type PortSpec = { port: string; types: string[] };
-type RunPayloadRecord = { nodeId: string; port: string; payload: PayloadT };
 
 const mockCatalog: Array<{ type: string; in: PortSpec[]; out: PortSpec[] }> = [
   { type: "ui", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
@@ -41,9 +40,16 @@ const sampleFlow: FlowDef = {
     },
     {
       id: "llm",
-      name: "LLM",
+      name: "LLAMA3.1 8B",
       type: "llm.generic",
-      params: { modelId: "mock", promptTemplate: "" },
+      params: {
+        modelId: "model:llama3.1-8b.Q4_K_M",
+        adapter: "llama.cpp",
+        runtime: "CPU",
+        temperature: 0.2,
+        maxTokens: 2048,
+        promptTemplate: ""
+      },
       in: [{ port: "prompt", types: ["text"] }],
       out: [{ port: "completion", types: ["text"] }]
     },
@@ -63,64 +69,22 @@ const sampleFlow: FlowDef = {
 };
 
 function createFallbackVoide(): VoideApi {
-  const runs = new Map<string, RunPayloadRecord[]>();
   let storedFlow: FlowDef = sampleFlow;
   const telemetryListeners = new Set<(event: TelemetryPayload) => void>();
-
-  const emitTelemetry = (event: TelemetryPayload) => {
-    telemetryListeners.forEach((listener) => {
-      try {
-        listener(event);
-      } catch (error) {
-        console.warn("[voide-mock] Telemetry listener threw", error);
-      }
-    });
-  };
 
   return {
     async getNodeCatalog() {
       console.info("[voide-mock] Using mock node catalog (renderer running outside Electron)");
       return mockCatalog;
     },
-    async runFlow(flow, inputs = {}) {
-      const runId = `mock-run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-      const payloads: RunPayloadRecord[] = flow.nodes.flatMap((node) =>
-        node.out.map((outPort) => ({
-          nodeId: node.id,
-          port: outPort.port,
-          payload: { kind: "json", value: { message: `Mock payload from ${node.name || node.id}` } }
-        }))
+    async runFlow(flow, _inputs = {}) {
+      console.warn("[voide-mock] Flow execution is disabled outside the Electron runtime.");
+      throw new Error(
+        "Mock runs have been removed. Start the Electron app with a configured llama.cpp or gpt4all backend to execute flows."
       );
-      Object.entries(inputs ?? {}).forEach(([nodeId, value]) => {
-        const textValue = typeof value === "string" ? value : JSON.stringify(value);
-        payloads.push({
-          nodeId,
-          port: "conversation",
-          payload: { kind: "text", text: textValue }
-        });
-      });
-      runs.set(runId, payloads);
-      console.info(`[voide-mock] Pretending to run flow '${flow.id}' → ${runId}`);
-      globalThis.setTimeout(() => {
-        const timestamp = Date.now();
-        flow.edges.forEach((edge) => {
-          if (!edge.id) {
-            return;
-          }
-          emitTelemetry({
-            type: "edge_transfer",
-            runId,
-            edgeId: edge.id,
-            bytes: Math.max(1, Math.round(Math.random() * 512)),
-            at: timestamp
-          });
-        });
-      }, 0);
-      return { runId };
     },
     async stopFlow(runId) {
-      runs.delete(runId);
-      console.info(`[voide-mock] Stopping mock run ${runId}`);
+      console.warn(`[voide-mock] stopFlow(${runId}) called but no mock run is active.`);
       return { ok: true };
     },
     async openFlow() {
@@ -146,7 +110,8 @@ function createFallbackVoide(): VoideApi {
       return { ok: errors.length === 0, errors };
     },
     async getLastRunPayloads(runId) {
-      return runs.get(runId) ?? [];
+      console.warn(`[voide-mock] getLastRunPayloads(${runId}) requested but mock runs are disabled.`);
+      return [];
     },
     onTelemetry(cb) {
       telemetryListeners.add(cb);

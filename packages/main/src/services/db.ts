@@ -37,6 +37,21 @@ export async function initDB() {
     body text,
     created_at integer default (strftime('%s','now'))
   );
+  create table if not exists logs(
+    id integer primary key autoincrement,
+    run_id text,
+    node_id text,
+    tag text,
+    body text,
+    created_at integer default (strftime('%s','now'))
+  );
+  create table if not exists memory(
+    namespace text not null default 'default',
+    key text not null,
+    value text not null default '',
+    updated_at integer default (strftime('%s','now')),
+    primary key(namespace, key)
+  );
   `);
 }
 
@@ -92,4 +107,42 @@ export async function getPayloadsForRun(runId: string) {
     .prepare("select node_id,port,kind,body,created_at from payloads where run_id=? order by id asc")
     .all(runId);
   return rows.map((r: any) => ({ nodeId: r.node_id, port: r.port, payload: JSON.parse(r.body) }));
+}
+
+export async function insertLogEntry(
+  runId: string,
+  nodeId: string,
+  tag: string | null | undefined,
+  payload: unknown
+) {
+  const database = getDB();
+  database
+    .prepare("insert into logs(run_id,node_id,tag,body) values(?,?,?,?)")
+    .run(runId, nodeId, tag ?? null, JSON.stringify(payload ?? null));
+}
+
+export async function readMemory(namespace: string, key: string): Promise<string | null> {
+  const database = getDB();
+  const row = database
+    .prepare("select value from memory where namespace=? and key=?")
+    .get(namespace, key) as { value?: string } | undefined;
+  return row && typeof row.value === "string" ? row.value : null;
+}
+
+export async function writeMemory(namespace: string, key: string, value: string): Promise<void> {
+  const database = getDB();
+  database
+    .prepare(
+      "insert into memory(namespace,key,value,updated_at) values(?,?,?,strftime('%s','now')) " +
+        "on conflict(namespace,key) do update set value=excluded.value, updated_at=strftime('%s','now')"
+    )
+    .run(namespace, key, value);
+}
+
+export async function appendMemory(namespace: string, key: string, value: string): Promise<string> {
+  const database = getDB();
+  const existing = await readMemory(namespace, key);
+  const combined = existing ? `${existing}\n${value}` : value;
+  await writeMemory(namespace, key, combined);
+  return combined;
 }

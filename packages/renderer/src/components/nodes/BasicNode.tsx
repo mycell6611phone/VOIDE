@@ -290,7 +290,13 @@ const deriveModuleCategory = (node: NodeDef): ModuleCategory | null => {
   ) {
     return "tool";
   }
-  if (haystack.includes("ui") || haystack.includes("interface")) {
+  if (
+    haystack.includes("ui") ||
+    haystack.includes("interface") ||
+    haystack.includes("chat-input") ||
+    haystack.includes("chat input") ||
+    moduleKey === "chat.input"
+  ) {
     return "interface";
   }
   return null;
@@ -1022,7 +1028,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
 
         openChat({
           nodeId: data.id,
-          nodeLabel: data.name ?? data.id ?? "Interface",
+          nodeLabel: data.name ?? data.id ?? "Chat Input",
           geometry
         });
         return;

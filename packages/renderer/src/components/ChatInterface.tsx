@@ -22,7 +22,7 @@ export default function ChatInterface() {
   return (
     <div style={shellStyle}>
       <div style={containerStyle}>
-        <StandaloneChatView nodeId="standalone" label="Interface" />
+        <StandaloneChatView nodeId="standalone" label="Chat Input" />
       </div>
     </div>
   );

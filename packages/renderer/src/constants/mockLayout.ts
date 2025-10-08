@@ -4,36 +4,35 @@ import {
   type FlowDef,
 } from "@voide/shared";
 
-const text = ["TEXT"];
-
 export const mockLayoutFlow: FlowDef = {
   id: "flow:draft-layout",
   version: "1.0.0",
   nodes: [
     {
-      id: "ui-entry",
-      type: "module",
-      name: "UI",
+      id: "chat-input",
+      type: "chat.input",
+      name: "ChatInput",
       params: {
         __position: { x: 120, y: 360 },
         role: "entrypoint",
-        moduleKey: "interface"
+        moduleKey: "chat.input",
+        message: "How can I help you today?",
       },
-      in: [{ port: "feedback", types: text }],
-      out: [{ port: "conversation", types: text }]
+      in: [{ port: "response", types: ["TEXT", "JSON"] }],
+      out: [{ port: "text", types: ["TEXT"] }],
     },
     {
       id: "prompt-main",
-      type: "module",
+      type: "prompt",
       name: "Prompt",
       params: {
         __position: { x: 420, y: 360 },
-        text: PROMPT_PRESET_MAP[DEFAULT_PROMPT_PRESET_ID].defaultText,
+        template: PROMPT_PRESET_MAP[DEFAULT_PROMPT_PRESET_ID].defaultText,
         preset: "analysis",
-        moduleKey: "prompt"
+        moduleKey: "prompt",
       },
-      in: [{ port: "context", types: text }],
-      out: [{ port: "prompt", types: text }]
+      in: [{ port: "vars", types: ["TEXT", "JSON"] }],
+      out: [{ port: "text", types: ["TEXT"] }],
     },
     {
       id: "llm-primary",
@@ -45,54 +44,47 @@ export const mockLayoutFlow: FlowDef = {
         modelId: "model:llama3.1-8b.Q4_K_M",
         runtime: "CPU",
         temperature: 0.2,
-        maxTokens: 2048
+        maxTokens: 2048,
+        moduleKey: "llm",
       },
-      in: [{ port: "prompt", types: text }],
-      out: [{ port: "response", types: text }]
+      in: [{ port: "prompt", types: ["TEXT"] }],
+      out: [{ port: "text", types: ["TEXT"] }],
     },
     {
       id: "cache-primary",
-      type: "module",
+      type: "cache",
       name: "Cache",
       params: {
         __position: { x: 1020, y: 360 },
-        strategy: "reuse",
-        ttl: 900,
-        moduleKey: "cache"
+        strategy: "read-through",
+        key: "last-response",
+        moduleKey: "cache",
       },
-      in: [
-        { port: "lookup", types: text },
-        { port: "store", types: text }
-      ],
-      out: [{ port: "result", types: text }]
+      in: [{ port: "text", types: ["TEXT"] }],
+      out: [{ port: "text", types: ["TEXT"] }],
     }
   ],
   edges: [
     {
-      id: "edge-ui-prompt",
-      from: ["ui-entry", "conversation"],
-      to: ["prompt-main", "context"]
-    },
-    {
-      id: "edge-ui-cache",
-      from: ["ui-entry", "conversation"],
-      to: ["cache-primary", "lookup"]
+      id: "edge-input-prompt",
+      from: ["chat-input", "text"],
+      to: ["prompt-main", "vars"],
     },
     {
       id: "edge-prompt-llm",
-      from: ["prompt-main", "prompt"],
-      to: ["llm-primary", "prompt"]
+      from: ["prompt-main", "text"],
+      to: ["llm-primary", "prompt"],
     },
     {
       id: "edge-llm-cache",
-      from: ["llm-primary", "response"],
-      to: ["cache-primary", "store"]
+      from: ["llm-primary", "text"],
+      to: ["cache-primary", "text"],
     },
     {
-      id: "edge-cache-ui",
-      from: ["cache-primary", "result"],
-      to: ["ui-entry", "feedback"]
-    }
+      id: "edge-cache-input",
+      from: ["cache-primary", "text"],
+      to: ["chat-input", "response"],
+    },
   ],
   prompts: { packs: [] },
   models: { registryRef: "../models/models.json" },

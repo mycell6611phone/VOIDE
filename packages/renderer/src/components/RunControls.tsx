@@ -650,26 +650,15 @@ export default function RunControls() {
 
           if (filePath) {
             const sanitizedFilePath = filePath.replace(/\\/g, "/");
-            const normalizedRelativeForward = normalizedRelative.replace(/\\/g, "/");
-            if (
-              normalizedRelativeForward &&
-              sanitizedFilePath.endsWith(normalizedRelativeForward) &&
-              filePath.length >= normalizedRelativeForward.length
-            ) {
-              selectedDirectoryPath = filePath
-                .slice(0, filePath.length - normalizedRelativeForward.length)
-                .replace(/[\\/]+$/, "");
+            const segments = sanitizedFilePath.split("/");
+            if (segments.length > 1) {
+              segments.pop();
+              selectedDirectoryPath = segments.join("/");
+            } else {
+              selectedDirectoryPath = sanitizedFilePath;
             }
-            if (!selectedDirectoryPath) {
-              const lastSeparatorIndex = Math.max(
-                filePath.lastIndexOf("/"),
-                filePath.lastIndexOf("\\")
-              );
-              if (lastSeparatorIndex >= 0) {
-                selectedDirectoryPath = filePath.slice(0, lastSeparatorIndex).replace(/[\\/]+$/, "");
-              } else {
-                selectedDirectoryPath = filePath;
-              }
+            if (selectedDirectoryPath) {
+              selectedDirectoryPath = selectedDirectoryPath.replace(/[\\/]+$/, "");
             }
           }
 

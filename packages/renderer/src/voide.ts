@@ -1,8 +1,18 @@
 import { FlowDef, PayloadT } from "@voide/shared";
 import type { TelemetryPayload } from "@voide/ipc";
 
+type PortSpec = { port: string; types: string[] };
+
+export interface NodeCatalogEntry {
+  type: string;
+  label: string;
+  inputs: PortSpec[];
+  outputs: PortSpec[];
+  params: Record<string, unknown>;
+}
+
 export interface VoideApi {
-  getNodeCatalog: () => Promise<Array<{ type: string; in: PortSpec[]; out: PortSpec[] }>>;
+  getNodeCatalog: () => Promise<NodeCatalogEntry[]>;
   runFlow: (flow: FlowDef, inputs?: Record<string, unknown>) => Promise<{ runId: string }>;
   stopFlow: (runId: string) => Promise<{ ok: boolean }>;
   openFlow: () => Promise<{ flow: FlowDef } | null>;
@@ -12,18 +22,78 @@ export interface VoideApi {
   onTelemetry?: (cb: (event: TelemetryPayload) => void) => (() => void) | void;
 }
 
-type PortSpec = { port: string; types: string[] };
-
-const mockCatalog: Array<{ type: string; in: PortSpec[]; out: PortSpec[] }> = [
-  { type: "ui", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
-  { type: "llm", in: [{ port: "prompt", types: ["text"] }], out: [{ port: "completion", types: ["text"] }] },
-  { type: "prompt", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
-  { type: "memory", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
-  { type: "debate", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
-  { type: "log", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
-  { type: "cache", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
-  { type: "divider", in: [{ port: "in", types: ["text", "json"] }], out: [{ port: "out", types: ["text", "json"] }] },
-  { type: "loop", in: [{ port: "in", types: ["text"] }], out: [{ port: "body", types: ["text"] }, { port: "out", types: ["text"] }] }
+const mockCatalog: NodeCatalogEntry[] = [
+  {
+    type: "chat.input",
+    label: "ChatInput",
+    inputs: [{ port: "response", types: ["text", "json"] }],
+    outputs: [{ port: "text", types: ["text"] }],
+    params: { message: "" },
+  },
+  {
+    type: "prompt",
+    label: "Prompt",
+    inputs: [{ port: "vars", types: ["json", "text"] }],
+    outputs: [{ port: "text", types: ["text"] }],
+    params: { template: "" },
+  },
+  {
+    type: "llm",
+    label: "LLM",
+    inputs: [{ port: "prompt", types: ["text"] }],
+    outputs: [{ port: "text", types: ["text"] }],
+    params: {
+      adapter: "llama.cpp",
+      runtime: "CPU",
+      temperature: 0.7,
+      maxTokens: 2048,
+    },
+  },
+  {
+    type: "debate.loop",
+    label: "Debate/Loop",
+    inputs: [{ port: "text", types: ["text"] }],
+    outputs: [{ port: "text", types: ["text"] }],
+    params: { iterations: 2, reducer: "last" },
+  },
+  {
+    type: "cache",
+    label: "Cache",
+    inputs: [{ port: "text", types: ["text"] }],
+    outputs: [{ port: "text", types: ["text"] }],
+    params: { strategy: "read-through", key: "" },
+  },
+  {
+    type: "log",
+    label: "Log",
+    inputs: [{ port: "any", types: ["text", "json", "vector"] }],
+    outputs: [{ port: "any", types: ["text", "json", "vector"] }],
+    params: { tag: "" },
+  },
+  {
+    type: "memory",
+    label: "Memory",
+    inputs: [{ port: "text", types: ["text"] }],
+    outputs: [{ port: "text", types: ["text"] }],
+    params: { op: "get", namespace: "default", key: "" },
+  },
+  {
+    type: "diverter",
+    label: "Diverter",
+    inputs: [{ port: "in", types: ["text", "json"] }],
+    outputs: [
+      { port: "a", types: ["text", "json"] },
+      { port: "b", types: ["text", "json"] },
+    ],
+    params: { route: "all" },
+  },
+  {
+    type: "tool.call",
+    label: "Tool Call",
+    inputs: [{ port: "args", types: ["json", "text"] }],
+    outputs: [{ port: "result", types: ["json", "text"] }],
+    params: { tool: "" },
+  },
 ];
 
 const sampleFlow: FlowDef = {
@@ -31,40 +101,57 @@ const sampleFlow: FlowDef = {
   version: "1.0.0",
   nodes: [
     {
+      id: "chat-input",
+      name: "ChatInput",
+      type: "chat.input",
+      params: { message: "Tell me something interesting about space." },
+      in: [{ port: "response", types: ["text", "json"] }],
+      out: [{ port: "text", types: ["text"] }],
+    },
+    {
       id: "prompt",
       name: "Prompt",
-      type: "system.prompt",
-      params: { text: "Welcome to VOIDE" },
-      in: [],
-      out: [{ port: "out", types: ["text"] }]
+      type: "prompt",
+      params: { template: "You are a helpful assistant.\nUser: {{input}}\nAssistant:" },
+      in: [{ port: "vars", types: ["json", "text"] }],
+      out: [{ port: "text", types: ["text"] }],
     },
     {
       id: "llm",
       name: "LLAMA3.1 8B",
-      type: "llm.generic",
+      type: "llm",
       params: {
         modelId: "model:llama3.1-8b.Q4_K_M",
         adapter: "llama.cpp",
         runtime: "CPU",
         temperature: 0.2,
         maxTokens: 2048,
-        promptTemplate: ""
       },
       in: [{ port: "prompt", types: ["text"] }],
-      out: [{ port: "completion", types: ["text"] }]
+      out: [{ port: "text", types: ["text"] }],
+    },
+    {
+      id: "logger",
+      name: "Log",
+      type: "log",
+      params: { tag: "sample" },
+      in: [{ port: "any", types: ["text", "json", "vector"] }],
+      out: [{ port: "any", types: ["text", "json", "vector"] }],
     },
     {
       id: "output",
       name: "Output",
       type: "output",
       params: {},
-      in: [{ port: "in", types: ["text"] }],
-      out: []
-    }
+      in: [{ port: "text", types: ["text"] }],
+      out: [],
+    },
   ],
   edges: [
-    { id: "e1", from: ["prompt", "out"], to: ["llm", "prompt"] },
-    { id: "e2", from: ["llm", "completion"], to: ["output", "in"] }
+    { id: "e1", from: ["chat-input", "text"], to: ["prompt", "vars"] },
+    { id: "e2", from: ["prompt", "text"], to: ["llm", "prompt"] },
+    { id: "e3", from: ["llm", "text"], to: ["logger", "any"] },
+    { id: "e4", from: ["logger", "any"], to: ["output", "text"] },
   ]
 };
 

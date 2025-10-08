@@ -1,15 +1,7 @@
-import React from "react";
+import React, { useMemo } from "react";
 import type { NodeDef, PortDef } from "@voide/shared";
 import { useFlowStore } from "../state/flowStore";
-
-type ModuleConfig = {
-  key: string;
-  label: string;
-  nodeType: "llm" | "module";
-  inputs: PortDef[];
-  outputs: PortDef[];
-  description?: string;
-};
+import type { NodeCatalogEntry } from "../voide";
 
 type ToolConfig = {
   key: "wire";
@@ -19,93 +11,24 @@ type ToolConfig = {
 
 const POSITION_KEY = "__position";
 
-const MODULES: ModuleConfig[] = [
-  {
-    key: "interface",
-    label: "UI",
-    nodeType: "module",
-    inputs: [{ port: "feedback", types: ["TEXT"] }],
-    outputs: [{ port: "conversation", types: ["TEXT"] }],
-    description: "Chat entry point"
-  },
-  {
-    key: "llm",
-    label: "LLM",
-    nodeType: "llm",
-    inputs: [{ port: "prompt", types: ["TEXT"] }],
-    outputs: [{ port: "response", types: ["TEXT"] }],
-    description: "Large language model"
-  },
-  {
-    key: "prompt",
-    label: "Prompt",
-    nodeType: "module",
-    inputs: [],
-    outputs: [{ port: "prompt", types: ["TEXT"] }],
-    description: "Prepare model prompts"
-  },
-  {
-    key: "debate",
-    label: "Debate/Loop",
-    nodeType: "module",
-    inputs: [{ port: "input", types: ["TEXT"] }],
-    outputs: [{ port: "result", types: ["TEXT"] }],
-    description: "Iterative reasoning"
-  },
-  {
-    key: "cache",
-    label: "Cache",
-    nodeType: "module",
-    inputs: [{ port: "in", types: ["TEXT", "JSON"] }],
-    outputs: [{ port: "out", types: ["TEXT", "JSON"] }],
-    description: "Reuse previous outputs"
-  },
-  {
-    key: "log",
-    label: "Log",
-    nodeType: "module",
-    inputs: [{ port: "entry", types: ["TEXT", "JSON"] }],
-    outputs: [],
-    description: "Record activity"
-  },
-  {
-    key: "memory",
-    label: "Memory",
-    nodeType: "module",
-    inputs: [
-      { port: "search", types: ["TEXT", "JSON"] },
-      { port: "write", types: ["TEXT", "JSON"] }
-    ],
-    outputs: [{ port: "attach", types: ["TEXT", "JSON"] }],
-    description: "Store and retrieve persistent context"
-  },
-  {
-    key: "divider",
-    label: "Divider",
-    nodeType: "module",
-    inputs: [{ port: "in", types: ["TEXT", "JSON"] }],
-    outputs: [
-      { port: "pathA", types: ["TEXT", "JSON"] },
-      { port: "pathB", types: ["TEXT", "JSON"] }
-    ],
-    description: "Route outputs"
-  },
-  {
-    key: "tool",
-    label: "Tool Call",
-    nodeType: "module",
-    inputs: [{ port: "input", types: ["TEXT", "JSON"] }],
-    outputs: [{ port: "result", types: ["TEXT", "JSON"] }],
-    description: "Invoke registered tools"
-  }
-];
+const MODULE_DESCRIPTIONS: Record<string, string> = {
+  "chat.input": "Chat entry point",
+  prompt: "Prepare model prompts",
+  llm: "Large language model",
+  "debate.loop": "Iterative reasoning",
+  cache: "Reuse previous outputs",
+  log: "Record activity",
+  memory: "Store and retrieve persistent context",
+  diverter: "Route outputs",
+  "tool.call": "Invoke registered tools",
+};
 
 const TOOLS: ToolConfig[] = [
   {
     key: "wire",
     label: "Wiring Tool",
-    description: "Connect modules together"
-  }
+    description: "Connect modules together",
+  },
 ];
 
 const computePosition = (index: number) => {
@@ -116,25 +39,31 @@ const computePosition = (index: number) => {
   const row = Math.floor(index / columns);
   return {
     x: 220 + col * spacingX,
-    y: 160 + row * spacingY
+    y: 160 + row * spacingY,
   };
 };
 
 const uniqueNodeId = (prefix: string) =>
   `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
-const makeNode = (config: ModuleConfig, index: number): NodeDef => {
+const clonePorts = (ports: Array<{ port: string; types: string[] }> | undefined): PortDef[] =>
+  Array.isArray(ports)
+    ? ports.map((port) => ({ port: port.port, types: [...port.types] }))
+    : [];
+
+const makeNode = (entry: NodeCatalogEntry, index: number): NodeDef => {
   const position = computePosition(index);
   return {
-    id: uniqueNodeId(config.key),
-    type: config.nodeType,
-    name: config.label,
+    id: uniqueNodeId(entry.type),
+    type: entry.type,
+    name: entry.label,
     params: {
       [POSITION_KEY]: position,
-      moduleKey: config.key
+      moduleKey: entry.type,
+      ...(entry.params ?? {}),
     },
-    in: config.inputs,
-    out: config.outputs
+    in: clonePorts(entry.inputs),
+    out: clonePorts(entry.outputs),
   };
 };
 
@@ -144,7 +73,7 @@ const sectionTitleStyle: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: 0.6,
   color: "#475569",
-  marginBottom: 8
+  marginBottom: 8,
 };
 
 const moduleButtonStyle: React.CSSProperties = {
@@ -159,26 +88,45 @@ const moduleButtonStyle: React.CSSProperties = {
   flexDirection: "column",
   gap: 4,
   cursor: "pointer",
-  transition: "border-color 0.2s ease, box-shadow 0.2s ease"
+  transition: "border-color 0.2s ease, box-shadow 0.2s ease",
 };
 
 const toolButtonStyle: React.CSSProperties = {
   ...moduleButtonStyle,
   justifyContent: "space-between",
   flexDirection: "row",
-  alignItems: "center"
+  alignItems: "center",
 };
 
 export default function Palette() {
-  const { flow, addNode, activeTool, setActiveTool } = useFlowStore((state) => ({
+  const { flow, addNode, activeTool, setActiveTool, catalog } = useFlowStore((state) => ({
     flow: state.flow,
     addNode: state.addNode,
     activeTool: state.activeTool,
-    setActiveTool: state.setActiveTool
+    setActiveTool: state.setActiveTool,
+    catalog: state.catalog,
   }));
 
-  const handleAddModule = (config: ModuleConfig) => {
-    const node = makeNode(config, flow.nodes.length);
+  const modules = useMemo(() => {
+    if (!Array.isArray(catalog)) {
+      return [] as NodeCatalogEntry[];
+    }
+    return catalog
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") {
+          return null;
+        }
+        const record = entry as NodeCatalogEntry;
+        if (typeof record.type !== "string" || typeof record.label !== "string") {
+          return null;
+        }
+        return record;
+      })
+      .filter((entry): entry is NodeCatalogEntry => Boolean(entry));
+  }, [catalog]);
+
+  const handleAddModule = (entry: NodeCatalogEntry) => {
+    const node = makeNode(entry, flow.nodes.length);
     addNode(node);
     if (activeTool !== "select") {
       setActiveTool("select");
@@ -198,58 +146,59 @@ export default function Palette() {
         padding: "16px 14px",
         display: "flex",
         flexDirection: "column",
-        gap: 24,
-        overflowY: "auto"
+        gap: 18,
       }}
     >
       <div>
         <div style={sectionTitleStyle}>Modules</div>
-        <div style={{ display: "grid", gap: 12 }}>
-          {MODULES.map((module) => (
-            <button
-              key={module.key}
-              style={{
-                ...moduleButtonStyle,
-                borderColor: module.key === "llm" ? "#fca5a5" : moduleButtonStyle.border,
-                boxShadow: "none"
-              }}
-              onClick={() => handleAddModule(module)}
-            >
-              <span>{module.label}</span>
-              {module.description ? (
-                <span style={{ fontSize: 12, fontWeight: 400, color: "#64748b" }}>
-                  {module.description}
-                </span>
-              ) : null}
-            </button>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {modules.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#64748b" }}>
+              Node catalog unavailable. Connect to the runtime to load modules.
+            </div>
+          ) : (
+            modules.map((entry) => {
+              const description = MODULE_DESCRIPTIONS[entry.type] ?? "";
+              return (
+                <button
+                  key={entry.type}
+                  style={moduleButtonStyle}
+                  onClick={() => handleAddModule(entry)}
+                >
+                  <span style={{ fontSize: 14 }}>{entry.label}</span>
+                  {description ? (
+                    <span style={{ fontSize: 11, color: "#64748b" }}>{description}</span>
+                  ) : null}
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
-
       <div>
         <div style={sectionTitleStyle}>Tools</div>
-        <div style={{ display: "grid", gap: 12 }}>
-          {TOOLS.map((tool) => (
-            <button
-              key={tool.key}
-              style={{
-                ...toolButtonStyle,
-                borderColor: activeTool === tool.key ? "#94a3b8" : toolButtonStyle.border,
-                background: activeTool === tool.key ? "#e2e8f0" : toolButtonStyle.background
-              }}
-              onClick={() => handleToggleTool(tool)}
-            >
-              <span>{tool.label}</span>
-              {tool.description ? (
-                <span style={{ fontSize: 12, fontWeight: 400, color: "#64748b" }}>
-                  {tool.description}
-                </span>
-              ) : null}
-            </button>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {TOOLS.map((tool) => {
+            const isActive = activeTool === tool.key;
+            return (
+              <button
+                key={tool.key}
+                style={{
+                  ...toolButtonStyle,
+                  borderColor: isActive ? "#2563eb" : "#d1d5db",
+                  background: isActive ? "#e0f2fe" : toolButtonStyle.background,
+                }}
+                onClick={() => handleToggleTool(tool)}
+              >
+                <span style={{ fontSize: 13 }}>{tool.label}</span>
+                {tool.description ? (
+                  <span style={{ fontSize: 11, color: "#64748b" }}>{tool.description}</span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
       </div>
     </aside>
   );
 }
-

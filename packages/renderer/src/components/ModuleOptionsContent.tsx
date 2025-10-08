@@ -592,7 +592,7 @@ const moduleHeadings: Record<ModuleCategory, { title: string; description: strin
       description: "Label a branch point so canvases stay readable."
     },
     interface: {
-      title: "Interface",
+      title: "Chat Input",
       description: "Configure the chat entry point into the flow."
     },
     memory: {
@@ -1320,16 +1320,34 @@ function renderInterfaceOptions(
   params: Record<string, any> | undefined,
   onUpdate: ModuleOptionsContentProps["onUpdate"]
 ) {
+  const message = typeof params?.message === "string" ? params.message : "";
   const title = typeof params?.title === "string" ? params.title : "Chat";
   const placeholder =
-    typeof params?.placeholder === "string"
-      ? params.placeholder
-      : "Ask the team anything";
+    typeof params?.placeholder === "string" ? params.placeholder : "Ask anything";
+
+  const handleMessageChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    updateParamValue(onUpdate, "message", event.target.value);
+  };
 
   return (
     <>
       <div style={fieldStyle}>
-        <span style={labelStyle}>Window Title</span>
+        <span style={labelStyle}>Default Message</span>
+        <textarea
+          style={textAreaStyle}
+          value={message}
+          onChange={handleMessageChange}
+          placeholder="Provide the first user message"
+          spellCheck
+        />
+        <span style={helperStyle}>
+          Used when a run starts without live chat input. Leave blank to prompt the
+          user at runtime.
+        </span>
+      </div>
+
+      <div style={fieldStyle}>
+        <span style={labelStyle}>Chat Window Title</span>
         <input
           style={inputStyle}
           value={title}
@@ -1348,6 +1366,7 @@ function renderInterfaceOptions(
           }
           spellCheck
         />
+        <span style={helperStyle}>Optional. Controls the hint text in the chat box.</span>
       </div>
     </>
   );

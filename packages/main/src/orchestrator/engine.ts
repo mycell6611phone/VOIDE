@@ -1,15 +1,35 @@
 import Piscina from "piscina";
 import fs from "fs";
 import path from "path";
+import { createHash } from "crypto";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
-import type { FlowDef, NodeDef, LLMParams, LoopParams, PayloadT, TextPayload, RuntimeProfile } from "@voide/shared";
+import type { FlowDef, NodeDef, LLMParams, PayloadT, TextPayload, RuntimeProfile } from "@voide/shared";
 import { TelemetryEventType } from "@voide/shared";
 import { topoOrder, Frontier, downstream } from "./scheduler.js";
+import {
+  clearAndRegister,
+  getNode,
+  listNodes,
+  type ExecCtx,
+  type NodeExecutionResult,
+  type NodeImpl,
+} from "./nodeRegistry.js";
 import { getModelRegistry } from "../services/models.js";
 import { getSecretsService } from "../services/secrets.js";
-import { recordRunLog, createRun, updateRunStatus, savePayload, getPayloadsForRun } from "../services/db.js";
+import {
+  recordRunLog,
+  createRun,
+  updateRunStatus,
+  savePayload,
+  getPayloadsForRun,
+  insertLogEntry,
+  readMemory,
+  writeMemory,
+  appendMemory,
+} from "../services/db.js";
 import { emitSchedulerTelemetry } from "../services/telemetry.js";
+import { invokeTool } from "../services/tools.js";
 
 type RunState = {
   runId: string;
@@ -20,6 +40,7 @@ type RunState = {
   values: Map<string, PayloadT[]>;
   pktSeq: number;
   runtimeInputs: Record<string, unknown>;
+  nodeState: Map<string, unknown>;
 };
 
 const runs = new Map<string, RunState>();
@@ -33,7 +54,6 @@ const PiscinaCtor = Piscina as any;
 // runtime module resolution errors when Piscina attempted to load the
 // workers. The extra "../" correctly points to the sibling package.
 const poolLLM = new PiscinaCtor({ filename: path.join(__dirname, "../../../workers/dist/llm.js") });
-const poolEmbed = new PiscinaCtor({ filename: path.join(__dirname, "../../../workers/dist/embed.js") });
 
 type ManifestModel = {
   name?: string;
@@ -610,6 +630,634 @@ async function resolveLLMJobConfig(rawParams: Record<string, unknown>): Promise<
   return { params, modelFile, manifestModel, registryModel };
 }
 
+function clonePayload(payload: PayloadT): PayloadT {
+  try {
+    return typeof structuredClone === "function" ? structuredClone(payload) : JSON.parse(JSON.stringify(payload));
+  } catch {
+    return JSON.parse(JSON.stringify(payload));
+  }
+}
+
+function clonePayloadArray(payloads: PayloadT[]): PayloadT[] {
+  return payloads.map(clonePayload);
+}
+
+function cloneInputsMap(map: Map<string, PayloadT[]>): Map<string, PayloadT[]> {
+  const out = new Map<string, PayloadT[]>();
+  for (const [port, payloads] of map.entries()) {
+    out.set(port, clonePayloadArray(payloads));
+  }
+  return out;
+}
+
+function collectIncomingPayloads(st: RunState, nodeId: string): Map<string, PayloadT[]> {
+  const map = new Map<string, PayloadT[]>();
+  for (const edge of st.flow.edges) {
+    if (edge.to[0] !== nodeId) {
+      continue;
+    }
+    const key = `${edge.from[0]}:${edge.from[1]}`;
+    const payloads = st.values.get(key);
+    if (!payloads || payloads.length === 0) {
+      continue;
+    }
+    const existing = map.get(edge.to[1]);
+    if (existing) {
+      existing.push(...payloads.map(clonePayload));
+    } else {
+      map.set(edge.to[1], payloads.map(clonePayload));
+    }
+  }
+  return map;
+}
+
+function countTokens(text: string): number {
+  const trimmed = typeof text === "string" ? text.trim() : "";
+  if (!trimmed) {
+    return 0;
+  }
+  return trimmed.split(/\s+/).length;
+}
+
+function normalizeNamespace(value: unknown): string {
+  if (typeof value !== "string") {
+    return "default";
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : "default";
+}
+
+function extractRuntimeMessage(value: unknown): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const candidateKeys = ["message", "text", "content", "value"];
+    for (const key of candidateKeys) {
+      const raw = record[key];
+      if (typeof raw === "string" && raw.trim().length > 0) {
+        return raw;
+      }
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return null;
+}
+
+function renderTemplate(template: string, vars: Record<string, unknown>): string {
+  const tpl = typeof template === "string" ? template : "";
+  if (!tpl.trim()) {
+    const direct = vars.input;
+    return typeof direct === "string" ? direct : "";
+  }
+  return tpl.replace(/{{\s*([\w.]+)\s*}}/g, (_match, key: string) => {
+    const path = key.split(".");
+    let current: unknown = vars;
+    for (const segment of path) {
+      if (!current || typeof current !== "object") {
+        current = undefined;
+        break;
+      }
+      current = (current as Record<string, unknown>)[segment];
+    }
+    if (current === undefined || current === null) {
+      return "";
+    }
+    return String(current);
+  });
+}
+
+function payloadToArgs(payload: PayloadT): unknown {
+  if (payload.kind === "json") {
+    return payload.value;
+  }
+  if (payload.kind === "text") {
+    const text = payload.text ?? "";
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return "";
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return text;
+    }
+  }
+  return payload;
+}
+
+const chatInputNode: NodeImpl = {
+  type: "chat.input",
+  label: "ChatInput",
+  inputs: [{ port: "response", types: ["text", "json"] }],
+  outputs: [{ port: "text", types: ["text"] }],
+  params: { message: "" },
+  async execute(ctx) {
+    const params = (ctx.node.params ?? {}) as Record<string, unknown>;
+    let message = extractRuntimeMessage(ctx.runtimeInput);
+    if (!message) {
+      const responses = ctx.getText("response");
+      if (responses.length > 0) {
+        message = responses[responses.length - 1];
+      }
+    }
+    if (!message && typeof params.message === "string") {
+      message = params.message;
+    }
+    const text = message ?? "";
+    await ctx.recordProgress({ tokens: countTokens(text), latencyMs: 0, status: "ok" });
+    return [{ port: "text", payload: { kind: "text", text } }];
+  },
+};
+
+const promptNode: NodeImpl = {
+  type: "prompt",
+  label: "Prompt",
+  inputs: [{ port: "vars", types: ["json", "text"] }],
+  outputs: [{ port: "text", types: ["text"] }],
+  params: { template: "" },
+  async execute(ctx) {
+    const payloads = ctx.getInput("vars");
+    const vars: Record<string, unknown> = {};
+    for (const payload of payloads) {
+      if (payload.kind === "json" && payload.value && typeof payload.value === "object") {
+        Object.assign(vars, payload.value as Record<string, unknown>);
+      }
+      if (payload.kind === "text") {
+        vars.input = payload.text;
+      }
+    }
+    if (!("input" in vars)) {
+      const runtime = extractRuntimeMessage(ctx.runtimeInput);
+      if (runtime) {
+        vars.input = runtime;
+      }
+    }
+    const params = (ctx.node.params ?? {}) as Record<string, unknown>;
+    const template = typeof params.template === "string" ? params.template : "";
+    const rendered = renderTemplate(template, vars);
+    await ctx.recordProgress({ tokens: countTokens(rendered), latencyMs: 0, status: "ok" });
+    return [{ port: "text", payload: { kind: "text", text: rendered } }];
+  },
+};
+
+const llmNode: NodeImpl = {
+  type: "llm",
+  label: "LLM",
+  inputs: [{ port: "prompt", types: ["text"] }],
+  outputs: [{ port: "text", types: ["text"] }],
+  params: {
+    adapter: "llama.cpp",
+    runtime: "CPU",
+    temperature: 0.7,
+    maxTokens: 2048,
+  },
+  async execute(ctx) {
+    const prompts = ctx.getText("prompt");
+    const prompt = prompts.join("\n");
+    const started = ctx.now();
+    const { params, modelFile } = await resolveLLMJobConfig(ctx.node.params ?? {});
+    const result = await poolLLM.run({ params, prompt, modelFile });
+    const payload: TextPayload = { kind: "text", text: result.text };
+    if (params.includeRawInput) {
+      payload.rawInput = prompt;
+    }
+    await ctx.recordProgress({
+      tokens: typeof result.tokens === "number" ? result.tokens : countTokens(result.text),
+      latencyMs: ctx.now() - started,
+      status: "ok",
+    });
+    return [{ port: "text", payload }];
+  },
+};
+
+const debateLoopNode: NodeImpl = {
+  type: "debate.loop",
+  label: "Debate/Loop",
+  inputs: [{ port: "text", types: ["text"] }],
+  outputs: [{ port: "text", types: ["text"] }],
+  params: { iterations: 2, reducer: "last" },
+  async execute(ctx) {
+    const params = (ctx.node.params ?? {}) as Record<string, unknown>;
+    const iterations = Math.max(1, toPositiveInt(params.iterations) ?? 2);
+    const reducer = typeof params.reducer === "string" ? params.reducer.toLowerCase() : "last";
+    const input = ctx.getText("text").join("\n");
+    const rounds: string[] = [];
+    for (let i = 0; i < iterations; i += 1) {
+      const prefix = iterations > 1 ? `Round ${i + 1}: ` : "";
+      rounds.push(`${prefix}${input}`.trim());
+    }
+    const output = reducer === "concat" ? rounds.join("\n\n") : rounds[rounds.length - 1] ?? input;
+    await ctx.recordProgress({ tokens: countTokens(output), latencyMs: 0, status: "ok" });
+    return [{ port: "text", payload: { kind: "text", text: output } }];
+  },
+};
+
+const cacheNode: NodeImpl = {
+  type: "cache",
+  label: "Cache",
+  inputs: [{ port: "text", types: ["text"] }],
+  outputs: [{ port: "text", types: ["text"] }],
+  params: { strategy: "read-through", key: "" },
+  async execute(ctx) {
+    const params = (ctx.node.params ?? {}) as Record<string, unknown>;
+    const payloads = ctx.getInput("text");
+    const textPayload = payloads.find((p): p is TextPayload => p.kind === "text");
+    const text = textPayload?.text ?? "";
+    const keyParam = typeof params.key === "string" && params.key.trim().length > 0 ? params.key.trim() : null;
+    const key = keyParam ?? createHash("sha256").update(text).digest("hex");
+    const store = ctx.getNodeState<Map<string, TextPayload>>(() => new Map());
+    const cached = store.get(key);
+    if (cached) {
+      await ctx.recordProgress({ tokens: countTokens(cached.text), latencyMs: 0, status: "ok" });
+      return [{ port: "text", payload: clonePayload(cached) }];
+    }
+    if (textPayload) {
+      store.set(key, clonePayload(textPayload) as TextPayload);
+      await ctx.recordProgress({ tokens: countTokens(textPayload.text), latencyMs: 0, status: "ok" });
+      return [{ port: "text", payload: textPayload }];
+    }
+    await ctx.recordProgress({ tokens: 0, latencyMs: 0, status: "ok" });
+    return [];
+  },
+};
+
+const logNode: NodeImpl = {
+  type: "log",
+  label: "Log",
+  inputs: [{ port: "any", types: ["text", "json", "vector"] }],
+  outputs: [{ port: "any", types: ["text", "json", "vector"] }],
+  params: { tag: "" },
+  async execute(ctx) {
+    const params = (ctx.node.params ?? {}) as Record<string, unknown>;
+    const tag = typeof params.tag === "string" && params.tag.trim().length > 0 ? params.tag.trim() : null;
+    const payloads = ctx.getInput("any");
+    const timestamp = ctx.now();
+    await Promise.all(
+      payloads.map((payload) => ctx.logEntry({ tag, payload: { payload, timestamp } }))
+    );
+    await ctx.recordProgress({ tokens: 0, latencyMs: 0, status: "ok" });
+    return payloads.map((payload) => ({ port: "any", payload }));
+  },
+};
+
+const memoryNode: NodeImpl = {
+  type: "memory",
+  label: "Memory",
+  inputs: [{ port: "text", types: ["text"] }],
+  outputs: [{ port: "text", types: ["text"] }],
+  params: { op: "get", namespace: "default", key: "" },
+  async execute(ctx) {
+    const params = (ctx.node.params ?? {}) as Record<string, unknown>;
+    const namespace = normalizeNamespace(params.namespace);
+    const key = typeof params.key === "string" && params.key.trim().length > 0 ? params.key.trim() : null;
+    if (!key) {
+      throw new Error("Memory node requires a non-empty 'key' parameter.");
+    }
+    const op = typeof params.op === "string" ? params.op.toLowerCase() : "get";
+    const text = ctx.getText("text").join("\n");
+    let result = "";
+    if (op === "set") {
+      await ctx.writeMemory(namespace, key, text);
+      result = text;
+    } else if (op === "append") {
+      result = await ctx.appendMemory(namespace, key, text);
+    } else {
+      result = (await ctx.readMemory(namespace, key)) ?? "";
+    }
+    await ctx.recordProgress({ tokens: countTokens(result), latencyMs: 0, status: "ok" });
+    return [{ port: "text", payload: { kind: "text", text: result } }];
+  },
+};
+
+const diverterNode: NodeImpl = {
+  type: "diverter",
+  label: "Diverter",
+  inputs: [{ port: "in", types: ["text", "json"] }],
+  outputs: [
+    { port: "a", types: ["text", "json"] },
+    { port: "b", types: ["text", "json"] },
+  ],
+  params: { route: "all" },
+  async execute(ctx) {
+    const params = (ctx.node.params ?? {}) as Record<string, unknown>;
+    const routeParam = typeof params.route === "string" ? params.route.toLowerCase() : "all";
+    const targets = routeParam === "a" ? ["a"] : routeParam === "b" ? ["b"] : ["a", "b"];
+    const payloads = ctx.getInput("in");
+    const outputs: NodeExecutionResult = [];
+    for (const payload of payloads) {
+      for (const target of targets) {
+        outputs.push({ port: target, payload: clonePayload(payload) });
+      }
+    }
+    await ctx.recordProgress({ tokens: 0, latencyMs: 0, status: "ok" });
+    return outputs;
+  },
+};
+
+const toolCallNode: NodeImpl = {
+  type: "tool.call",
+  label: "Tool Call",
+  inputs: [{ port: "args", types: ["json", "text"] }],
+  outputs: [{ port: "result", types: ["json", "text"] }],
+  params: { tool: "" },
+  async execute(ctx) {
+    const params = (ctx.node.params ?? {}) as Record<string, unknown>;
+    const toolName = typeof params.tool === "string" && params.tool.trim().length > 0 ? params.tool.trim() : null;
+    if (!toolName) {
+      throw new Error("Tool Call node requires a 'tool' parameter.");
+    }
+    const payloads = ctx.getInput("args");
+    const argsSource = payloads.length > 0 ? payloads[payloads.length - 1] : undefined;
+    const args = argsSource ? payloadToArgs(argsSource) : ctx.runtimeInput;
+    const result = await ctx.invokeTool(toolName, args);
+    await ctx.recordProgress({ tokens: 0, latencyMs: 0, status: "ok" });
+    if (typeof result === "string") {
+      return [{ port: "result", payload: { kind: "text", text: result } }];
+    }
+    return [{ port: "result", payload: { kind: "json", value: result ?? null } }];
+  },
+};
+
+const outputNode: NodeImpl = {
+  type: "output",
+  label: "Output",
+  inputs: [{ port: "text", types: ["text"] }],
+  outputs: [],
+  hidden: true,
+  async execute(ctx) {
+    const text = ctx.getText("text").join("\n");
+    await ctx.logEntry({ tag: "output", payload: { text, timestamp: ctx.now() } });
+    await ctx.recordProgress({ tokens: countTokens(text), latencyMs: 0, status: "ok" });
+    return [];
+  },
+};
+
+const BUILTIN_NODES: NodeImpl[] = [
+  chatInputNode,
+  llmNode,
+  promptNode,
+  debateLoopNode,
+  cacheNode,
+  logNode,
+  memoryNode,
+  diverterNode,
+  toolCallNode,
+  outputNode,
+];
+
+clearAndRegister(BUILTIN_NODES);
+
+const PORT_MIGRATIONS: Record<string, { in?: Record<string, string>; out?: Record<string, string> }> = {
+  "chat.input": {
+    in: { feedback: "response", Json: "response", response_in: "response" },
+    out: { conversation: "text", user_message: "text" },
+  },
+  prompt: {
+    in: { context: "vars", in: "vars" },
+    out: { prompt: "text", out: "text" },
+  },
+  llm: {
+    in: { model_input: "prompt" },
+    out: { model_output: "text", completion: "text", response: "text" },
+  },
+  "debate.loop": {
+    in: { configurable_in: "text", input: "text", in: "text" },
+    out: { configurable_out: "text", body: "text", out: "text", result: "text" },
+  },
+  cache: {
+    in: { lookup: "text", pass_through: "text", save_input: "text", store: "text" },
+    out: { cached_output: "text", result: "text", out: "text" },
+  },
+  log: {
+    in: { input: "any", entry: "any" },
+    out: {},
+  },
+  memory: {
+    in: { search: "text", write: "text", memory_base: "text", save_data: "text" },
+    out: { attach: "text", retrieved_memory: "text", out: "text" },
+  },
+  diverter: {
+    in: { in: "in" },
+    out: { and_out: "a", or_out: "b", pathA: "a", pathB: "b" },
+  },
+  "tool.call": {
+    in: { input: "args" },
+    out: {},
+  },
+  output: {
+    in: { in: "text" },
+    out: {},
+  },
+};
+
+function upgradeFlow(flow: FlowDef): FlowDef {
+  const upgradedNodes = flow.nodes.map((node) => {
+    const next: NodeDef = {
+      ...node,
+      params: { ...(node.params ?? {}) },
+    };
+    let nextType = node.type;
+    const params = next.params as Record<string, unknown>;
+    if (nextType === "system.prompt") {
+      nextType = "prompt";
+      if (typeof params.text === "string" && typeof params.template !== "string") {
+        params.template = params.text;
+      }
+      delete params.text;
+    } else if (nextType === "llm.generic") {
+      nextType = "llm";
+    } else if (nextType === "critic") {
+      nextType = "debate.loop";
+      if (params.iterations === undefined) {
+        params.iterations = 1;
+      }
+    } else if (nextType === "loop") {
+      nextType = "debate.loop";
+    } else if (nextType === "orchestrator") {
+      nextType = "diverter";
+      if (params.route === undefined) {
+        params.route = "all";
+      }
+    } else if (nextType === "retriever" || nextType === "vector.store") {
+      nextType = "memory";
+      if (params.op === undefined) {
+        params.op = "get";
+      }
+    } else if (nextType === "ui") {
+      nextType = "chat.input";
+    } else if (nextType === "module") {
+      const moduleKey = typeof params.moduleKey === "string" ? params.moduleKey.toLowerCase() : "";
+      switch (moduleKey) {
+        case "interface":
+          nextType = "chat.input";
+          break;
+        case "prompt":
+          nextType = "prompt";
+          break;
+        case "llm":
+          nextType = "llm";
+          break;
+        case "cache":
+          nextType = "cache";
+          break;
+        case "memory":
+          nextType = "memory";
+          break;
+        case "divider":
+        case "diverter":
+          nextType = "diverter";
+          break;
+        case "debate":
+        case "loop":
+          nextType = "debate.loop";
+          break;
+        case "log":
+          nextType = "log";
+          break;
+        case "tool":
+        case "toolcall":
+        case "tool-call":
+          nextType = "tool.call";
+          break;
+        default:
+          break;
+      }
+    }
+
+    next.type = nextType;
+    params.moduleKey = nextType;
+
+    const impl = getNode(nextType);
+    if (impl) {
+      next.in = impl.inputs.map((port) => ({ port: port.port, types: [...port.types] }));
+      next.out = impl.outputs.map((port) => ({ port: port.port, types: [...port.types] }));
+      if (!next.name || !next.name.trim()) {
+        next.name = impl.label;
+      }
+      if (impl.params) {
+        for (const [key, value] of Object.entries(impl.params)) {
+          if (!(key in params)) {
+            params[key] = value;
+          }
+        }
+      }
+    }
+    return next;
+  });
+
+  const outPortRemap = new Map<string, Record<string, string>>();
+  const inPortRemap = new Map<string, Record<string, string>>();
+
+  upgradedNodes.forEach((node) => {
+    const migration = PORT_MIGRATIONS[node.type];
+    if (migration?.out) {
+      outPortRemap.set(node.id, migration.out);
+    }
+    if (migration?.in) {
+      inPortRemap.set(node.id, migration.in);
+    }
+  });
+
+  const upgradedEdges = flow.edges.map((edge) => {
+    const remapped: typeof edge = { ...edge, from: [...edge.from] as [string, string], to: [...edge.to] as [string, string] };
+    const outMap = outPortRemap.get(remapped.from[0]);
+    if (outMap && outMap[remapped.from[1]]) {
+      remapped.from[1] = outMap[remapped.from[1]];
+    }
+    const inMap = inPortRemap.get(remapped.to[0]);
+    if (inMap && inMap[remapped.to[1]]) {
+      remapped.to[1] = inMap[remapped.to[1]];
+    }
+    return remapped;
+  });
+
+  return {
+    ...flow,
+    nodes: upgradedNodes,
+    edges: upgradedEdges,
+  };
+}
+
+function createExecCtx(st: RunState, node: NodeDef): ExecCtx {
+  const cachedInputs = collectIncomingPayloads(st, node.id);
+  const runtimeInput = st.runtimeInputs?.[node.id];
+  return {
+    runId: st.runId,
+    node,
+    runtimeInput,
+    now: () => Date.now(),
+    getInputs: () => cloneInputsMap(cachedInputs),
+    getInput: (port: string) => clonePayloadArray(cachedInputs.get(port) ?? []),
+    getText: (port?: string) => {
+      const sources = port ? cachedInputs.get(port) ?? [] : Array.from(cachedInputs.values()).flat();
+      const texts: string[] = [];
+      for (const payload of sources) {
+        if (payload.kind === "text" && typeof payload.text === "string") {
+          texts.push(payload.text);
+        }
+      }
+      if (texts.length === 0) {
+        const runtime = extractRuntimeMessage(runtimeInput);
+        if (runtime) {
+          texts.push(runtime);
+        }
+      }
+      return texts;
+    },
+    getNodeState: <T,>(factory: () => T): T => {
+      const existing = st.nodeState.get(node.id) as T | undefined;
+      if (existing !== undefined) {
+        return existing;
+      }
+      const created = factory();
+      st.nodeState.set(node.id, created);
+      return created;
+    },
+    updateNodeState: <T,>(updater: (state: T | undefined) => T | undefined) => {
+      const previous = st.nodeState.get(node.id) as T | undefined;
+      const next = updater(previous);
+      if (next === undefined) {
+        st.nodeState.delete(node.id);
+      } else {
+        st.nodeState.set(node.id, next);
+      }
+    },
+    recordProgress: async ({ tokens, latencyMs, status, message }) => {
+      await recordRunLog({
+        type: "operation_progress",
+        runId: st.runId,
+        nodeId: node.id,
+        tokens: tokens ?? 0,
+        latencyMs: latencyMs ?? 0,
+        status: status ?? "ok",
+        message,
+      } as any);
+    },
+    logEntry: async ({ tag, payload }) => {
+      await insertLogEntry(st.runId, node.id, tag ?? null, {
+        payload,
+        timestamp: Date.now(),
+      });
+    },
+    readMemory: (namespace, key) => readMemory(normalizeNamespace(namespace), key),
+    writeMemory: (namespace, key, value) => writeMemory(normalizeNamespace(namespace), key, value),
+    appendMemory: (namespace, key, value) => appendMemory(normalizeNamespace(namespace), key, value),
+    invokeTool: (name, args) => invokeTool(name, args, { runId: st.runId, nodeId: node.id }),
+  };
+}
+
 function seedRuntimeInputs(st: RunState) {
   const entries = Object.entries(st.runtimeInputs ?? {});
   if (entries.length === 0) {
@@ -644,22 +1292,26 @@ function nodeById(flow: FlowDef, id: string): NodeDef {
 function portKey(nid: string, port: string) { return `${nid}:${port}`; }
 
 export async function runFlow(flow: FlowDef, inputs: Record<string, unknown> = {}) {
+  const upgraded = upgradeFlow(flow);
   const runId = uuidv4();
-  const order = topoOrder(flow);
-  const f0 = new Frontier(order.filter(id => flow.edges.every(e => e.to[0] !== id)));
+  const order = topoOrder(upgraded);
+  const roots = order.filter((id) => upgraded.edges.every((edge) => edge.to[0] !== id));
+  const f0 = new Frontier(roots);
+  const runtimeInputs = { ...(upgraded.runtimeInputs ?? {}), ...inputs };
   const st: RunState = {
     runId,
-    flow,
+    flow: upgraded,
     frontier: f0,
     halted: false,
     iter: new Map(),
     values: new Map(),
     pktSeq: 0,
-    runtimeInputs: inputs,
+    runtimeInputs,
+    nodeState: new Map(),
   };
   seedRuntimeInputs(st);
   runs.set(runId, st);
-  await createRun(runId, flow.id);
+  await createRun(runId, upgraded.id);
   updateRunStatus(runId, "running");
   const loopPromise = loop(runId)
     .catch(err => {
@@ -694,96 +1346,13 @@ export async function getLastRunPayloads(runId: string) {
 }
 
 export function getNodeCatalog() {
-  return [
-    // 1. UI module — protobuf input/output
-    {
-      type: "ui",
-      in: [{ port: "response_in", types: ["protobuf"] }],
-      out: [{ port: "user_message", types: ["protobuf"] }],
-    },
-
-    // 2. LLM module — protobuf input/output
-    {
-      type: "llm",
-      in: [
-        {
-          port: "model_input",
-          types: ["protobuf"],
-          description:
-            "Receives protobuf message containing prompt and parameters. Module decodes message to JSON internally.",
-        },
-      ],
-      out: [
-        {
-          port: "model_output",
-          types: ["protobuf"],
-          description:
-            "Outputs protobuf message containing model response. Module encodes JSON/text output back to protobuf.",
-        },
-      ],
-    },
-
-    // 3. Prompt module — protobuf in/out
-    {
-      type: "prompt",
-      in: [{ port: "in", types: ["protobuf"] }],
-      out: [{ port: "out", types: ["protobuf"] }],
-    },
-
-    // 4. Memory module — two protobuf inputs, one protobuf output
-    {
-      type: "memory",
-      in: [
-        { port: "memory_base", types: ["protobuf"] },
-        { port: "save_data", types: ["protobuf"] },
-      ],
-      out: [{ port: "retrieved_memory", types: ["protobuf"] }],
-    },
-
-    // 5. Debate module — configurable protobuf ports
-    {
-      type: "debate",
-      in: [{ port: "configurable_in", types: ["protobuf"] }],
-      out: [{ port: "configurable_out", types: ["protobuf"] }],
-    },
-
-    // 6. Log module — one protobuf input, no output
-    {
-      type: "log",
-      in: [{ port: "input", types: ["protobuf"] }],
-      out: [],
-    },
-
-    // 7. Cache module — two protobuf inputs, one protobuf output
-    {
-      type: "cache",
-      in: [
-        { port: "pass_through", types: ["protobuf"] },
-        { port: "save_input", types: ["protobuf"] },
-      ],
-      out: [{ port: "cached_output", types: ["protobuf"] }],
-    },
-
-    // 8. Divider module — one protobuf input, two protobuf outputs (AND/OR gate)
-    {
-      type: "divider",
-      in: [{ port: "in", types: ["protobuf"] }],
-      out: [
-        { port: "and_out", types: ["protobuf"] },
-        { port: "or_out", types: ["protobuf"] },
-      ],
-    },
-
-    // 9. Loop module — protobuf multi-output structure
-    {
-      type: "loop",
-      in: [{ port: "in", types: ["protobuf"] }],
-      out: [
-        { port: "body", types: ["protobuf"] },
-        { port: "out", types: ["protobuf"] },
-      ],
-    },
-  ];
+  return listNodes().map((node) => ({
+    type: node.type,
+    label: node.label,
+    inputs: node.inputs,
+    outputs: node.outputs,
+    params: { ...(node.params ?? {}) },
+  }));
 }
 
 async function loop(runId: string) {
@@ -796,10 +1365,21 @@ async function loop(runId: string) {
       payload: { id: node.id, span: st.runId },
     });
     try {
-      const out = await executeNode(st, node);
-      for (const [port, payload] of out) {
-        st.values.set(portKey(node.id, port), [payload]);
-        await savePayload(runId, node.id, port, payload);
+      const results = await executeNode(st, node);
+      const grouped = new Map<string, PayloadT[]>();
+      for (const entry of results) {
+        const bucket = grouped.get(entry.port);
+        if (bucket) {
+          bucket.push(entry.payload);
+        } else {
+          grouped.set(entry.port, [entry.payload]);
+        }
+      }
+      for (const [port, payloads] of grouped.entries()) {
+        st.values.set(portKey(node.id, port), payloads);
+        for (const payload of payloads) {
+          await savePayload(runId, node.id, port, payload);
+        }
         emitWireTransfers(st, node, port);
       }
       downstream(st.flow, node.id).forEach(n => st.frontier.add(n));
@@ -856,7 +1436,7 @@ export async function shutdownOrchestrator() {
     runs.clear();
     loopTasks.clear();
 
-    const pools = [poolLLM, poolEmbed];
+    const pools = [poolLLM];
     await Promise.all(
       pools.map((pool) => {
         if (pool && typeof pool.destroy === "function") {
@@ -873,104 +1453,24 @@ export async function shutdownOrchestrator() {
   return shutdownPromise;
 }
 
-async function executeNode(st: RunState, node: NodeDef): Promise<Array<[string, any]>> {
-  const params = (node.params ?? {}) as Record<string, unknown>;
-  const t0 = Date.now();
-  if (node.type === "system.prompt") {
-    const text = String(params["text"] ?? "");
-    const dt = Date.now() - t0;
-    await recordRunLog({
-      type: "operation_progress",
-      runId: st.runId,
-      nodeId: node.id,
-      tokens: text.split(/\s+/).length,
-      latencyMs: dt,
-      status: "ok",
-    });
-    return [["out", { kind: "text", text }]];
+async function executeNode(st: RunState, node: NodeDef): Promise<NodeExecutionResult> {
+  const impl = getNode(node.type);
+  if (!impl) {
+    const allowed = listNodes()
+      .map((entry) => entry.type)
+      .sort();
+    throw new Error(`Unknown node type "${node.type}". Available types: ${allowed.join(", ")}`);
   }
-  if (node.type === "llm.generic" || node.type === "critic") {
-    const inputs = incomingText(st, node.id);
-    const prompt = inputs.join("\n");
-    const { params: mergedParams, modelFile } = await resolveLLMJobConfig(params);
-    console.info(
-      `[orchestrator] Invoking adapter ${mergedParams.adapter} (runtime=${mergedParams.runtime}, maxTokens=${mergedParams.maxTokens}, temperature=${mergedParams.temperature}) for model ${mergedParams.modelId} on node ${node.id}`
-    );
-    let modelsBase = process.cwd();
-    try {
-      const { value } = await getSecretsService().get("paths", "modelsDir");
-      if (typeof value === "string" && value.trim()) {
-        modelsBase = value;
-      }
-    } catch (error) {
-      console.warn("Failed to read models directory secret during execution, using cwd:", error);
-    }
-    const modelPath = path.resolve(modelsBase, modelFile ?? "");
-    const result = await poolLLM.run({
-      params: mergedParams,
-      prompt,
-      modelFile: modelPath,
-    });
-    const includeRawInput = mergedParams.includeRawInput === true;
-    const payload: TextPayload = { kind: "text", text: result.text };
-    if (includeRawInput) {
-      payload.rawInput = prompt;
-    }
-    await recordRunLog({
-      type: "operation_progress",
-      runId: st.runId,
-      nodeId: node.id,
-      tokens: result.tokens,
-      latencyMs: result.latencyMs,
-      status: "ok",
-    });
-    return [[node.type === "critic" ? "notes" : "completion", payload]];
+  const ctx = createExecCtx(st, node);
+  const started = Date.now();
+  try {
+    const result = await impl.execute(ctx, node);
+    return Array.isArray(result) ? result : [];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await ctx.recordProgress({ tokens: 0, latencyMs: Date.now() - started, status: "error", message });
+    throw error;
   }
-  if (node.type === "embedding") {
-    const txt = incomingText(st, node.id).join("\n");
-    const res = await poolEmbed.run({ text: txt });
-    await recordRunLog({
-      type: "operation_progress",
-      runId: st.runId,
-      nodeId: node.id,
-      tokens: txt.split(/\s+/).length,
-      latencyMs: 1,
-      status: "ok",
-    });
-    return [["vec", { kind: "vector", values: res.values }]];
-  }
-  if (node.type === "loop") {
-    const it = (st.iter.get(node.id) ?? 0) + 1; st.iter.set(node.id, it);
-    const body = incomingText(st, node.id).join("\n");
-    const stopOn = (params as unknown as LoopParams).stopOn;
-    const maxIters = (params as unknown as LoopParams).maxIters ?? 1;
-    const done = (stopOn && body.includes(stopOn)) || it >= maxIters;
-    const out: Array<[string, any]> = [];
-    out.push(["body", { kind: "text", text: body + (done ? "\nDONE" : "\n") }]);
-    if (done) out.push(["out", { kind: "text", text: body }]);
-    await recordRunLog({
-      type: "operation_progress",
-      runId: st.runId,
-      nodeId: node.id,
-      tokens: body.split(/\s+/).length,
-      latencyMs: Date.now() - t0,
-      status: "ok",
-    });
-    return out;
-  }
-  if (node.type === "output") {
-    const body = incomingText(st, node.id).join("\n");
-    await recordRunLog({
-      type: "operation_progress",
-      runId: st.runId,
-      nodeId: node.id,
-      tokens: body.split(/\s+/).length,
-      latencyMs: Date.now() - t0,
-      status: "ok",
-    });
-    return [];
-  }
-  throw new Error(`unknown node type ${node.type}`);
 }
 
 function emitWireTransfers(st: RunState, node: NodeDef, port: string) {
@@ -993,12 +1493,3 @@ function emitWireTransfers(st: RunState, node: NodeDef, port: string) {
   }
 }
 
-function incomingText(st: RunState, nodeId: string): string[] {
-  const ins = st.flow.edges.filter(e => e.to[0] === nodeId);
-  const texts: string[] = [];
-  for (const e of ins) {
-    const vs = st.values.get(`${e.from[0]}:${e.from[1]}`) ?? [];
-    vs.forEach(v => { if (v.kind === "text") texts.push(v.text); });
-  }
-  return texts;
-}

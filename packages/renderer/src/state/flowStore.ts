@@ -537,7 +537,10 @@ export const useFlowStore = create<S>((set, get) => ({
     const snapshot = cloneValue(compiled);
     const interfaceNodes = snapshot.nodes.filter((node) => {
       const moduleKey = (node.params as { moduleKey?: unknown } | undefined)?.moduleKey;
-      return typeof moduleKey === "string" && moduleKey === "interface";
+      if (typeof moduleKey === "string" && (moduleKey === "interface" || moduleKey === "chat.input")) {
+        return true;
+      }
+      return node.type === "chat.input";
     });
     const chatState = useChatStore.getState();
     const runtimeInputs: Record<string, unknown> = {};

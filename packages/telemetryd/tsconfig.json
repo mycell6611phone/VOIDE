@@ -16,6 +16,6 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../shared" }
+    { "path": "packages/shared/src/telemetry.ts" }
   ]
 }

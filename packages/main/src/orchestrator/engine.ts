@@ -4,7 +4,7 @@ import path from "path";
 import { createHash } from "crypto";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
-import type { FlowDef, NodeDef, LLMParams, LoopParams, PayloadT, TextPayload, RuntimeProfile } from "@voide/shared";
+import type { FlowDef, NodeDef, LLMParams, PayloadT, TextPayload, RuntimeProfile } from "@voide/shared";
 import { TelemetryEventType } from "@voide/shared";
 import { topoOrder, Frontier, downstream } from "./scheduler.js";
 import {

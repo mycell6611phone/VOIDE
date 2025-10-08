@@ -1,8 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
 import {
   Flow,
-  flowValidate,
+  catalogList,
+  flowLastRunPayloads,
+  flowOpen,
   flowRun,
+  flowSave,
+  flowStop,
+  flowValidate,
   modelEnsure,
   appGetVersion,
   telemetryEvent,
@@ -13,12 +18,22 @@ import {
 
 const api = {
   validateFlow: (flow: Flow) => ipcRenderer.invoke(flowValidate.name, flow),
+  openFlow: () => ipcRenderer.invoke(flowOpen.name),
+  saveFlow: (flow: Flow, filePath?: string | null) =>
+    ipcRenderer.invoke(flowSave.name, { flow, filePath: filePath ?? null }),
   runFlow: (flow: Flow, inputs: Record<string, unknown> = {}) =>
     ipcRenderer.invoke(flowRun.name, { flow, inputs }),
+  stopFlow: (runId: string) => ipcRenderer.invoke(flowStop.name, { runId }),
+  getLastRunPayloads: (runId: string) => ipcRenderer.invoke(flowLastRunPayloads.name, { runId }),
+  getNodeCatalog: () => ipcRenderer.invoke(catalogList.name),
   ensureModel: (modelId: string) => ipcRenderer.invoke(modelEnsure.name, { modelId }),
   getVersion: () => ipcRenderer.invoke(appGetVersion.name),
   onTelemetry: (cb: (ev: TelemetryPayload) => void) => {
-    ipcRenderer.on(telemetryEvent.name, (_e, ev: TelemetryPayload) => cb(ev));
+    const listener = (_e: Electron.IpcRendererEvent, ev: TelemetryPayload) => cb(ev);
+    ipcRenderer.on(telemetryEvent.name, listener);
+    return () => {
+      ipcRenderer.off(telemetryEvent.name, listener);
+    };
   },
   openChatWindow: async () => {
     const result = await ipcRenderer.invoke(chatWindowOpen.name);

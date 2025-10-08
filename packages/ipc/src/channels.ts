@@ -40,6 +40,91 @@ export const Flow = z
 
 export type Flow = z.infer<typeof Flow>;
 
+const Role = z.enum(["system", "user", "assistant"]);
+
+const TextPayload = z
+  .object({
+    kind: z.literal("text"),
+    text: z.string(),
+    rawInput: z.string().optional()
+  })
+  .passthrough();
+
+const JsonPayload = z
+  .object({
+    kind: z.literal("json"),
+    value: z.any()
+  })
+  .passthrough();
+
+const MessagesPayload = z
+  .object({
+    kind: z.literal("messages"),
+    messages: z.array(
+      z
+        .object({
+          role: Role,
+          content: z.string()
+        })
+        .passthrough()
+    )
+  })
+  .passthrough();
+
+const VectorPayload = z
+  .object({
+    kind: z.literal("vector"),
+    values: z.array(z.number())
+  })
+  .passthrough();
+
+const FilePayload = z
+  .object({
+    kind: z.literal("file"),
+    path: z.string(),
+    mime: z.string()
+  })
+  .passthrough();
+
+const CodePayload = z
+  .object({
+    kind: z.literal("code"),
+    language: z.string(),
+    text: z.string()
+  })
+  .passthrough();
+
+const MetricsPayload = z
+  .object({
+    kind: z.literal("metrics"),
+    data: z.record(z.number())
+  })
+  .passthrough();
+
+export const Payload = z.discriminatedUnion("kind", [
+  TextPayload,
+  JsonPayload,
+  MessagesPayload,
+  VectorPayload,
+  FilePayload,
+  CodePayload,
+  MetricsPayload
+]);
+
+export type Payload = z.infer<typeof Payload>;
+
+export const NodeCatalogEntry = z
+  .object({
+    type: z.string(),
+    label: z.string(),
+    inputs: z.array(Port).default([]),
+    outputs: z.array(Port).default([]),
+    params: z.record(z.any()).default({})
+  })
+  .passthrough();
+
+export type NodeCatalogEntry = z.infer<typeof NodeCatalogEntry>;
+
 // --- Channel definitions ---------------------------------------------------
 
 export const flowValidate = {
@@ -47,12 +132,51 @@ export const flowValidate = {
   request: Flow,
   response: z.object({
     ok: z.boolean(),
-    errors: z.array(z.string())
+    errors: z.array(z.unknown())
   })
 };
 
 export type FlowValidateReq = z.infer<typeof flowValidate.request>;
 export type FlowValidateRes = z.infer<typeof flowValidate.response>;
+
+export const flowOpen = {
+  name: "flow:open",
+  request: z.undefined(),
+  response: z.union([
+    z.object({
+      canceled: z.literal(true)
+    }),
+    z.object({
+      path: z.string().optional(),
+      flow: Flow
+    }),
+    z.object({
+      error: z.string()
+    })
+  ])
+};
+
+export type FlowOpenReq = z.infer<typeof flowOpen.request>;
+export type FlowOpenRes = z.infer<typeof flowOpen.response>;
+
+export const flowSave = {
+  name: "flow:save",
+  request: z.object({
+    flow: Flow,
+    filePath: z.string().optional().nullable()
+  }),
+  response: z.union([
+    z.object({
+      path: z.string().optional().nullable()
+    }),
+    z.object({
+      error: z.string()
+    })
+  ])
+};
+
+export type FlowSaveReq = z.infer<typeof flowSave.request>;
+export type FlowSaveRes = z.infer<typeof flowSave.response>;
 
 export const flowRun = {
   name: "flow:run",
@@ -65,6 +189,39 @@ export const flowRun = {
 
 export type FlowRunReq = z.infer<typeof flowRun.request>;
 export type FlowRunRes = z.infer<typeof flowRun.response>;
+
+export const flowStop = {
+  name: "flow:stop",
+  request: z.object({ runId: z.string() }),
+  response: z.object({ ok: z.boolean() })
+};
+
+export type FlowStopReq = z.infer<typeof flowStop.request>;
+export type FlowStopRes = z.infer<typeof flowStop.response>;
+
+export const flowLastRunPayloads = {
+  name: "flow:last-run-payloads",
+  request: z.object({ runId: z.string() }),
+  response: z.array(
+    z.object({
+      nodeId: z.string(),
+      port: z.string(),
+      payload: Payload
+    })
+  )
+};
+
+export type FlowLastRunPayloadsReq = z.infer<typeof flowLastRunPayloads.request>;
+export type FlowLastRunPayloadsRes = z.infer<typeof flowLastRunPayloads.response>;
+
+export const catalogList = {
+  name: "catalog:list",
+  request: z.undefined(),
+  response: z.array(NodeCatalogEntry)
+};
+
+export type CatalogListReq = z.infer<typeof catalogList.request>;
+export type CatalogListRes = z.infer<typeof catalogList.response>;
 
 export const modelEnsure = {
   name: "model:ensure",

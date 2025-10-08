@@ -1,23 +1,21 @@
 import { FlowDef, PayloadT } from "@voide/shared";
-import type { TelemetryPayload } from "@voide/ipc";
+import type {
+  Flow as IpcFlow,
+  FlowOpenRes,
+  NodeCatalogEntry as IpcNodeCatalogEntry,
+  TelemetryPayload,
+} from "@voide/ipc";
+import { ipcClient } from "./lib/ipcClient";
 
-type PortSpec = { port: string; types: string[] };
-
-export interface NodeCatalogEntry {
-  type: string;
-  label: string;
-  inputs: PortSpec[];
-  outputs: PortSpec[];
-  params: Record<string, unknown>;
-}
+export type NodeCatalogEntry = IpcNodeCatalogEntry;
 
 export interface VoideApi {
   getNodeCatalog: () => Promise<NodeCatalogEntry[]>;
   runFlow: (flow: FlowDef, inputs?: Record<string, unknown>) => Promise<{ runId: string }>;
   stopFlow: (runId: string) => Promise<{ ok: boolean }>;
-  openFlow: () => Promise<{ flow: FlowDef } | null>;
+  openFlow: () => Promise<{ flow: FlowDef; path?: string } | null>;
   saveFlow: (flow: FlowDef) => Promise<void>;
-  validateFlow: (flow: FlowDef) => Promise<{ ok: boolean; errors?: unknown }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  validateFlow: (flow: FlowDef) => Promise<{ ok: boolean; errors?: unknown }>;
   getLastRunPayloads: (runId: string) => Promise<Array<{ nodeId: string; port: string; payload: PayloadT }>>;
   onTelemetry?: (cb: (event: TelemetryPayload) => void) => (() => void) | void;
 }
@@ -152,7 +150,7 @@ const sampleFlow: FlowDef = {
     { id: "e2", from: ["prompt", "text"], to: ["llm", "prompt"] },
     { id: "e3", from: ["llm", "text"], to: ["logger", "any"] },
     { id: "e4", from: ["logger", "any"], to: ["output", "text"] },
-  ]
+  ],
 };
 
 function createFallbackVoide(): VoideApi {
@@ -164,10 +162,10 @@ function createFallbackVoide(): VoideApi {
       console.info("[voide-mock] Using mock node catalog (renderer running outside Electron)");
       return mockCatalog;
     },
-    async runFlow(flow, _inputs = {}) {
+    async runFlow(_flow, _inputs = {}) {
       console.warn("[voide-mock] Flow execution is disabled outside the Electron runtime.");
       throw new Error(
-        "Mock runs have been removed. Start the Electron app with a configured llama.cpp or gpt4all backend to execute flows."
+        "Mock runs have been removed. Start the Electron app with a configured llama.cpp or gpt4all backend to execute flows.",
       );
     },
     async stopFlow(runId) {
@@ -205,24 +203,79 @@ function createFallbackVoide(): VoideApi {
       return () => {
         telemetryListeners.delete(cb);
       };
-    }
+    },
   };
 }
 
+function mapOpenFlowResult(result: FlowOpenRes): { flow: FlowDef; path?: string } | null {
+  if ("canceled" in result && result.canceled) {
+    return null;
+  }
+  if ("flow" in result) {
+    return {
+      flow: result.flow as unknown as FlowDef,
+      path: result.path ?? undefined,
+    };
+  }
+  return null;
+}
+
+function createElectronVoide(): VoideApi {
+  return {
+    getNodeCatalog: () => ipcClient.getNodeCatalog(),
+    runFlow: (flow, inputs = {}) => ipcClient.runFlow(flow as unknown as IpcFlow, inputs),
+    stopFlow: (runId) => ipcClient.stopFlow(runId),
+    openFlow: async () => {
+      const result = await ipcClient.openFlow();
+      return mapOpenFlowResult(result);
+    },
+    saveFlow: async (flow) => {
+      await ipcClient.saveFlow(flow as unknown as IpcFlow);
+    },
+    validateFlow: (flow) => ipcClient.validateFlow(flow as unknown as IpcFlow),
+    getLastRunPayloads: async (runId) => {
+      const payloads = await ipcClient.getLastRunPayloads(runId);
+      return payloads.map((entry) => ({
+        nodeId: entry.nodeId,
+        port: entry.port,
+        payload: entry.payload as PayloadT,
+      }));
+    },
+    onTelemetry: (cb) => ipcClient.onTelemetry(cb),
+  };
+}
+
+type ElectronBridge = {
+  validateFlow: (...args: any[]) => Promise<unknown>;
+  openFlow: (...args: any[]) => Promise<unknown>;
+  saveFlow: (...args: any[]) => Promise<unknown>;
+  runFlow: (...args: any[]) => Promise<unknown>;
+  stopFlow: (...args: any[]) => Promise<unknown>;
+  getLastRunPayloads: (...args: any[]) => Promise<unknown>;
+  getNodeCatalog: (...args: any[]) => Promise<unknown>;
+  onTelemetry: (cb: (event: unknown) => void) => (() => void) | void;
+  [key: string]: unknown;
+};
+
 declare global {
   interface Window {
-    voide?: VoideApi;
+    voide?: ElectronBridge;
   }
 }
 
-const globalWindow = typeof window !== "undefined" ? (window as Window & { voide?: VoideApi }) : undefined;
-const fallback = createFallbackVoide();
+const globalWindow = typeof window !== "undefined" ? (window as Window & { voide?: ElectronBridge }) : undefined;
 
-const voideInstance: VoideApi = globalWindow?.voide ? { ...fallback, ...globalWindow.voide } : fallback;
+const hasBridge = Boolean(
+  globalWindow?.voide &&
+    typeof globalWindow.voide.validateFlow === "function" &&
+    typeof globalWindow.voide.openFlow === "function" &&
+    typeof globalWindow.voide.saveFlow === "function" &&
+    typeof globalWindow.voide.runFlow === "function" &&
+    typeof globalWindow.voide.stopFlow === "function" &&
+    typeof globalWindow.voide.getLastRunPayloads === "function" &&
+    typeof globalWindow.voide.getNodeCatalog === "function",
+);
 
-if (globalWindow) {
-  globalWindow.voide = voideInstance;
-}
+const voideInstance: VoideApi = hasBridge ? createElectronVoide() : createFallbackVoide();
 
 export const voide = voideInstance;
-

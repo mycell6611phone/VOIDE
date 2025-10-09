@@ -6,7 +6,7 @@
   "main": "dist/main.js",
   "engines": { "node": ">=20.11" },
   "scripts": {
-    "build": "tsc -b tsconfig.json",
+    "build": "tsc -b --force tsconfig.json",
     "dev": "tsc -b --watch tsconfig.json",
     "test": "node --test test/*.test.mjs"
   },

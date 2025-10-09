@@ -1,5 +1,5 @@
 import Ajv from "ajv";
-import flowSchemaJson from "../../../flows/schema/flow.schema.json" assert { type: "json" };
+import flowSchemaJson from "../../../flows/schema/flow.schema.json" with { type: "json" };
 const AjvCtor = Ajv;
 const ajv = new AjvCtor({ allErrors: true, strict: false });
 const flowSchema = flowSchemaJson;

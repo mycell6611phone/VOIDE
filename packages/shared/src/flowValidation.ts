@@ -1,7 +1,9 @@
 import Ajv from "ajv";
+import { createRequire } from "node:module";
 import type { ErrorObject } from "ajv";
 import type { EdgeDef, FlowDef, NodeDef, PortDef } from "./types.js";
-import flowSchemaJson from "../../../flows/schema/flow.schema.json" assert { type: "json" };
+
+import flowSchemaJson from "../../../flows/schema/flow.schema.json" with { type: "json" };
 
 export type FlowValidationError = ErrorObject<string, Record<string, unknown>, unknown>;
 

@@ -1,6 +1,12 @@
-import type { ErrorObject } from "ajv";
 import type { FlowDef } from "./types.js";
-export type FlowValidationError = ErrorObject<string, Record<string, unknown>, unknown>;
+export interface FlowValidationError {
+    keyword: string;
+    instancePath: string;
+    schemaPath: string;
+    params: Record<string, unknown>;
+    message?: string;
+    [key: string]: unknown;
+}
 export interface FlowValidationResult {
     ok: boolean;
     errors: FlowValidationError[];

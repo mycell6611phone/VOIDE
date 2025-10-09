@@ -20,6 +20,14 @@ export class Frontier {
   add(n: string): void {
     this.ready.add(n);
   }
+
+  clear(): void {
+    this.ready.clear();
+  }
+
+  snapshot(): string[] {
+    return Array.from(this.ready);
+  }
 }
 
 export function topoOrder(flow: FlowDef): string[] {

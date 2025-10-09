@@ -28,9 +28,11 @@ import {
   writeMemory,
   appendMemory,
 } from "../services/db.js";
-import { emitSchedulerTelemetry } from "../services/telemetry.js";
+import { emitSchedulerTelemetry, shutdownTelemetry } from "../services/telemetry.js";
 import { emitEdgeTransfer, emitNodeError, emitNodeState } from "../ipc/telemetry.js";
 import { invokeTool } from "../services/tools.js";
+
+type NodeLifecycleStatus = "queued" | "running" | "ok" | "error" | "stopped";
 
 type RunState = {
   runId: string;
@@ -42,10 +44,84 @@ type RunState = {
   pktSeq: number;
   runtimeInputs: Record<string, unknown>;
   nodeState: Map<string, unknown>;
+  nodeStatus: Map<string, NodeLifecycleStatus>;
+  abortController: AbortController;
+  activeNodeId: string | null;
 };
 
 const runs = new Map<string, RunState>();
 const loopTasks = new Map<string, Promise<void>>();
+
+function createAbortError(message: string, reason?: unknown): Error {
+  if (reason instanceof Error) {
+    return reason;
+  }
+  const error = new Error(message);
+  error.name = "AbortError";
+  return error;
+}
+
+function isAbortError(error: unknown): boolean {
+  if (!error) {
+    return false;
+  }
+  if (error instanceof Error && error.name === "AbortError") {
+    return true;
+  }
+  if (typeof error === "object" && "name" in error) {
+    return (error as { name?: unknown }).name === "AbortError";
+  }
+  if (typeof error === "object" && "code" in error) {
+    return (error as { code?: unknown }).code === "ABORT_ERR";
+  }
+  return false;
+}
+
+function throwIfAborted(signal: AbortSignal, message = "Run cancelled."): void {
+  if (signal.aborted) {
+    throw createAbortError(message, signal.reason);
+  }
+}
+
+function abortablePromise<T>(signal: AbortSignal, promise: Promise<T>, message?: string): Promise<T> {
+  if (!signal.aborted) {
+    return new Promise<T>((resolve, reject) => {
+      const cleanup = () => signal.removeEventListener("abort", onAbort);
+      const onAbort = () => {
+        cleanup();
+        reject(createAbortError(message ?? "Run cancelled.", signal.reason));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      promise.then(
+        (value) => {
+          cleanup();
+          resolve(value);
+        },
+        (error) => {
+          cleanup();
+          reject(error);
+        }
+      );
+    });
+  }
+  return Promise.reject(createAbortError(message ?? "Run cancelled.", signal.reason));
+}
+
+function setNodeStatus(st: RunState, nodeId: string, status: NodeLifecycleStatus): void {
+  const previous = st.nodeStatus.get(nodeId);
+  if (previous === status) {
+    return;
+  }
+  st.nodeStatus.set(nodeId, status);
+  emitNodeState(st.runId, nodeId, status);
+}
+
+function markNodeStopped(st: RunState, nodeId: string): void {
+  const status = st.nodeStatus.get(nodeId);
+  if (!status || status === "running" || status === "queued") {
+    setNodeStatus(st, nodeId, "stopped");
+  }
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PiscinaCtor = Piscina as any;
 
@@ -99,20 +175,25 @@ type LLMWorkerJob = {
 
 type LLMWorkerResult = { text: string; tokens?: number; latencyMs?: number };
 
-async function runLLMWithFallback(job: LLMWorkerJob): Promise<LLMWorkerResult> {
+async function runLLMWithFallback(job: LLMWorkerJob, signal: AbortSignal): Promise<LLMWorkerResult> {
+  throwIfAborted(signal);
   const pool = ensureLLMPool();
   if (pool) {
     try {
-      return await pool.run(job);
+      return await pool.run(job, { signal });
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       console.error("[orchestrator] LLM worker execution failed, retrying in-process:", error);
       poolLLM = null;
     }
   }
-  return runLLMInline(job);
+  return runLLMInline(job, signal);
 }
 
-async function runLLMInline(job: LLMWorkerJob): Promise<LLMWorkerResult> {
+async function runLLMInline(job: LLMWorkerJob, signal: AbortSignal): Promise<LLMWorkerResult> {
+  throwIfAborted(signal);
   const start = Date.now();
   const adapter = job.params.adapter ?? DEFAULT_ADAPTER;
   if (!llmFallbackLogged && adapter !== "mock") {
@@ -121,7 +202,9 @@ async function runLLMInline(job: LLMWorkerJob): Promise<LLMWorkerResult> {
     );
     llmFallbackLogged = true;
   }
+  throwIfAborted(signal);
   const text = runMockFallback(job.prompt ?? "");
+  throwIfAborted(signal);
   return {
     text,
     tokens: countTokens(text),
@@ -910,7 +993,8 @@ const llmNode: NodeImpl = {
     const started = ctx.now();
     const { params, modelFile } = await resolveLLMJobConfig(ctx.node.params ?? {});
 
-    const result = await runLLMWithFallback({ params, prompt, modelFile });
+    ctx.throwIfCancelled();
+    const result = await runLLMWithFallback({ params, prompt, modelFile }, ctx.abortSignal);
 
     const payload: TextPayload = { kind: "text", text: result.text };
     if (params.includeRawInput) {
@@ -1280,6 +1364,7 @@ function createExecCtx(st: RunState, node: NodeDef): ExecCtx {
     runId: st.runId,
     node,
     runtimeInput,
+    abortSignal: st.abortController.signal,
     now: () => Date.now(),
     getInputs: () => cloneInputsMap(cachedInputs),
     getInput: (port: string) => clonePayloadArray(cachedInputs.get(port) ?? []),
@@ -1317,6 +1402,8 @@ function createExecCtx(st: RunState, node: NodeDef): ExecCtx {
         st.nodeState.set(node.id, next);
       }
     },
+    isCancelled: () => st.abortController.signal.aborted,
+    throwIfCancelled: () => throwIfAborted(st.abortController.signal),
     recordProgress: async ({ tokens, latencyMs, status, message }) => {
       await recordRunLog({
         type: "operation_progress",
@@ -1337,7 +1424,8 @@ function createExecCtx(st: RunState, node: NodeDef): ExecCtx {
     readMemory: (namespace, key) => readMemory(normalizeNamespace(namespace), key),
     writeMemory: (namespace, key, value) => writeMemory(normalizeNamespace(namespace), key, value),
     appendMemory: (namespace, key, value) => appendMemory(normalizeNamespace(namespace), key, value),
-    invokeTool: (name, args) => invokeTool(name, args, { runId: st.runId, nodeId: node.id }),
+    invokeTool: (name, args) =>
+      invokeTool(name, args, { runId: st.runId, nodeId: node.id }, st.abortController.signal),
   };
 }
 
@@ -1355,7 +1443,6 @@ export async function runFlow(flow: FlowDef, inputs: Record<string, unknown> = {
   const order = topoOrder(upgraded);
   const roots = order.filter((id) => upgraded.edges.every((edge) => edge.to[0] !== id));
   const f0 = new Frontier(roots);
-  roots.forEach((nodeId) => emitNodeState(runId, nodeId, "queued"));
   const runtimeInputs = { ...(upgraded.runtimeInputs ?? {}), ...inputs };
   const st: RunState = {
     runId,
@@ -1367,8 +1454,12 @@ export async function runFlow(flow: FlowDef, inputs: Record<string, unknown> = {
     pktSeq: 0,
     runtimeInputs,
     nodeState: new Map(),
+    nodeStatus: new Map(),
+    abortController: new AbortController(),
+    activeNodeId: null,
   };
   runs.set(runId, st);
+  roots.forEach((nodeId) => setNodeStatus(st, nodeId, "queued"));
   await createRun(runId, upgraded.id);
   updateRunStatus(runId, "running");
   const loopPromise = loop(runId)
@@ -1389,12 +1480,31 @@ export async function runFlow(flow: FlowDef, inputs: Record<string, unknown> = {
 
 export async function stopFlow(runId: string) {
   const st = runs.get(runId);
-  if (!st) {
-    return { ok: true };
+  if (st) {
+    if (!st.halted) {
+      st.halted = true;
+      if (!st.abortController.signal.aborted) {
+        st.abortController.abort(createAbortError(`Run ${runId} stopped.`));
+      }
+      updateRunStatus(runId, "stopped");
+      if (st.activeNodeId) {
+        markNodeStopped(st, st.activeNodeId);
+      }
+      for (const nodeId of st.frontier.snapshot()) {
+        markNodeStopped(st, nodeId);
+      }
+      st.frontier.clear();
+    }
   }
-  if (!st.halted) {
-    st.halted = true;
-    updateRunStatus(runId, "stopped");
+  const task = loopTasks.get(runId);
+  if (task) {
+    try {
+      await task;
+    } catch (error) {
+      if (!isAbortError(error)) {
+        console.warn(`[orchestrator] stopFlow awaiting loop failed:`, error);
+      }
+    }
   }
   return { ok: true };
 }
@@ -1419,7 +1529,8 @@ async function loop(runId: string) {
   while (!st.halted && st.frontier.hasReady()) {
     const nodeId = st.frontier.nextReady();
     const node = nodeById(st.flow, nodeId);
-    emitNodeState(st.runId, node.id, "running");
+    st.activeNodeId = node.id;
+    setNodeStatus(st, node.id, "running");
     emitSchedulerTelemetry({
       type: TelemetryEventType.NodeStart,
       payload: { id: node.id, span: st.runId },
@@ -1442,10 +1553,12 @@ async function loop(runId: string) {
         }
         emitWireTransfers(st, node, port, payloads);
       }
-      downstream(st.flow, node.id).forEach((n) => {
-        st.frontier.add(n);
-        emitNodeState(st.runId, n, "queued");
-      });
+      if (!st.halted && !st.abortController.signal.aborted) {
+        downstream(st.flow, node.id).forEach((n) => {
+          st.frontier.add(n);
+          setNodeStatus(st, n, "queued");
+        });
+      }
       emitSchedulerTelemetry({
         type: TelemetryEventType.NodeEnd,
         payload: { id: node.id, span: st.runId, ok: true },
@@ -1454,8 +1567,20 @@ async function loop(runId: string) {
         type: TelemetryEventType.AckClear,
         payload: { id: node.id, span: st.runId },
       });
-      emitNodeState(st.runId, node.id, "ok");
+      setNodeStatus(st, node.id, "ok");
     } catch (err: any) {
+      if (isAbortError(err) || st.abortController.signal.aborted || st.halted) {
+        emitSchedulerTelemetry({
+          type: TelemetryEventType.NodeEnd,
+          payload: { id: node.id, span: st.runId, ok: false, reason: "aborted" },
+        });
+        emitSchedulerTelemetry({
+          type: TelemetryEventType.AckClear,
+          payload: { id: node.id, span: st.runId },
+        });
+        markNodeStopped(st, node.id);
+        break;
+      }
       const reason = String(err);
       await recordRunLog({
         type: "operation_progress",
@@ -1474,8 +1599,10 @@ async function loop(runId: string) {
         type: TelemetryEventType.Stalled,
         payload: { id: node.id, span: st.runId, reason },
       });
-      emitNodeState(st.runId, node.id, "error");
+      setNodeStatus(st, node.id, "error");
       emitNodeError(st.runId, node.id, reason);
+    } finally {
+      st.activeNodeId = null;
     }
   }
   if (!st.halted) updateRunStatus(runId, "done");
@@ -1487,6 +1614,35 @@ export async function shutdownOrchestrator() {
   if (shutdownPromise) {
     return shutdownPromise;
   }
+  shutdownPromise = (async () => {
+    try {
+      const runIds = Array.from(new Set([...runs.keys(), ...loopTasks.keys()]));
+      if (runIds.length > 0) {
+        await Promise.all(runIds.map((runId) => stopFlow(runId)));
+      }
+
+      const pending = Array.from(loopTasks.values());
+      if (pending.length > 0) {
+        await Promise.allSettled(pending);
+      }
+
+      const pool = poolLLM;
+      poolLLM = null;
+      if (pool) {
+        try {
+          await pool.destroy();
+        } catch (error) {
+          console.warn("[orchestrator] Failed to destroy LLM worker pool:", error);
+        }
+      }
+    } finally {
+      shutdownTelemetry();
+    }
+  })();
+  shutdownPromise.catch((error) => {
+    console.error("[orchestrator] Shutdown encountered an error:", error);
+  });
+  return shutdownPromise;
 }
 async function executeNode(st: RunState, node: NodeDef): Promise<NodeExecutionResult> {
   const impl = getNode(node.type);
@@ -1496,12 +1652,20 @@ async function executeNode(st: RunState, node: NodeDef): Promise<NodeExecutionRe
       .sort();
     throw new Error(`Unknown node type "${node.type}". Available types: ${allowed.join(", ")}`);
   }
+  throwIfAborted(st.abortController.signal);
   const ctx = createExecCtx(st, node);
   const started = Date.now();
   try {
-    const result = await impl.execute(ctx, node);
+    const result = await abortablePromise(
+      st.abortController.signal,
+      impl.execute(ctx, node),
+      `Run cancelled while executing node ${node.id}.`
+    );
     return Array.isArray(result) ? result : [];
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     const message = error instanceof Error ? error.message : String(error);
     await ctx.recordProgress({ tokens: 0, latencyMs: Date.now() - started, status: "error", message });
     throw error;

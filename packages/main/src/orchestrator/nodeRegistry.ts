@@ -4,12 +4,15 @@ export interface ExecCtx {
   readonly runId: string;
   readonly node: NodeDef;
   readonly runtimeInput?: unknown;
+  readonly abortSignal: AbortSignal;
   now(): number;
   getInputs(): Map<string, PayloadT[]>;
   getInput(port: string): PayloadT[];
   getText(port?: string): string[];
   getNodeState<T>(factory: () => T): T;
   updateNodeState<T>(updater: (state: T | undefined) => T | undefined): void;
+  isCancelled(): boolean;
+  throwIfCancelled(): void;
   recordProgress(details: { tokens?: number; latencyMs?: number; status?: "ok" | "error"; message?: string }): Promise<void>;
   logEntry(details: { tag?: string | null; payload: unknown }): Promise<void>;
   readMemory(namespace: string, key: string): Promise<string | null>;

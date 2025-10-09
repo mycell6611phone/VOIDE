@@ -1,4 +1,5 @@
-import "react-flow-renderer/dist/style.css";
+
+import "./react-flow-renderer.css";
 
 import React, {
   useCallback,

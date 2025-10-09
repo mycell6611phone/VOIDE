@@ -5,7 +5,7 @@ import { CanvasBoundaryProvider } from "../CanvasBoundaryContext";
 import { EDIT_MENU_DATA_ATTRIBUTE, EDIT_MENU_WIDTH } from "../EditMenu";
 import LLMNode from "../nodes/LLMNode";
 
-vi.mock("reactflow", () => ({
+vi.mock("react-flow-renderer", () => ({
   __esModule: true,
   Handle: ({ children }: any) => <div>{children}</div>,
   Position: { Left: "left", Right: "right" }

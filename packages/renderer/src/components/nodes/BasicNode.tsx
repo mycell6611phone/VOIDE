@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Handle, Position, type NodeProps } from "reactflow";
+import { Handle, Position, type NodeProps } from "react-flow-renderer";
 import { shallow } from "zustand/shallow";
 import type { NodeDef } from "@voide/shared";
 import ContextWindow from "../ContextWindow";

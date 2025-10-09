@@ -1,6 +1,6 @@
 import React, { type MutableRefObject } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { Position, ReactFlowProvider, type NodeProps } from "reactflow";
+import { Position, ReactFlowProvider, type NodeProps } from "react-flow-renderer";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import * as matchers from "@testing-library/jest-dom/matchers";
 import type { NodeDef } from "@voide/shared";

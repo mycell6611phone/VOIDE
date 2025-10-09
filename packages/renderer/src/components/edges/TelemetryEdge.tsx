@@ -1,11 +1,5 @@
 import React, { useMemo } from "react";
-import {
-  BaseEdge,
-  EdgeLabelRenderer,
-  getBezierPath,
-  type EdgeProps,
-  type BezierEdgeProps,
-} from "reactflow";
+import { Position, type EdgeProps } from "react-flow-renderer";
 
 import {
   getEdgeTelemetryStatus,
@@ -94,7 +88,84 @@ const statusStyles: Record<EdgeTelemetryStatus, React.CSSProperties> = {
   },
 };
 
-type TelemetryEdgeProps = EdgeProps<BezierEdgeProps>;
+const EDGE_CURVATURE = 0.32;
+
+interface BezierParams {
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+  sourcePosition: Position;
+  targetPosition: Position;
+  curvature: number;
+}
+
+const calculateControlOffset = (distance: number, curvature: number) =>
+  distance >= 0 ? 0.5 * distance : curvature * 25 * Math.sqrt(-distance);
+
+const getControlPoint = (
+  pos: Position,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  curvature: number,
+) => {
+  switch (pos) {
+    case Position.Left:
+      return { x: x1 - calculateControlOffset(x1 - x2, curvature), y: y1 };
+    case Position.Right:
+      return { x: x1 + calculateControlOffset(x2 - x1, curvature), y: y1 };
+    case Position.Top:
+      return { x: x1, y: y1 - calculateControlOffset(y1 - y2, curvature) };
+    case Position.Bottom:
+    default:
+      return { x: x1, y: y1 + calculateControlOffset(y2 - y1, curvature) };
+  }
+};
+
+const computeBezierGeometry = ({
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  curvature,
+}: BezierParams) => {
+  const sourceControl = getControlPoint(
+    sourcePosition,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    curvature,
+  );
+  const targetControl = getControlPoint(
+    targetPosition,
+    targetX,
+    targetY,
+    sourceX,
+    sourceY,
+    curvature,
+  );
+
+  const path = `M${sourceX},${sourceY} C${sourceControl.x},${sourceControl.y} ${targetControl.x},${targetControl.y} ${targetX},${targetY}`;
+  const centerX =
+    sourceX * 0.125 +
+    sourceControl.x * 0.375 +
+    targetControl.x * 0.375 +
+    targetX * 0.125;
+  const centerY =
+    sourceY * 0.125 +
+    sourceControl.y * 0.375 +
+    targetControl.y * 0.375 +
+    targetY * 0.125;
+
+  return { path, center: { x: centerX, y: centerY } };
+};
+
+type TelemetryEdgeProps = EdgeProps;
 
 export default function TelemetryEdge(props: TelemetryEdgeProps) {
   ensureStyles();
@@ -103,50 +174,52 @@ export default function TelemetryEdge(props: TelemetryEdgeProps) {
     (state) => getEdgeTelemetryStatus(state, props.id),
   );
 
-  const [edgePath, labelX, labelY] = useMemo(
-    () =>
-      getBezierPath({
-        sourceX: props.sourceX,
-        sourceY: props.sourceY,
-        targetX: props.targetX,
-        targetY: props.targetY,
-        sourcePosition: props.sourcePosition,
-        targetPosition: props.targetPosition,
-        curvature: 0.32,
-      }),
-    [
-      props.sourceX,
-      props.sourceY,
-      props.targetX,
-      props.targetY,
-      props.sourcePosition,
-      props.targetPosition,
-    ],
-  );
+  const geometry = useMemo(() =>
+    computeBezierGeometry({
+      sourceX: props.sourceX,
+      sourceY: props.sourceY,
+      targetX: props.targetX,
+      targetY: props.targetY,
+      sourcePosition: props.sourcePosition,
+      targetPosition: props.targetPosition,
+      curvature: EDGE_CURVATURE,
+    }),
+  [
+    props.sourceX,
+    props.sourceY,
+    props.targetX,
+    props.targetY,
+    props.sourcePosition,
+    props.targetPosition,
+  ]);
 
   return (
     <>
-      <BaseEdge
-        id={props.id}
-        path={edgePath}
+      <path
+        className="react-flow__edge-path"
+        d={geometry.path}
+        markerStart={props.markerStart}
         markerEnd={props.markerEnd}
-        style={{ stroke: "#334155", strokeWidth: 2.2 }}
+        style={{
+          stroke: "#334155",
+          strokeWidth: 2.2,
+          fill: "none",
+          ...(props.style ?? {}),
+        }}
       />
-      <EdgeLabelRenderer>
-        <div
-          data-voide-edge-telemetry
-          data-status={status}
-          style={{
-            position: "absolute",
-            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` as const,
-            pointerEvents: "none",
-          }}
-        >
-          <div style={{ ...baseIndicatorStyle, ...statusStyles[status] }} aria-hidden>
-            ●
-          </div>
+      <foreignObject
+        pointerEvents="none"
+        x={geometry.center.x - indicatorSize / 2}
+        y={geometry.center.y - indicatorSize / 2}
+        width={indicatorSize}
+        height={indicatorSize}
+        data-voide-edge-telemetry
+        data-status={status}
+      >
+        <div style={{ ...baseIndicatorStyle, ...statusStyles[status] }} aria-hidden>
+          ●
         </div>
-      </EdgeLabelRenderer>
+      </foreignObject>
     </>
   );
 }

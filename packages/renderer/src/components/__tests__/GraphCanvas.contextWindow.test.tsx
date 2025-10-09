@@ -2,7 +2,7 @@ import * as React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
-vi.mock("reactflow", () => {
+vi.mock("react-flow-renderer", () => {
   const useNodesState = (initialNodes: any[]) => {
     const [nodes, setNodes] = React.useState(initialNodes);
     const onNodesChange = React.useCallback(() => undefined, []);
@@ -44,7 +44,7 @@ vi.mock("reactflow", () => {
   };
 });
 
-import ReactFlow from "reactflow";
+import ReactFlow from "react-flow-renderer";
 import GraphCanvas from "../GraphCanvas";
 
 describe("GraphCanvas context menu", () => {

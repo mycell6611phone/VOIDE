@@ -1,4 +1,4 @@
-import "reactflow/dist/style.css";
+import "react-flow-renderer/dist/style.css";
 
 import React, {
   useCallback,
@@ -19,8 +19,8 @@ import ReactFlow, {
   ReactFlowInstance,
   addEdge,
   useEdgesState,
-  useNodesState
-} from "reactflow";
+  useNodesState,
+} from "react-flow-renderer";
 
 import type { EdgeDef, NodeDef } from "@voide/shared";
 import type { TelemetryPayload } from "@voide/ipc";

@@ -1,12 +1,46 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "../../dist/main",
+    "outDir": "dist",
+    "rootDir": "src",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "composite": true,
     "baseUrl": "../..",
-    "types": ["node", "electron"]
-  
-}
+    "types": ["node", "electron"],
+    "paths": {
 
+      "@voide/shared": [
+        "packages/shared/dist/index.d.ts",
+        "packages/shared/dist/index.js"
+      ],
+      "@voide/shared/*": [
+        "packages/shared/dist/*.d.ts",
+        "packages/shared/dist/*"
+      ],
+      "@voide/ipc": [
+        "packages/ipc/dist/index.d.ts",
+        "packages/ipc/dist/index.js"
+      ],
+      "@voide/ipc/*": [
+        "packages/ipc/dist/*.d.ts",
+        "packages/ipc/dist/*"
+      ],
+      "@voide/schemas": [
+        "packages/schemas/dist/src/index.d.ts",
+        "packages/schemas/dist/src/index.js"
+      ],
+      "@voide/schemas/*": [
+        "packages/schemas/dist/src/*.d.ts",
+        "packages/schemas/dist/src/*"
+      ],
+      "@voide/core/dist/*": ["core/dist/*"]
+    }
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../shared" },
+    { "path": "../ipc" },
+    { "path": "../../core" }
+  ]
+}

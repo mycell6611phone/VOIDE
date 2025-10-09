@@ -1,9 +1,8 @@
 import Ajv from "ajv";
-import { createRequire } from "node:module";
+import flowSchemaJson from "../../../flows/schema/flow.schema.json" assert { type: "json" };
 const AjvCtor = Ajv;
 const ajv = new AjvCtor({ allErrors: true, strict: false });
-const require = createRequire(import.meta.url);
-const flowSchema = require("../../../flows/schema/flow.schema.json");
+const flowSchema = flowSchemaJson;
 const validateSchema = ajv.compile(flowSchema);
 function createError(keyword, instancePath, message, params) {
     return {

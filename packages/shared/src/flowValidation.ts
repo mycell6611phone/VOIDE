@@ -1,7 +1,7 @@
 import Ajv from "ajv";
 import type { ErrorObject } from "ajv";
-import { createRequire } from "node:module";
 import type { EdgeDef, FlowDef, NodeDef, PortDef } from "./types.js";
+import flowSchemaJson from "../../../flows/schema/flow.schema.json" assert { type: "json" };
 
 export type FlowValidationError = ErrorObject<string, Record<string, unknown>, unknown>;
 
@@ -16,8 +16,7 @@ type AjvConstructor = new (options?: Record<string, unknown>) => AjvInstance;
 
 const AjvCtor = Ajv as unknown as AjvConstructor;
 const ajv = new AjvCtor({ allErrors: true, strict: false });
-const require = createRequire(import.meta.url);
-const flowSchema = require("../../../flows/schema/flow.schema.json") as Record<string, unknown>;
+const flowSchema = flowSchemaJson as Record<string, unknown>;
 const validateSchema = ajv.compile<FlowDef>(flowSchema);
 
 function createError(

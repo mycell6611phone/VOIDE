@@ -3,11 +3,7 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "composite": true,
-    "paths": {
-      "@voide/shared": ["packages/shared/dist/index"],
-      "@voide/shared/*": ["packages/shared/dist/*"]
-    }
+    "composite": true
   },
   "include": ["src"],
   "exclude": ["dist", "node_modules"],

@@ -1,6 +1,6 @@
+import { createHash } from "node:crypto";
+
 import { compile } from "@voide/core/dist/build/compiler.js";
-import { FLOW_IR_VERSION } from "@voide/core/dist/build/ir.js";
-import { hashCompiledFlow } from "@voide/core/dist/build/hash.js";
 import * as pb from "@voide/core/dist/proto/voide/v1/flow.js";
 import type { Flow as FlowGraph } from "@voide/ipc";
 import type { FlowDef, NodeDef, EdgeDef } from "@voide/shared";
@@ -89,7 +89,7 @@ export function compileAndCache(flow: FlowGraph): CompileResult {
   const runtimeInputs = { ...(flow.runtimeInputs ?? {}) };
   const sanitized = sanitizeFlow(flow);
   const bytes = compile(sanitized as any);
-  const hash = hashCompiledFlow(bytes);
+  const hash = createHash("sha256").update(bytes).digest("hex");
 
   const existing = compiledFlows.get(hash);
   if (existing) {
@@ -103,9 +103,10 @@ export function compileAndCache(flow: FlowGraph): CompileResult {
 
   const proto = pb.Flow.decode(bytes);
   const flowDef = fromProto(proto, runtimeInputs);
+  const version = proto.version && proto.version.length > 0 ? proto.version : "1.0.0";
   const entry: CompiledFlowEntry = {
     hash,
-    version: FLOW_IR_VERSION,
+    version,
     flow: flowDef,
     runtimeInputs: { ...runtimeInputs },
     bytes,

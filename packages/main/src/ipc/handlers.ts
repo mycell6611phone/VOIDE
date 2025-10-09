@@ -8,8 +8,9 @@ import {
   appExit,
 } from "@voide/ipc";
 import { validateFlow } from "../services/validate.js";
-import { runFlow } from "../orchestrator/engine.js";
+import { runFlow, getLastRunPayloads } from "../orchestrator/engine.js";
 import { getModelRegistry } from "../services/models.js";
+import { emitRunPayloads } from "./telemetry.js";
 
 function formatError(err: unknown) {
   return { error: String(err) };
@@ -20,26 +21,49 @@ type HandlerDeps = {
   exitApplication: () => Promise<void> | void;
 };
 
+const legacyChannelNames: Record<string, readonly string[]> = {
+  [flowValidate.name]: ["voide:validateFlow"],
+  [flowRun.name]: ["voide:runFlow"],
+};
+
+function bindHandler(
+  channel: { name: string },
+  handler: Parameters<typeof ipcMain.handle>[1],
+  legacy: readonly string[] = [],
+) {
+  const names = [channel.name, ...legacy];
+  for (const name of names) {
+    ipcMain.removeHandler(name);
+    ipcMain.handle(name, handler);
+  }
+}
+
 export function registerHandlers(deps: HandlerDeps) {
-  ipcMain.handle(flowValidate.name, async (_e, payload) => {
+  bindHandler(flowValidate, async (_e, payload) => {
     const parsed = flowValidate.request.safeParse(payload);
     if (!parsed.success) return formatError(parsed.error.flatten());
     const res = validateFlow(parsed.data as any);
     return flowValidate.response.parse({ ok: res.ok, errors: res.errors });
-  });
+  }, legacyChannelNames[flowValidate.name] ?? []);
 
-  ipcMain.handle(flowRun.name, async (_e, payload) => {
+  bindHandler(flowRun, async (_e, payload) => {
     const parsed = flowRun.request.safeParse(payload);
     if (!parsed.success) return formatError(parsed.error.flatten());
     try {
       const out = await runFlow(parsed.data.flow as any, parsed.data.inputs ?? {});
+      try {
+        const payloads = await getLastRunPayloads(out.runId);
+        emitRunPayloads(out.runId, payloads);
+      } catch (err) {
+        console.warn("Failed to stream run payloads", err);
+      }
       return flowRun.response.parse(out);
     } catch (err) {
       return formatError(err);
     }
-  });
+  }, legacyChannelNames[flowRun.name] ?? []);
 
-  ipcMain.handle(modelEnsure.name, async (_e, payload) => {
+  bindHandler(modelEnsure, async (_e, payload) => {
     const parsed = modelEnsure.request.safeParse(payload);
     if (!parsed.success) return formatError(parsed.error.flatten());
     try {
@@ -51,7 +75,7 @@ export function registerHandlers(deps: HandlerDeps) {
     }
   });
 
-  ipcMain.handle(appGetVersion.name, async () => {
+  bindHandler(appGetVersion, async () => {
     try {
       const v = app.getVersion();
       return appGetVersion.response.parse(v);
@@ -60,7 +84,7 @@ export function registerHandlers(deps: HandlerDeps) {
     }
   });
 
-  ipcMain.handle(chatWindowOpen.name, async () => {
+  bindHandler(chatWindowOpen, async () => {
     try {
       await deps.openChatWindow();
       return chatWindowOpen.response.parse({ ok: true });
@@ -69,7 +93,7 @@ export function registerHandlers(deps: HandlerDeps) {
     }
   });
 
-  ipcMain.handle(appExit.name, async () => {
+  bindHandler(appExit, async () => {
     try {
       await deps.exitApplication();
       return appExit.response.parse({ ok: true });

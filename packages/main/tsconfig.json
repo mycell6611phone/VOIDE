@@ -27,12 +27,12 @@
         "packages/ipc/dist/*"
       ],
       "@voide/schemas": [
-        "packages/schemas/dist/src/index.d.ts",
-        "packages/schemas/dist/src/index.js"
+        "packages/schemas/dist/index.d.ts",
+        "packages/schemas/dist/index.js"
       ],
       "@voide/schemas/*": [
-        "packages/schemas/dist/src/*.d.ts",
-        "packages/schemas/dist/src/*"
+        "packages/schemas/dist/*.d.ts",
+        "packages/schemas/dist/*"
       ],
       "@voide/core/dist/*": ["core/dist/*"]
     }

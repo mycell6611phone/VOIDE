@@ -8,15 +8,12 @@ import {
   flowLastRunPayloads,
   flowLastOpened,
   flowOpen,
-  flowRun,
   flowSave,
   flowStop,
-  flowValidate
 } from "@voide/ipc";
 import { persistFlow, rememberLastOpenedFlow, readLastOpenedFlow } from "./services/db.js";
 import { getSecretsService } from "./services/secrets.js";
-import { runFlow, stopFlow, stepFlow, getNodeCatalog, getLastRunPayloads } from "./orchestrator/engine.js";
-import { emitRunPayloads } from "./ipc/telemetry.js";
+import { stopFlow, stepFlow, getNodeCatalog, getLastRunPayloads } from "./orchestrator/engine.js";
 import { getModelRegistry, installModel } from "./services/models.js";
 
 const AjvCtor = Ajv as any;
@@ -85,31 +82,6 @@ export function setupIPC() {
     }
   };
 
-  const handleValidateFlow: Parameters<typeof ipcMain.handle>[1] = async (_e, raw: unknown) => {
-    const parsed = flowValidate.request.safeParse(raw);
-    if (!parsed.success) {
-      return { ok: false, errors: [parsed.error.message] };
-    }
-    const ok = validate(parsed.data as FlowDef);
-    return { ok, errors: ok ? [] : validate.errors ?? [] };
-  };
-
-  const handleRunFlow: Parameters<typeof ipcMain.handle>[1] = async (_e, raw: unknown) => {
-    const parsed = flowRun.request.safeParse(raw);
-    if (!parsed.success) {
-      return { error: parsed.error.message };
-    }
-    const { flow, inputs } = parsed.data;
-    const result = await runFlow(flow as FlowDef, inputs ?? {});
-    try {
-      const payloads = await getLastRunPayloads(result.runId);
-      emitRunPayloads(result.runId, payloads);
-    } catch (error) {
-      console.warn("Failed to stream run payloads", error);
-    }
-    return result;
-  };
-
   const handleStopFlow: Parameters<typeof ipcMain.handle>[1] = async (_e, raw: unknown) => {
     const parsed = flowStop.request.safeParse(raw);
     if (!parsed.success) {
@@ -135,8 +107,6 @@ export function setupIPC() {
   registerChannel(flowOpen.name, handleOpenFlow, ["voide:openFlow"]);
   registerChannel(flowSave.name, handleSaveFlow, ["voide:saveFlow"]);
   registerChannel(flowLastOpened.name, handleLastOpenedFlow);
-  registerChannel(flowValidate.name, handleValidateFlow, ["voide:validateFlow"]);
-  registerChannel(flowRun.name, handleRunFlow, ["voide:runFlow"]);
   registerChannel(flowStop.name, handleStopFlow, ["voide:stopFlow"]);
   registerChannel(flowLastRunPayloads.name, handleLastRunPayloads, ["voide:getLastRunPayloads"]);
   registerChannel(catalogList.name, async () => getNodeCatalog(), ["voide:getNodeCatalog"]);

@@ -15,6 +15,7 @@ export interface VoideApi {
   stopFlow: (runId: string) => Promise<{ ok: boolean }>;
   openFlow: () => Promise<{ flow: FlowDef; path?: string } | null>;
   saveFlow: (flow: FlowDef) => Promise<void>;
+  getLastOpenedFlow: () => Promise<FlowDef | null>;
   validateFlow: (flow: FlowDef) => Promise<{ ok: boolean; errors?: unknown }>;
   getLastRunPayloads: (runId: string) => Promise<Array<{ nodeId: string; port: string; payload: PayloadT }>>;
   onTelemetry?: (cb: (event: TelemetryPayload) => void) => (() => void) | void;
@@ -180,6 +181,9 @@ function createFallbackVoide(): VoideApi {
       storedFlow = flow;
       console.info(`[voide-mock] Saved flow '${flow.id}' in memory`);
     },
+    async getLastOpenedFlow() {
+      return storedFlow ?? null;
+    },
     async validateFlow(flow) {
       const errors: string[] = [];
       if (!flow.id?.trim()) errors.push("Flow id is required");
@@ -232,6 +236,10 @@ function createElectronVoide(): VoideApi {
     saveFlow: async (flow) => {
       await ipcClient.saveFlow(flow as unknown as IpcFlow);
     },
+    getLastOpenedFlow: async () => {
+      const result = await ipcClient.getLastOpenedFlow();
+      return result as unknown as FlowDef | null;
+    },
     validateFlow: (flow) => ipcClient.validateFlow(flow as unknown as IpcFlow),
     getLastRunPayloads: async (runId) => {
       const payloads = await ipcClient.getLastRunPayloads(runId);
@@ -249,6 +257,7 @@ type ElectronBridge = {
   validateFlow: (...args: any[]) => Promise<unknown>;
   openFlow: (...args: any[]) => Promise<unknown>;
   saveFlow: (...args: any[]) => Promise<unknown>;
+  getLastOpenedFlow: (...args: any[]) => Promise<unknown>;
   runFlow: (...args: any[]) => Promise<unknown>;
   stopFlow: (...args: any[]) => Promise<unknown>;
   getLastRunPayloads: (...args: any[]) => Promise<unknown>;
@@ -270,6 +279,7 @@ const hasBridge = Boolean(
     typeof globalWindow.voide.validateFlow === "function" &&
     typeof globalWindow.voide.openFlow === "function" &&
     typeof globalWindow.voide.saveFlow === "function" &&
+    typeof globalWindow.voide.getLastOpenedFlow === "function" &&
     typeof globalWindow.voide.runFlow === "function" &&
     typeof globalWindow.voide.stopFlow === "function" &&
     typeof globalWindow.voide.getLastRunPayloads === "function" &&

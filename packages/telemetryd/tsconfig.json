@@ -12,10 +12,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "noEmitOnError": true
-  },
-  "include": ["src"],
-  "references": [
-    { "path": "packages/shared/src/telemetry.ts" }
-  ]
+    "noEmitOnError": true,
+    "include": ["src"],
+    "references": [
+    { "path":"../shared" }
+   ]
+  }
 }

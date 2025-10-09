@@ -178,6 +178,25 @@ export const flowSave = {
 export type FlowSaveReq = z.infer<typeof flowSave.request>;
 export type FlowSaveRes = z.infer<typeof flowSave.response>;
 
+export const flowLastOpened = {
+  name: "flow:last-opened",
+  request: z.undefined(),
+  response: z.union([
+    z.object({
+      flow: Flow
+    }),
+    z.object({
+      empty: z.literal(true)
+    }),
+    z.object({
+      error: z.string()
+    })
+  ])
+};
+
+export type FlowLastOpenedReq = z.infer<typeof flowLastOpened.request>;
+export type FlowLastOpenedRes = z.infer<typeof flowLastOpened.response>;
+
 export const flowRun = {
   name: "flow:run",
   request: z.object({

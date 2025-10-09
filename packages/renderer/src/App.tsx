@@ -8,6 +8,22 @@ import GlobalStyles from "./components/GlobalStyles";
 
 function App() {
   const setCatalog = useFlowStore((state) => state.setCatalog);
+  const setFlow = useFlowStore((state) => state.setFlow);
+
+  useEffect(() => {
+    let cancelled = false;
+    voide
+      .getLastOpenedFlow()
+      .then((storedFlow) => {
+        if (!cancelled && storedFlow) {
+          setFlow(storedFlow);
+        }
+      })
+      .catch((err) => console.error("Failed to load stored flow", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [setFlow]);
 
   useEffect(() => {
     let cancelled = false;

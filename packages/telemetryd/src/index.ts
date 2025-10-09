@@ -10,7 +10,7 @@ import {
   TelemetryEventType,
   decodeTelemetryFrame,
   EVENT_HEADER_SIZE,
-} from "packages/shared/src/telemetry.ts";
+} from "@voide/shared";
 
 const HEADER_SIZE = 64;
 const RING_MAGIC = "VTLR";

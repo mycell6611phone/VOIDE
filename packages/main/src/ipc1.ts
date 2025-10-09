@@ -6,13 +6,14 @@ import type { FlowDef } from "@voide/shared";
 import {
   catalogList,
   flowLastRunPayloads,
+  flowLastOpened,
   flowOpen,
   flowRun,
   flowSave,
   flowStop,
   flowValidate
 } from "@voide/ipc";
-import { getDB } from "./services/db.js";
+import { persistFlow, rememberLastOpenedFlow, readLastOpenedFlow } from "./services/db.js";
 import { getSecretsService } from "./services/secrets.js";
 import { runFlow, stopFlow, stepFlow, getNodeCatalog, getLastRunPayloads } from "./orchestrator/engine.js";
 import { getModelRegistry } from "./services/models.js";
@@ -36,9 +37,16 @@ export function setupIPC() {
   const handleOpenFlow: Parameters<typeof ipcMain.handle>[1] = async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({ filters: [{ name: "Flow", extensions: ["json"] }] });
     if (canceled || !filePaths[0]) return { canceled: true };
-    const json = JSON.parse(fs.readFileSync(filePaths[0], "utf-8"));
-    if (!validate(json)) return { error: ajv.errorsText(validate.errors) };
-    return { path: filePaths[0], flow: json };
+    try {
+      const json = JSON.parse(fs.readFileSync(filePaths[0], "utf-8"));
+      if (!validate(json)) return { error: ajv.errorsText(validate.errors) };
+      const parsedFlow = json as FlowDef;
+      persistFlow(parsedFlow);
+      await rememberLastOpenedFlow(parsedFlow.id);
+      return { path: filePaths[0], flow: parsedFlow };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Failed to open flow" };
+    }
   };
 
   const handleSaveFlow: Parameters<typeof ipcMain.handle>[1] = async (_e, raw: unknown) => {
@@ -48,12 +56,27 @@ export function setupIPC() {
     }
     const { flow, filePath } = parsed.data;
     if (!validate(flow)) return { error: ajv.errorsText(validate.errors) };
-    const db = getDB();
-    db.prepare("insert or replace into flows(id,name,json,version,updated_at) values(?,?,?,?,strftime('%s','now'))")
-      .run(flow.id, flow.id, JSON.stringify(flow), flow.version);
-    const savePath = filePath ?? (await dialog.showSaveDialog({ defaultPath: `${flow.id}.json` })).filePath;
-    if (savePath) fs.writeFileSync(savePath, JSON.stringify(flow, null, 2));
-    return { path: savePath ?? null };
+    try {
+      persistFlow(flow as FlowDef);
+      await rememberLastOpenedFlow(flow.id);
+      const savePath = filePath ?? null;
+      if (savePath) fs.writeFileSync(savePath, JSON.stringify(flow, null, 2));
+      return { path: savePath };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Failed to save flow" };
+    }
+  };
+
+  const handleLastOpenedFlow: Parameters<typeof ipcMain.handle>[1] = async () => {
+    try {
+      const stored = await readLastOpenedFlow();
+      if (!stored) {
+        return { empty: true as const };
+      }
+      return { flow: stored.flow };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Failed to load stored flow" };
+    }
   };
 
   const handleValidateFlow: Parameters<typeof ipcMain.handle>[1] = async (_e, raw: unknown) => {
@@ -98,6 +121,7 @@ export function setupIPC() {
 
   registerChannel(flowOpen.name, handleOpenFlow, ["voide:openFlow"]);
   registerChannel(flowSave.name, handleSaveFlow, ["voide:saveFlow"]);
+  registerChannel(flowLastOpened.name, handleLastOpenedFlow);
   registerChannel(flowValidate.name, handleValidateFlow, ["voide:validateFlow"]);
   registerChannel(flowRun.name, handleRunFlow, ["voide:runFlow"]);
   registerChannel(flowStop.name, handleStopFlow, ["voide:stopFlow"]);

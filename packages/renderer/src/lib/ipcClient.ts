@@ -4,6 +4,7 @@ import {
   flowOpen,
   flowRun,
   flowSave,
+  flowLastOpened,
   flowStop,
   flowValidate,
   modelEnsure,
@@ -12,6 +13,7 @@ import {
   Flow,
   FlowOpenRes,
   FlowSaveRes,
+  FlowLastOpenedRes,
   FlowStopRes,
   FlowLastRunPayloadsRes,
   NodeCatalogEntry,
@@ -96,6 +98,19 @@ export const ipcClient = {
       { runId },
       (req) => [req.runId],
     ),
+  getLastOpenedFlow: async (): Promise<Flow | null> => {
+    const result = await invoke<void, FlowLastOpenedRes>(
+      window.voide.getLastOpenedFlow,
+      flowLastOpened.request,
+      flowLastOpened.response,
+      undefined as unknown as void,
+      () => [],
+    );
+    if (result && typeof result === "object" && "empty" in result) {
+      return null;
+    }
+    return (result as { flow: Flow }).flow;
+  },
   getNodeCatalog: () =>
     invoke<void, NodeCatalogEntry[]>(
       window.voide.getNodeCatalog,

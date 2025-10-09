@@ -198,6 +198,7 @@ export default function GraphCanvas() {
       if (!payload || typeof payload !== "object") {
         return;
       }
+      const eventAt = "at" in payload && typeof payload.at === "number" ? payload.at : undefined;
       if (payload.type !== "edge_transfer") {
         return;
       }
@@ -210,18 +211,18 @@ export default function GraphCanvas() {
         const [sourceNode, sourcePort] = match.from;
         const [targetNode, targetPort] = match.to;
         if (sourceNode && sourcePort) {
-          recordOutputPortActivity(sourceNode, sourcePort);
+          recordOutputPortActivity(sourceNode, sourcePort, eventAt);
         }
         if (targetNode && targetPort) {
-          recordInputPortActivity(targetNode, targetPort);
+          recordInputPortActivity(targetNode, targetPort, eventAt);
         }
-        recordEdgeTransferSuccess(match.id);
+        recordEdgeTransferSuccess(match.id, eventAt);
         return;
       }
 
       if (payload.type === "error") {
         const relatedEdges = edgesRef.current.filter((edge) => edge.from[0] === payload.nodeId);
-        relatedEdges.forEach((edge) => markEdgeError(edge.id));
+        relatedEdges.forEach((edge) => markEdgeError(edge.id, eventAt));
         return;
       }
 

@@ -10,6 +10,8 @@ import {
   modelEnsure,
   telemetryEvent,
   appGetVersion,
+  flowRunPayloadsEvent,
+  FlowRunPayloadsEvent,
   Flow,
   FlowOpenRes,
   FlowSaveRes,
@@ -141,6 +143,20 @@ export const ipcClient = {
       if (parsed.success) cb(parsed.data);
     };
     const unsubscribe = window.voide.onTelemetry(handler as (ev: TelemetryPayload) => void);
+    return typeof unsubscribe === "function"
+      ? () => {
+          unsubscribe();
+        }
+      : undefined;
+  },
+  onRunPayloads: (cb: (event: FlowRunPayloadsEvent) => void) => {
+    const handler = (evRaw: unknown) => {
+      const parsed = flowRunPayloadsEvent.payload.safeParse(evRaw);
+      if (parsed.success) cb(parsed.data);
+    };
+    const unsubscribe = window.voide.onRunPayloads?.(
+      handler as (event: FlowRunPayloadsEvent) => void,
+    );
     return typeof unsubscribe === "function"
       ? () => {
           unsubscribe();

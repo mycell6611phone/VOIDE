@@ -16,6 +16,7 @@ import {
 import { persistFlow, rememberLastOpenedFlow, readLastOpenedFlow } from "./services/db.js";
 import { getSecretsService } from "./services/secrets.js";
 import { runFlow, stopFlow, stepFlow, getNodeCatalog, getLastRunPayloads } from "./orchestrator/engine.js";
+import { emitRunPayloads } from "./ipc/telemetry.js";
 import { getModelRegistry, installModel } from "./services/models.js";
 
 const AjvCtor = Ajv as any;
@@ -99,7 +100,14 @@ export function setupIPC() {
       return { error: parsed.error.message };
     }
     const { flow, inputs } = parsed.data;
-    return runFlow(flow as FlowDef, inputs ?? {});
+    const result = await runFlow(flow as FlowDef, inputs ?? {});
+    try {
+      const payloads = await getLastRunPayloads(result.runId);
+      emitRunPayloads(result.runId, payloads);
+    } catch (error) {
+      console.warn("Failed to stream run payloads", error);
+    }
+    return result;
   };
 
   const handleStopFlow: Parameters<typeof ipcMain.handle>[1] = async (_e, raw: unknown) => {

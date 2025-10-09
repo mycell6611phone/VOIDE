@@ -13,6 +13,8 @@ import {
   appGetVersion,
   telemetryEvent,
   TelemetryPayload,
+  flowRunPayloadsEvent,
+  FlowRunPayloadsEvent,
   chatWindowOpen,
   appExit,
 } from "@voide/ipc";
@@ -35,6 +37,23 @@ const api = {
     ipcRenderer.on(telemetryEvent.name, listener);
     return () => {
       ipcRenderer.off(telemetryEvent.name, listener);
+    };
+  },
+  onRunPayloads: (cb: (event: FlowRunPayloadsEvent) => void) => {
+    const listener = (
+      _e: Electron.IpcRendererEvent,
+      payload: { runId: string; payloads: unknown },
+    ) => {
+      try {
+        const parsed = flowRunPayloadsEvent.payload.parse(payload);
+        cb(parsed);
+      } catch (error) {
+        console.warn("[voide] Ignoring malformed run payload event", error);
+      }
+    };
+    ipcRenderer.on(flowRunPayloadsEvent.name, listener);
+    return () => {
+      ipcRenderer.off(flowRunPayloadsEvent.name, listener);
     };
   },
   openChatWindow: async () => {

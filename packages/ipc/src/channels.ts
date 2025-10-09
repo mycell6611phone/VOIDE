@@ -233,6 +233,16 @@ export const flowLastRunPayloads = {
 export type FlowLastRunPayloadsReq = z.infer<typeof flowLastRunPayloads.request>;
 export type FlowLastRunPayloadsRes = z.infer<typeof flowLastRunPayloads.response>;
 
+export const flowRunPayloadsEvent = {
+  name: "flow:last-run-payloads:event",
+  payload: z.object({
+    runId: z.string(),
+    payloads: flowLastRunPayloads.response,
+  }),
+};
+
+export type FlowRunPayloadsEvent = z.infer<typeof flowRunPayloadsEvent.payload>;
+
 export const catalogList = {
   name: "catalog:list",
   request: z.undefined(),

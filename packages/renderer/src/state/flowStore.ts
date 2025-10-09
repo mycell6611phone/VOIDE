@@ -28,6 +28,110 @@ type RunStatus = "idle" | "running" | "success" | "error";
 
 type RunPayloadRecord = { nodeId: string; port: string; payload: PayloadT };
 
+const RUN_PAYLOAD_FALLBACK_MS = 1500;
+
+const pendingRunPayloads = new Map<string, RunPayloadRecord[]>();
+const runPayloadWaiters = new Map<string, Set<(payloads: RunPayloadRecord[]) => void>>();
+let runPayloadSubscriptionInitialized = false;
+
+const deliverRunPayloads = (runId: string, payloads: RunPayloadRecord[]) => {
+  const waiters = runPayloadWaiters.get(runId);
+  if (!waiters || waiters.size === 0) {
+    pendingRunPayloads.set(runId, cloneValue(payloads));
+    return;
+  }
+  runPayloadWaiters.delete(runId);
+  waiters.forEach((waiter) => {
+    try {
+      waiter(cloneValue(payloads));
+    } catch (error) {
+      console.warn("Failed to deliver run payloads to waiter", error);
+    }
+  });
+};
+
+const stashRunPayloads = (runId: string, payloads: RunPayloadRecord[]) => {
+  pendingRunPayloads.set(runId, cloneValue(payloads));
+  deliverRunPayloads(runId, payloads);
+};
+
+const ensureRunPayloadSubscription = () => {
+  if (runPayloadSubscriptionInitialized) {
+    return;
+  }
+  runPayloadSubscriptionInitialized = true;
+  if (typeof voide.onRunPayloads !== "function") {
+    return;
+  }
+  voide.onRunPayloads((event) => {
+    if (!event || typeof event !== "object") {
+      return;
+    }
+    const normalized = (event.payloads ?? []).map((entry) => ({
+      nodeId: entry.nodeId,
+      port: entry.port,
+      payload: entry.payload,
+    }));
+    stashRunPayloads(event.runId, normalized);
+  });
+};
+
+const waitForRunPayloads = async (runId: string): Promise<RunPayloadRecord[]> => {
+  ensureRunPayloadSubscription();
+  if (typeof voide.onRunPayloads !== "function") {
+    const fallback = await voide.getLastRunPayloads(runId);
+    return cloneValue(fallback);
+  }
+  const existing = pendingRunPayloads.get(runId);
+  if (existing) {
+    pendingRunPayloads.delete(runId);
+    return cloneValue(existing);
+  }
+  return new Promise((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const finalize = (payloads: RunPayloadRecord[]) => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      const waiters = runPayloadWaiters.get(runId);
+      if (waiters) {
+        waiters.delete(handler);
+        if (waiters.size === 0) {
+          runPayloadWaiters.delete(runId);
+        }
+      }
+      pendingRunPayloads.delete(runId);
+      resolve(cloneValue(payloads));
+    };
+    const handler = (payloads: RunPayloadRecord[]) => {
+      finalize(payloads);
+    };
+    const waiters = runPayloadWaiters.get(runId) ?? new Set<(payloads: RunPayloadRecord[]) => void>();
+    waiters.add(handler);
+    runPayloadWaiters.set(runId, waiters);
+    timer = globalThis.setTimeout(async () => {
+      const waitersSet = runPayloadWaiters.get(runId);
+      if (waitersSet) {
+        waitersSet.delete(handler);
+        if (waitersSet.size === 0) {
+          runPayloadWaiters.delete(runId);
+        }
+      }
+      try {
+        const fallback = await voide.getLastRunPayloads(runId);
+        pendingRunPayloads.delete(runId);
+        resolve(cloneValue(fallback));
+      } catch (error) {
+        console.warn("Failed to fetch run payloads via fallback", error);
+        resolve([]);
+      }
+    }, RUN_PAYLOAD_FALLBACK_MS);
+  });
+};
+
+ensureRunPayloadSubscription();
+
 const indentBlock = (text: string): string => {
   const safe = text && text.trim().length > 0 ? text : "(no payload)";
   return safe
@@ -564,7 +668,7 @@ export const useFlowStore = create<S>((set, get) => ({
     try {
       const { runId } = await voide.runFlow(snapshot, runtimeInputs);
       set({ activeRunId: runId, lastRunId: runId });
-      const outputs = await voide.getLastRunPayloads(runId);
+      const outputs = await waitForRunPayloads(runId);
       const copiedOutputs = cloneValue(outputs);
       set({
         runStatus: "success",

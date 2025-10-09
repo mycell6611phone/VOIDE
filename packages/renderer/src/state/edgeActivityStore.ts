@@ -11,9 +11,9 @@ type EdgeId = string;
 
 interface EdgeTelemetryStore {
   edgeStates: Record<EdgeId, EdgeTelemetryEntry>;
-  beginTransfer: (edgeId: EdgeId) => number;
+  beginTransfer: (edgeId: EdgeId, eventAt?: number) => number;
   resolveTransfer: (edgeId: EdgeId, eventAt: number, ok: boolean) => void;
-  markError: (edgeId: EdgeId) => void;
+  markError: (edgeId: EdgeId, eventAt?: number) => void;
   clearState: (edgeId: EdgeId, eventAt: number) => void;
   reset: () => void;
 }
@@ -25,20 +25,23 @@ const ERROR_DECAY_MS = 2200;
 const schedule = (delay: number, callback: () => void) =>
   globalThis.setTimeout(callback, delay);
 
+const coerceTimestamp = (value?: number) =>
+  typeof value === "number" && Number.isFinite(value) ? value : Date.now();
+
 export const useEdgeTelemetryStore = create<EdgeTelemetryStore>((set, get) => ({
   edgeStates: {},
-  beginTransfer: (edgeId) => {
-    const eventAt = Date.now();
+  beginTransfer: (edgeId, eventAt) => {
+    const eventAtMs = coerceTimestamp(eventAt);
     set((state) => ({
       edgeStates: {
         ...state.edgeStates,
         [edgeId]: {
           status: "in-flight",
-          lastEventAt: eventAt,
+          lastEventAt: eventAtMs,
         },
       },
     }));
-    return eventAt;
+    return eventAtMs;
   },
   resolveTransfer: (edgeId, eventAt, ok) => {
     const { edgeStates } = get();
@@ -64,19 +67,19 @@ export const useEdgeTelemetryStore = create<EdgeTelemetryStore>((set, get) => ({
       get().clearState(edgeId, eventAt);
     });
   },
-  markError: (edgeId) => {
-    const eventAt = Date.now();
+  markError: (edgeId, eventAt) => {
+    const eventAtMs = coerceTimestamp(eventAt);
     set((state) => ({
       edgeStates: {
         ...state.edgeStates,
         [edgeId]: {
           status: "error",
-          lastEventAt: eventAt,
+          lastEventAt: eventAtMs,
         },
       },
     }));
     schedule(ERROR_DECAY_MS, () => {
-      get().clearState(edgeId, eventAt);
+      get().clearState(edgeId, eventAtMs);
     });
   },
   clearState: (edgeId, eventAt) => {
@@ -102,22 +105,22 @@ export const getEdgeTelemetryStatus = (
   edgeId: EdgeId,
 ): EdgeTelemetryStatus => store.edgeStates[edgeId]?.status ?? "idle";
 
-export const recordEdgeTransferSuccess = (edgeId: EdgeId) => {
-  const eventAt = useEdgeTelemetryStore.getState().beginTransfer(edgeId);
+export const recordEdgeTransferSuccess = (edgeId: EdgeId, eventAt?: number) => {
+  const startAt = useEdgeTelemetryStore.getState().beginTransfer(edgeId, eventAt);
   schedule(TRANSFER_PROGRESS_MS, () => {
-    useEdgeTelemetryStore.getState().resolveTransfer(edgeId, eventAt, true);
+    useEdgeTelemetryStore.getState().resolveTransfer(edgeId, startAt, true);
   });
 };
 
-export const recordEdgeTransferError = (edgeId: EdgeId) => {
-  const eventAt = useEdgeTelemetryStore.getState().beginTransfer(edgeId);
+export const recordEdgeTransferError = (edgeId: EdgeId, eventAt?: number) => {
+  const startAt = useEdgeTelemetryStore.getState().beginTransfer(edgeId, eventAt);
   schedule(TRANSFER_PROGRESS_MS, () => {
-    useEdgeTelemetryStore.getState().resolveTransfer(edgeId, eventAt, false);
+    useEdgeTelemetryStore.getState().resolveTransfer(edgeId, startAt, false);
   });
 };
 
-export const markEdgeError = (edgeId: EdgeId) => {
-  useEdgeTelemetryStore.getState().markError(edgeId);
+export const markEdgeError = (edgeId: EdgeId, eventAt?: number) => {
+  useEdgeTelemetryStore.getState().markError(edgeId, eventAt);
 };
 
 export const resetEdgeTelemetry = () => {

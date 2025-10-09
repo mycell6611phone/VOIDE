@@ -1,5 +1,10 @@
 import { BrowserWindow } from "electron";
-import { telemetryEvent, TelemetryPayload } from "@voide/ipc";
+import {
+  telemetryEvent,
+  TelemetryPayload,
+  flowRunPayloadsEvent,
+  FlowLastRunPayloadsRes,
+} from "@voide/ipc";
 import { TelemetryEventType } from "@voide/shared";
 import { emitSchedulerTelemetry } from "../services/telemetry.js";
 
@@ -8,6 +13,41 @@ export function emitTelemetry(ev: TelemetryPayload) {
     w.webContents.send(telemetryEvent.name, ev);
   });
   mirrorToSidecar(ev);
+}
+
+export function emitNodeState(
+  runId: string,
+  nodeId: string,
+  state: string,
+  at: number = Date.now(),
+) {
+  emitTelemetry({ type: "node_state", runId, nodeId, state, at });
+}
+
+export function emitEdgeTransfer(
+  runId: string,
+  edgeId: string,
+  bytes: number,
+  at: number = Date.now(),
+) {
+  emitTelemetry({ type: "edge_transfer", runId, edgeId, bytes, at });
+}
+
+export function emitNodeError(
+  runId: string,
+  nodeId: string,
+  message: string,
+  at: number = Date.now(),
+  code = "runtime_error",
+) {
+  emitTelemetry({ type: "error", runId, nodeId, code, message, at });
+}
+
+export function emitRunPayloads(runId: string, payloads: FlowLastRunPayloadsRes) {
+  const payload = { runId, payloads } as const;
+  BrowserWindow.getAllWindows().forEach((w) => {
+    w.webContents.send(flowRunPayloadsEvent.name, payload);
+  });
 }
 
 function mirrorToSidecar(ev: TelemetryPayload) {

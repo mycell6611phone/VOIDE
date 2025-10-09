@@ -9,6 +9,11 @@ import { ipcClient } from "./lib/ipcClient";
 
 export type NodeCatalogEntry = IpcNodeCatalogEntry;
 
+type RunPayloadEvent = {
+  runId: string;
+  payloads: Array<{ nodeId: string; port: string; payload: PayloadT }>;
+};
+
 export interface VoideApi {
   getNodeCatalog: () => Promise<NodeCatalogEntry[]>;
   runFlow: (flow: FlowDef, inputs?: Record<string, unknown>) => Promise<{ runId: string }>;
@@ -19,6 +24,7 @@ export interface VoideApi {
   validateFlow: (flow: FlowDef) => Promise<{ ok: boolean; errors?: unknown }>;
   getLastRunPayloads: (runId: string) => Promise<Array<{ nodeId: string; port: string; payload: PayloadT }>>;
   onTelemetry?: (cb: (event: TelemetryPayload) => void) => (() => void) | void;
+  onRunPayloads?: (cb: (event: RunPayloadEvent) => void) => (() => void) | void;
 }
 
 const mockCatalog: NodeCatalogEntry[] = [
@@ -208,6 +214,10 @@ function createFallbackVoide(): VoideApi {
         telemetryListeners.delete(cb);
       };
     },
+    onRunPayloads(_cb) {
+      console.warn("[voide-mock] onRunPayloads is unavailable outside the Electron runtime.");
+      return () => {};
+    },
   };
 }
 
@@ -250,6 +260,17 @@ function createElectronVoide(): VoideApi {
       }));
     },
     onTelemetry: (cb) => ipcClient.onTelemetry(cb),
+    onRunPayloads: (cb) =>
+      ipcClient.onRunPayloads?.((event) =>
+        cb({
+          runId: event.runId,
+          payloads: event.payloads.map((entry) => ({
+            nodeId: entry.nodeId,
+            port: entry.port,
+            payload: entry.payload as PayloadT,
+          })),
+        }),
+      ),
   };
 }
 
@@ -261,6 +282,7 @@ type ElectronBridge = {
   runFlow: (...args: any[]) => Promise<unknown>;
   stopFlow: (...args: any[]) => Promise<unknown>;
   getLastRunPayloads: (...args: any[]) => Promise<unknown>;
+  onRunPayloads?: (cb: (event: unknown) => void) => (() => void) | void;
   getNodeCatalog: (...args: any[]) => Promise<unknown>;
   onTelemetry: (cb: (event: unknown) => void) => (() => void) | void;
   [key: string]: unknown;

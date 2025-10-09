@@ -13,13 +13,16 @@ interface PortActivityEntry {
 
 interface PortActivityStore {
   portStates: Record<PortKey, PortActivityEntry>;
-  recordInputActivity: (nodeId: string, portId: string) => void;
-  recordOutputActivity: (nodeId: string, portId: string) => void;
+  recordInputActivity: (nodeId: string, portId: string, eventAt?: number) => void;
+  recordOutputActivity: (nodeId: string, portId: string, eventAt?: number) => void;
   clearPortActivity: (key: PortKey, eventAt: number) => void;
   reset: () => void;
 }
 
 const createPortKey = (nodeId: string, portId: string): PortKey => `${nodeId}:${portId}`;
+
+const coerceTimestamp = (value?: number) =>
+  typeof value === "number" && Number.isFinite(value) ? value : Date.now();
 
 export const usePortActivityStore = create<PortActivityStore>((set, get) => {
   const scheduleReset = (key: PortKey, eventAt: number) => {
@@ -29,21 +32,27 @@ export const usePortActivityStore = create<PortActivityStore>((set, get) => {
     }, RESET_DELAY_MS);
   };
 
-  const writeActivity = (key: PortKey, status: Exclude<PortActivityStatus, "idle">) => {
-    const eventAt = Date.now();
+  const writeActivity = (
+    key: PortKey,
+    status: Exclude<PortActivityStatus, "idle">,
+    eventAt?: number,
+  ) => {
+    const eventAtMs = coerceTimestamp(eventAt);
     set((state) => ({
       portStates: {
         ...state.portStates,
-        [key]: { status, lastEventAt: eventAt }
+        [key]: { status, lastEventAt: eventAtMs }
       }
     }));
-    scheduleReset(key, eventAt);
+    scheduleReset(key, eventAtMs);
   };
 
   return {
     portStates: {},
-    recordInputActivity: (nodeId, portId) => writeActivity(createPortKey(nodeId, portId), "input-active"),
-    recordOutputActivity: (nodeId, portId) => writeActivity(createPortKey(nodeId, portId), "output-active"),
+    recordInputActivity: (nodeId, portId, eventAt) =>
+      writeActivity(createPortKey(nodeId, portId), "input-active", eventAt),
+    recordOutputActivity: (nodeId, portId, eventAt) =>
+      writeActivity(createPortKey(nodeId, portId), "output-active", eventAt),
     clearPortActivity: (key, eventAt) => {
       set((state) => {
         const existing = state.portStates[key];
@@ -63,12 +72,12 @@ export const PORT_ACTIVITY_RESET_DELAY_MS = RESET_DELAY_MS;
 
 export const portActivityKey = createPortKey;
 
-export const recordInputPortActivity = (nodeId: string, portId: string) => {
-  usePortActivityStore.getState().recordInputActivity(nodeId, portId);
+export const recordInputPortActivity = (nodeId: string, portId: string, eventAt?: number) => {
+  usePortActivityStore.getState().recordInputActivity(nodeId, portId, eventAt);
 };
 
-export const recordOutputPortActivity = (nodeId: string, portId: string) => {
-  usePortActivityStore.getState().recordOutputActivity(nodeId, portId);
+export const recordOutputPortActivity = (nodeId: string, portId: string, eventAt?: number) => {
+  usePortActivityStore.getState().recordOutputActivity(nodeId, portId, eventAt);
 };
 
 export const resetPortActivityStore = () => {

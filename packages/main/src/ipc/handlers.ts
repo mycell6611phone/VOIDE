@@ -53,8 +53,8 @@ export function registerHandlers(deps: HandlerDeps) {
       ok: res.ok,
       errors: Array.isArray(res.errors) ? res.errors : [],
     });
-
   }, legacyChannelNames[flowValidate.name] ?? []);
+
 
   bindHandler(flowRun, async (_e, payload) => {
     const parsed = flowRun.request.safeParse(payload);

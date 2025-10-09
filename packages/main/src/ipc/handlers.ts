@@ -41,9 +41,19 @@ function bindHandler(
 export function registerHandlers(deps: HandlerDeps) {
   bindHandler(flowValidate, async (_e, payload) => {
     const parsed = flowValidate.request.safeParse(payload);
-    if (!parsed.success) return formatError(parsed.error.flatten());
+    if (!parsed.success) {
+      return flowValidate.response.parse({
+        ok: false,
+        errors: parsed.error.errors ?? [],
+      });
+    }
     const res = validateFlow(parsed.data as any);
-    return flowValidate.response.parse({ ok: res.ok, errors: res.errors });
+
+    return flowValidate.response.parse({
+      ok: res.ok,
+      errors: Array.isArray(res.errors) ? res.errors : [],
+    });
+
   }, legacyChannelNames[flowValidate.name] ?? []);
 
   bindHandler(flowRun, async (_e, payload) => {

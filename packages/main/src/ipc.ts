@@ -26,9 +26,10 @@ export function setupIPC() {
     handler: Parameters<typeof ipcMain.handle>[1],
     legacyNames: string[] = []
   ) => {
-    ipcMain.handle(name, handler);
-    for (const legacy of legacyNames) {
-      ipcMain.handle(legacy, handler);
+    const names = [name, ...legacyNames];
+    for (const channelName of names) {
+      ipcMain.removeHandler(channelName);
+      ipcMain.handle(channelName, handler);
     }
   };
 

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
 
-register("ts-node/esm", import.meta.url);
+register(new URL("./ts-esm-loader.mjs", import.meta.url).href, import.meta.url);
 
 const {
   CHAT_SERVER_PORT,

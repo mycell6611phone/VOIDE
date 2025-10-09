@@ -130,6 +130,25 @@ describe("flow validation", () => {
     expect(messages.some((msg) => msg.includes("missing target node \"missing\""))).toBe(true);
   });
 
+  it("rejects duplicate edge ids", () => {
+    const flow: FlowDef = {
+      id: "flow-dup-edges",
+      version: "1",
+      nodes: [
+        { ...baseNode, id: "src", type: "input", out: [{ port: "out", types: ["text"] }] },
+        { ...baseNode, id: "dst", type: "output", in: [{ port: "in", types: ["text"] }] },
+      ],
+      edges: [
+        { id: "edge-1", from: ["src", "out"], to: ["dst", "in"] },
+        { id: "edge-1", from: ["src", "out"], to: ["dst", "in"] },
+      ],
+    };
+    const result = validateFlowDefinition(flow);
+    expect(result.ok).toBe(false);
+    const messages = formatFlowValidationErrors(result.errors);
+    expect(messages.some((msg) => msg.includes("Duplicate edge id \"edge-1\""))).toBe(true);
+  });
+
   it("rejects incompatible edge types", () => {
     const flow: FlowDef = {
       id: "flow-type-mismatch",
@@ -156,6 +175,24 @@ describe("flow validation", () => {
     expect(result.ok).toBe(false);
     const messages = formatFlowValidationErrors(result.errors);
     expect(messages.some((msg) => msg.includes("incompatible types"))).toBe(true);
+  });
+
+  it("rejects missing ports", () => {
+    const flow: FlowDef = {
+      id: "flow-missing-port",
+      version: "1",
+      nodes: [
+        { ...baseNode, id: "src", type: "input", out: [] },
+        { ...baseNode, id: "dst", type: "output", in: [{ port: "in", types: ["text"] }] },
+      ],
+      edges: [
+        { id: "edge-1", from: ["src", "out"], to: ["dst", "in"] },
+      ],
+    };
+    const result = validateFlowDefinition(flow);
+    expect(result.ok).toBe(false);
+    const messages = formatFlowValidationErrors(result.errors);
+    expect(messages.some((msg) => msg.includes("missing output port"))).toBe(true);
   });
 
   it("rejects schema mismatches", () => {

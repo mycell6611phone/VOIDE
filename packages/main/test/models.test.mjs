@@ -5,7 +5,7 @@ import path from "path";
 import { createHash } from "crypto";
 import { register } from "node:module";
 
-register("ts-node/esm", import.meta.url);
+register(new URL("./ts-esm-loader.mjs", import.meta.url).href, import.meta.url);
 
 const { getModelRegistry, installModel } = await import(
   "../src/services/models.ts"

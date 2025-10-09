@@ -6,7 +6,6 @@
   "main": "dist/main.js",
   "engines": { "node": ">=20.11" },
   "scripts": {
-    "build": "tsc --build tsconfig.json",
     "dev": "tsc -w -p tsconfig.json",
     "test": "node --test test/*.test.mjs"
   },
@@ -20,9 +19,7 @@
     "keytar": "^7.9.0",
     "piscina": "4.6.1",
     "uuid": "9.0.1"
-  },
-  "devDependencies": {
-    "ts-node": "^10.9.1"
+
   }
 }
 

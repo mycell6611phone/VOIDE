@@ -1,3 +1,4 @@
+// packages/ipc/tsconfig.json
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
@@ -9,9 +10,14 @@
     "types": ["node"],
     "composite": true
   },
-  "include": ["src"],
-  "references": [
-    { "path": "../shared" }
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "vitest.config.ts"
   ]
 }
 

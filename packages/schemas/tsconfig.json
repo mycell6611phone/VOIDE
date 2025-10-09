@@ -11,6 +11,5 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["node"]
-  },
+  }
 }
-  

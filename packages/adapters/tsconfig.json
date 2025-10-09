@@ -10,10 +10,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["node"]
-  },
-  "include": ["src"],
-  "references": [
-    { "path": "../shared" }
-  ]
+  }
+ 
+  
 }
 

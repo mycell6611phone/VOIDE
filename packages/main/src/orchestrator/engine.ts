@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import type { FlowDef, NodeDef, LLMParams, PayloadT, TextPayload, RuntimeProfile } from "@voide/shared";
 import { TelemetryEventType } from "@voide/shared";
+import { formatFlowValidationErrors } from "@voide/shared/flowValidation";
 import { topoOrder, Frontier, downstream } from "./scheduler.js";
 import {
   clearAndRegister,
@@ -31,6 +32,7 @@ import {
 import { emitSchedulerTelemetry, shutdownTelemetry } from "../services/telemetry.js";
 import { emitEdgeTransfer, emitNodeError, emitNodeState } from "../ipc/telemetry.js";
 import { invokeTool } from "../services/tools.js";
+import { validateFlow } from "../services/validate.js";
 
 type NodeLifecycleStatus = "queued" | "running" | "ok" | "error" | "stopped";
 
@@ -1438,6 +1440,13 @@ function nodeById(flow: FlowDef, id: string): NodeDef {
 function portKey(nid: string, port: string) { return `${nid}:${port}`; }
 
 export async function runFlow(flow: FlowDef, inputs: Record<string, unknown> = {}) {
+  const validation = validateFlow(flow);
+  if (!validation.ok) {
+    const message =
+      formatFlowValidationErrors(validation.errors).join("\n") ||
+      "Flow validation failed.";
+    throw new Error(message);
+  }
   const upgraded = upgradeFlow(flow);
   const runId = uuidv4();
   const order = topoOrder(upgraded);

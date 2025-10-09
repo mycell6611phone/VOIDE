@@ -4,13 +4,6 @@
   "version": "0.1.0",
   "type": "module",
   "main": "packages/main/dist/main.js",
-  "engines": {
-    "node": ">=20.11"
-  },
-  "author": {
-    "name": "VOIDE",
-    "email": "dev@voide.local"
-  },
   "description": "VOIDE application",
   "homepage": "https://voide.example.com",
   "scripts": {
@@ -19,24 +12,19 @@
     "lint": "turbo run lint",
     "start": "electron --no-sandbox packages/main/dist/main.js",
     "pack:linux": "electron-builder --linux deb AppImage",
-    "test": "pnpm --filter @voide/ipc test && pnpm --filter @voide/core test && pnpm --filter @voide/main test && pnpm --filter @voide/core exec node --loader ts-node/esm src/cli.ts validate ../flows/sample-basic.flow.json && pnpm --filter @voide/core exec node --loader ts-node/esm src/cli.ts pack ../flows/sample-basic.flow.json --out /tmp/sample.flow.pb",
-    "proto:gen": "protoc --proto_path proto --plugin=protoc-gen-ts=./node_modules/.pnpm/node_modules/.bin/protoc-gen-ts_proto --ts_out packages/shared/src/gen --ts_opt generate_dependencies,importSuffix=.js,outputServices=generic-definitions,esModuleInterop=true proto/flow.proto",
+    "proto_path proto --plugin=protoc-gen-ts=./node_modules/.pnpm/node_modules/.bin/protoc-gen-ts_proto --ts_out packages/shared/src/gen --ts_opt generate_dependencies,impoproto:gen": "protoc --rtSuffix=.js,outputServices=generic-definitions,esModuleInterop=true proto/flow.proto",
     "license:check": "pnpm -r --filter '!voide' exec license-checker-rseidelsohn --production --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC'"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.3.0",
     "@types/uuid": "^10.0.0",
-    "@vitest/ui": "^3.2.4",
-    "@voide/cli": "workspace:*",
     "concurrently": "9.0.1",
     "electron": "30.0.9",
     "electron-builder": "24.13.3",
-    "jsdom": "24.1.0",
     "license-checker-rseidelsohn": "4.4.2",
     "turbo": "2.0.4",
     "typescript": "5.5.4",
-    "vitest": "^3.2.4",
     "wait-on": "7.2.0"
   },
   "workspaces": [

@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
 
-register("ts-node/esm", import.meta.url);
+register(new URL("./ts-esm-loader.mjs", import.meta.url).href, import.meta.url);
 
 const { validateFlow } = await import("../src/services/validate.ts");
+const { formatFlowValidationErrors } = await import("@voide/shared/flowValidation");
 
 const baseNode = {
   name: "Node",
@@ -77,4 +78,86 @@ test("validateFlow rejects schema mismatch", () => {
   const result = validateFlow(flow);
   assert.equal(result.ok, false);
   assert.ok(result.errors.length > 0);
+});
+
+test("validateFlow rejects duplicate edge ids", () => {
+  const flow = {
+    id: "flow-dup-edges",
+    version: "1",
+    nodes: [
+      {
+        ...baseNode,
+        id: "src",
+        type: "input",
+        out: [{ port: "out", types: ["text"] }],
+      },
+      {
+        ...baseNode,
+        id: "dst",
+        type: "output",
+        in: [{ port: "in", types: ["text"] }],
+      },
+    ],
+    edges: [
+      { id: "edge-1", from: ["src", "out"], to: ["dst", "in"] },
+      { id: "edge-1", from: ["src", "out"], to: ["dst", "in"] },
+    ],
+  };
+
+  const result = validateFlow(flow);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((err) => err.keyword === "duplicateEdgeId"));
+});
+
+test("validateFlow rejects missing ports", () => {
+  const flow = {
+    id: "flow-missing-port",
+    version: "1",
+    nodes: [
+      {
+        ...baseNode,
+        id: "src",
+        type: "input",
+        out: [],
+      },
+      {
+        ...baseNode,
+        id: "dst",
+        type: "output",
+        in: [{ port: "in", types: ["text"] }],
+      },
+    ],
+    edges: [{ id: "edge-1", from: ["src", "out"], to: ["dst", "in"] }],
+  };
+
+  const result = validateFlow(flow);
+  assert.equal(result.ok, false);
+  const messages = formatFlowValidationErrors(result.errors);
+  assert.ok(messages.some((msg) => msg.includes("missing output port")));
+});
+
+test("validateFlow rejects type mismatches", () => {
+  const flow = {
+    id: "flow-type-mismatch",
+    version: "1",
+    nodes: [
+      {
+        ...baseNode,
+        id: "src",
+        type: "input",
+        out: [{ port: "out", types: ["text"] }],
+      },
+      {
+        ...baseNode,
+        id: "dst",
+        type: "output",
+        in: [{ port: "in", types: ["json"] }],
+      },
+    ],
+    edges: [{ id: "edge-1", from: ["src", "out"], to: ["dst", "in"] }],
+  };
+
+  const result = validateFlow(flow);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((err) => err.keyword === "typeMismatch"));
 });

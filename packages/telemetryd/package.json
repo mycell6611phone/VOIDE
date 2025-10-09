@@ -7,7 +7,6 @@
     "voide-telemetryd": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc --build tsconfig.json"
   },
   "dependencies": {
     "@voide/shared": "workspace:*"

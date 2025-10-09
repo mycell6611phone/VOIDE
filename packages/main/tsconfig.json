@@ -1,29 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
+    "outDir": "../../dist/main",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "composite": true,
     "baseUrl": "../..",
-    "rootDirs": [
-      "./src",
-      "../shared/src",
-      "../schemas/src",
-      "../ipc/src",
-      "../adapters/src",
-      "../workers/src"
-    ],
-    "types": ["node", "electron"],
-    "esModuleInterop": true
-  },
-  "include": ["src"],
-  "references": [
-    { "path": "../shared" },
-    { "path": "../schemas" },
-    { "path": "../ipc" },
-    { "path": "../adapters" },
-    { "path": "../workers" }
-  ]
+    "types": ["node", "electron"]
+  
 }
 

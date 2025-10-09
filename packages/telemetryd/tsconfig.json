@@ -2,20 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "declaration": true,
-    "declarationMap": true,
-    "composite": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "rootDirs": ["./src", "../shared/src"],
     "types": ["node"],
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "noEmitOnError": true
-  },
-  "include": ["src"],
-  "references": [
-    { "path": "../shared" }
-  ]
+   
+  }
 }

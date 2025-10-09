@@ -1,4 +1,9 @@
 import { FlowDef, PayloadT } from "@voide/shared";
+import {
+  formatFlowValidationErrors,
+  validateFlowDefinition,
+  type FlowValidationResult,
+} from "@voide/shared/flowValidation";
 import type {
   Flow as IpcFlow,
   FlowOpenRes,
@@ -21,7 +26,7 @@ export interface VoideApi {
   openFlow: () => Promise<{ flow: FlowDef; path?: string } | null>;
   saveFlow: (flow: FlowDef) => Promise<void>;
   getLastOpenedFlow: () => Promise<FlowDef | null>;
-  validateFlow: (flow: FlowDef) => Promise<{ ok: boolean; errors?: unknown }>;
+  validateFlow: (flow: FlowDef) => Promise<FlowValidationResult>;
   getLastRunPayloads: (runId: string) => Promise<Array<{ nodeId: string; port: string; payload: PayloadT }>>;
   onTelemetry?: (cb: (event: TelemetryPayload) => void) => (() => void) | void;
   onRunPayloads?: (cb: (event: RunPayloadEvent) => void) => (() => void) | void;
@@ -191,18 +196,14 @@ function createFallbackVoide(): VoideApi {
       return storedFlow ?? null;
     },
     async validateFlow(flow) {
-      const errors: string[] = [];
-      if (!flow.id?.trim()) errors.push("Flow id is required");
-      if (!flow.version?.trim()) errors.push("Flow version is required");
-      const nodeIds = new Set<string>();
-      flow.nodes.forEach((node) => {
-        if (nodeIds.has(node.id)) {
-          errors.push(`Duplicate node id: ${node.id}`);
-        } else {
-          nodeIds.add(node.id);
-        }
-      });
-      return { ok: errors.length === 0, errors };
+      const result = validateFlowDefinition(flow);
+      if (!result.ok) {
+        console.warn(
+          "[voide-mock] Flow validation failed:",
+          formatFlowValidationErrors(result.errors).join("; "),
+        );
+      }
+      return result;
     },
     async getLastRunPayloads(runId) {
       console.warn(`[voide-mock] getLastRunPayloads(${runId}) requested but mock runs are disabled.`);
@@ -250,7 +251,13 @@ function createElectronVoide(): VoideApi {
       const result = await ipcClient.getLastOpenedFlow();
       return result as unknown as FlowDef | null;
     },
-    validateFlow: (flow) => ipcClient.validateFlow(flow as unknown as IpcFlow),
+    validateFlow: async (flow) => {
+      const result = await ipcClient.validateFlow(flow as unknown as IpcFlow);
+      return {
+        ok: result.ok,
+        errors: result.errors as FlowValidationResult["errors"],
+      };
+    },
     getLastRunPayloads: async (runId) => {
       const payloads = await ipcClient.getLastRunPayloads(runId);
       return payloads.map((entry) => ({

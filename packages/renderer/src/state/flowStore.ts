@@ -1,5 +1,10 @@
 import { create } from "zustand";
-import type { EdgeDef, FlowDef, NodeDef, PayloadT } from "@voide/shared";
+import { type EdgeDef, type FlowDef, type NodeDef, type PayloadT } from "@voide/shared";
+import {
+  formatFlowValidationErrors,
+  validateFlowDefinition,
+  type FlowValidationError,
+} from "@voide/shared/flowValidation";
 import { createInitialFlow } from "../constants/mockLayout";
 import { voide } from "../voide";
 import { useChatStore } from "./chatStore";
@@ -607,12 +612,20 @@ export const useFlowStore = create<S>((set, get) => ({
     const snapshot = cloneValue(get().flow);
     set({ buildStatus: "building", buildError: null });
     try {
+      const localValidation = validateFlowDefinition(snapshot);
+      if (!localValidation.ok) {
+        const message =
+          formatFlowValidationErrors(localValidation.errors).join("\n") ||
+          "Flow validation failed.";
+        set({ buildStatus: "error", buildError: message });
+        return { ok: false, error: message };
+      }
+
       const validation = await voide.validateFlow(snapshot);
-      if (!validation?.ok) {
-        const message = Array.isArray(validation?.errors)
-          ? validation.errors.map((entry) => String(entry)).join("\n") ||
-            "Flow validation failed."
-          : "Flow validation failed.";
+      if (!validation.ok) {
+        const message =
+          formatFlowValidationErrors((validation.errors ?? []) as FlowValidationError[]).join("\n") ||
+          "Flow validation failed.";
         set({ buildStatus: "error", buildError: message });
         return { ok: false, error: message };
       }

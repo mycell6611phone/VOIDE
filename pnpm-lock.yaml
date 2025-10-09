@@ -227,6 +227,9 @@ importers:
 
   packages/shared:
     dependencies:
+      ajv:
+        specifier: 8.17.1
+        version: 8.17.1
       protobufjs:
         specifier: ^7.2.3
         version: 7.5.4

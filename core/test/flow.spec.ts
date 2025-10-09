@@ -7,6 +7,8 @@ import { promisify } from "node:util";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
+import { type FlowDef } from "@voide/shared";
+import { formatFlowValidationErrors, validateFlowDefinition } from "@voide/shared/flowValidation";
 
 const exec = promisify(execFile);
 const CLI_TIMEOUT = 20_000;
@@ -85,4 +87,95 @@ describe("flow schema", () => {
     const buf = await fs.readFile(out);
     expect(buf.length).toBeGreaterThan(0);
   }, CLI_TIMEOUT);
+});
+
+describe("flow validation", () => {
+  const baseNode = {
+    name: "Node",
+    params: {},
+    in: [],
+    out: [],
+  } as const;
+
+  it("rejects duplicate node ids", () => {
+    const flow: FlowDef = {
+      id: "flow-dup-nodes",
+      version: "1",
+      nodes: [
+        { ...baseNode, id: "a", type: "input" },
+        { ...baseNode, id: "a", type: "log" },
+      ],
+      edges: [],
+    };
+    const result = validateFlowDefinition(flow);
+    expect(result.ok).toBe(false);
+    const messages = formatFlowValidationErrors(result.errors);
+    expect(messages.some((msg) => msg.includes("Duplicate node id \"a\""))).toBe(true);
+  });
+
+  it("rejects dangling edges", () => {
+    const flow: FlowDef = {
+      id: "flow-dangling",
+      version: "1",
+      nodes: [
+        { ...baseNode, id: "src", type: "input", out: [{ port: "out", types: ["text"] }] },
+      ],
+      edges: [
+        { id: "e1", from: ["src", "out"], to: ["missing", "in"] },
+      ],
+    };
+    const result = validateFlowDefinition(flow);
+    expect(result.ok).toBe(false);
+    const messages = formatFlowValidationErrors(result.errors);
+    expect(messages.some((msg) => msg.includes("missing target node \"missing\""))).toBe(true);
+  });
+
+  it("rejects incompatible edge types", () => {
+    const flow: FlowDef = {
+      id: "flow-type-mismatch",
+      version: "1",
+      nodes: [
+        {
+          ...baseNode,
+          id: "src",
+          type: "input",
+          out: [{ port: "out", types: ["text"] }],
+        },
+        {
+          ...baseNode,
+          id: "dst",
+          type: "output",
+          in: [{ port: "in", types: ["json"] }],
+        },
+      ],
+      edges: [
+        { id: "e1", from: ["src", "out"], to: ["dst", "in"] },
+      ],
+    };
+    const result = validateFlowDefinition(flow);
+    expect(result.ok).toBe(false);
+    const messages = formatFlowValidationErrors(result.errors);
+    expect(messages.some((msg) => msg.includes("incompatible types"))).toBe(true);
+  });
+
+  it("rejects schema mismatches", () => {
+    const invalid = {
+      id: "flow-invalid",
+      version: "1",
+      nodes: [
+        {
+          id: "src",
+          type: "input",
+          in: [],
+          out: [],
+          params: {},
+        },
+      ],
+      edges: [],
+    } as unknown as FlowDef;
+    const result = validateFlowDefinition(invalid);
+    expect(result.ok).toBe(false);
+    const messages = formatFlowValidationErrors(result.errors);
+    expect(messages.length).toBeGreaterThan(0);
+  });
 });

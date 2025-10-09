@@ -12,9 +12,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src", "../../flows/schema/flow.schema.json"],
-  "references": [
-    { "path": "../shared" }
-  ]
 }
-
+  

@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { formatFlowValidationErrors } from "@voide/shared/flowValidation";
 import { useFlowStore } from "../state/flowStore";
 import { voide } from "../voide";
 
@@ -48,7 +49,11 @@ export default function PropertiesPanel() {
       <button
         onClick={async () => {
           const result = await voide.validateFlow(flow);
-          alert(result.ok ? "Valid" : JSON.stringify(result.errors));
+          alert(
+            result.ok
+              ? "Valid"
+              : formatFlowValidationErrors(result.errors).join("\n") || "Flow validation failed.",
+          );
         }}
       >
         Validate

@@ -6,6 +6,14 @@
     "moduleResolution": "NodeNext",
     "composite": true,
     "baseUrl": "../..",
+    "rootDirs": [
+      "./src",
+      "../shared/src",
+      "../schemas/src",
+      "../ipc/src",
+      "../adapters/src",
+      "../workers/src"
+    ],
     "types": ["node", "electron"],
     "esModuleInterop": true
   },

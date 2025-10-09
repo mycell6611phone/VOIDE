@@ -10,11 +10,50 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@voide/shared": ["packages/shared/src/index.ts"],
-      "@voide/schemas": ["packages/schemas/src/index.ts"],
-      "@voide/adapters": ["packages/adapters/src"],
-      "@voide/workers": ["packages/workers/src/index.ts"],
-      "@voide/ipc": ["packages/ipc/src/index.ts"]
+      "@voide/shared": [
+        "packages/shared/src/index.ts",
+        "packages/shared/dist/index.js"
+      ],
+      "@voide/shared/*": [
+        "packages/shared/src/*",
+        "packages/shared/dist/*"
+      ],
+      "@voide/schemas": [
+        "packages/schemas/src/index.ts",
+        "packages/schemas/dist/index.js"
+      ],
+      "@voide/schemas/*": [
+        "packages/schemas/src/*",
+        "packages/schemas/dist/*"
+      ],
+      "@voide/adapters": [
+        "packages/adapters/src/index.ts",
+        "packages/adapters/src/index.js",
+        "packages/adapters/dist/index.js",
+        "packages/adapters/src"
+      ],
+      "@voide/adapters/*": [
+        "packages/adapters/src/*",
+        "packages/adapters/dist/*"
+      ],
+      "@voide/workers": [
+        "packages/workers/src/index.ts",
+        "packages/workers/src/index.js",
+        "packages/workers/dist/index.js",
+        "packages/workers/src"
+      ],
+      "@voide/workers/*": [
+        "packages/workers/src/*",
+        "packages/workers/dist/*"
+      ],
+      "@voide/ipc": [
+        "packages/ipc/src/index.ts",
+        "packages/ipc/dist/index.js"
+      ],
+      "@voide/ipc/*": [
+        "packages/ipc/src/*",
+        "packages/ipc/dist/*"
+      ]
     }
   }
 }

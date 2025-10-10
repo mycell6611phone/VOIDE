@@ -2,6 +2,8 @@ import React, { useMemo } from "react";
 import type { NodeDef, PortDef } from "@voide/shared";
 import { useFlowStore } from "../state/flowStore";
 import type { NodeCatalogEntry } from "../voide";
+import ModuleTesterDropZone from "./ModuleTesterDropZone";
+import ModuleTesterDialog from "./ModuleTesterDialog";
 
 type ToolConfig = {
   key: "wire";
@@ -199,6 +201,10 @@ export default function Palette() {
           })}
         </div>
       </div>
+      <div style={{ marginTop: "auto" }}>
+        <ModuleTesterDropZone />
+      </div>
+      <ModuleTesterDialog />
     </aside>
   );
 }

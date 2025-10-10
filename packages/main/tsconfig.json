@@ -42,6 +42,7 @@
     { "path": "../shared" },
     { "path": "../ipc" },
     { "path": "../adapters" },
+    { "path": "../schemas" },
     { "path": "../../core" }
   ]
 }

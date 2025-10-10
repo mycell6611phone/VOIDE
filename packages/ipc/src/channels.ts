@@ -252,6 +252,61 @@ export const catalogList = {
 export type CatalogListReq = z.infer<typeof catalogList.request>;
 export type CatalogListRes = z.infer<typeof catalogList.response>;
 
+const moduleTestInput = z.object({
+  port: z.string(),
+  payload: Payload
+});
+
+const moduleTestProgress = z
+  .object({
+    tokens: z.number().optional(),
+    latencyMs: z.number().optional(),
+    status: z.enum(["ok", "error"]).optional(),
+    message: z.string().optional(),
+    at: z.number().optional()
+  })
+  .passthrough();
+
+const moduleTestLog = z
+  .object({
+    tag: z.string().nullable().optional(),
+    payload: z.unknown()
+  })
+  .passthrough();
+
+const moduleTestSuccess = z.object({
+  ok: z.literal(true),
+  outputs: z
+    .array(
+      z.object({
+        port: z.string(),
+        payload: Payload
+      })
+    )
+    .default([]),
+  progress: z.array(moduleTestProgress).default([]),
+  logs: z.array(moduleTestLog).default([])
+});
+
+const moduleTestFailure = z.object({
+  ok: z.literal(false),
+  error: z.string(),
+  progress: z.array(moduleTestProgress).default([]),
+  logs: z.array(moduleTestLog).default([])
+});
+
+export const moduleTest = {
+  name: "module:test",
+  request: z.object({
+    node: Node,
+    inputs: z.array(moduleTestInput).default([])
+  }),
+  response: z.union([moduleTestSuccess, moduleTestFailure])
+};
+
+export type ModuleTestReq = z.infer<typeof moduleTest.request>;
+export type ModuleTestRes = z.infer<typeof moduleTest.response>;
+
 export const modelEnsure = {
   name: "model:ensure",
   request: z.object({ modelId: z.string() }),

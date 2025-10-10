@@ -6,9 +6,10 @@ import {
   appGetVersion,
   chatWindowOpen,
   appExit,
+  moduleTest,
 } from "@voide/ipc";
 import { validateFlow } from "../services/validate.js";
-import { runFlow, getLastRunPayloads } from "../orchestrator/engine.js";
+import { runFlow, getLastRunPayloads, testNode } from "../orchestrator/engine.js";
 import { getModelRegistry } from "../services/models.js";
 import { emitRunPayloads } from "./telemetry.js";
 
@@ -72,6 +73,30 @@ export function registerHandlers(deps: HandlerDeps) {
       return formatError(err);
     }
   }, legacyChannelNames[flowRun.name] ?? []);
+
+  bindHandler(moduleTest, async (_e, payload) => {
+    const parsed = moduleTest.request.safeParse(payload);
+    if (!parsed.success) {
+      const message = parsed.error.errors?.map((issue) => issue.message).join("; ") ?? "Invalid module test request.";
+      return moduleTest.response.parse({
+        ok: false,
+        error: message,
+        progress: [],
+        logs: []
+      });
+    }
+    try {
+      const result = await testNode(parsed.data.node as any, parsed.data.inputs as any);
+      return moduleTest.response.parse(result);
+    } catch (err) {
+      return moduleTest.response.parse({
+        ok: false,
+        error: String(err),
+        progress: [],
+        logs: []
+      });
+    }
+  });
 
   bindHandler(modelEnsure, async (_e, payload) => {
     const parsed = modelEnsure.request.safeParse(payload);

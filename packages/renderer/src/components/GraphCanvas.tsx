@@ -18,6 +18,7 @@ import ReactFlow, {
   Node,
   NodeChange,
   ReactFlowInstance,
+  Viewport,
   addEdge,
   useEdgesState,
   useNodesState,
@@ -50,6 +51,7 @@ import {
   recordEdgeTransferError,
   recordEdgeTransferSuccess
 } from "../state/edgeActivityStore";
+import { useModuleTesterStore } from "../state/moduleTesterStore";
 
 const POSITION_KEY = "__position";
 const CONTEXT_WINDOW_DEFAULT_SIZE: WindowSize = { width: 320, height: 260 };
@@ -245,6 +247,54 @@ export default function GraphCanvas() {
   const handleReactFlowInit = useCallback((instance: ReactFlowInstance) => {
     reactFlowInstanceRef.current = instance;
   }, []);
+
+  const setCanvasZoom = useModuleTesterStore((state) => state.setCanvasZoom);
+  const setTesterDragging = useModuleTesterStore((state) => state.setDragging);
+  const setTesterHover = useModuleTesterStore((state) => state.setDropZoneHover);
+  const isPointInsideTester = useModuleTesterStore((state) => state.isPointInsideDropZone);
+  const startTesterSession = useModuleTesterStore((state) => state.startSession);
+
+  const handleMove = useCallback(
+    (_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
+      if (viewport && typeof viewport.zoom === "number") {
+        setCanvasZoom(viewport.zoom);
+      }
+    },
+    [setCanvasZoom]
+  );
+
+  const handleNodeDragStart = useCallback(
+    (event: React.MouseEvent, _node: Node<NodeDef>) => {
+      setTesterDragging(true);
+      const inside = isPointInsideTester(event.clientX, event.clientY);
+      setTesterHover(inside);
+    },
+    [isPointInsideTester, setTesterDragging, setTesterHover]
+  );
+
+  const handleNodeDrag = useCallback(
+    (event: React.MouseEvent, _node: Node<NodeDef>) => {
+      const inside = isPointInsideTester(event.clientX, event.clientY);
+      setTesterHover(inside);
+    },
+    [isPointInsideTester, setTesterHover]
+  );
+
+  const handleNodeDragStop = useCallback(
+    (event: React.MouseEvent, node: Node<NodeDef>) => {
+      setTesterDragging(false);
+      const inside = isPointInsideTester(event.clientX, event.clientY);
+      setTesterHover(false);
+      if (!inside) {
+        return;
+      }
+      const matched = flow.nodes.find((candidate) => candidate.id === node.id) ?? node.data;
+      if (matched) {
+        startTesterSession(matched as NodeDef);
+      }
+    },
+    [flow.nodes, isPointInsideTester, setTesterDragging, setTesterHover, startTesterSession]
+  );
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -537,6 +587,10 @@ const handleNodeContextMenu = useCallback(
           onPaneClick={handlePaneClick}
           onPaneContextMenu={handlePaneContextMenu}
           onInit={handleReactFlowInit}
+          onMove={handleMove}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDrag={handleNodeDrag}
+          onNodeDragStop={handleNodeDragStop}
           proOptions={{ hideAttribution: true }}
           autoPanOnNodeDrag={false}
           autoPanOnConnect={false}

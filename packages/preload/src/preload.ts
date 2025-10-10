@@ -17,6 +17,7 @@ import {
   FlowRunPayloadsEvent,
   chatWindowOpen,
   appExit,
+  moduleTest,
 } from "@voide/ipc";
 
 const api = {
@@ -63,6 +64,13 @@ const api = {
   exitApp: async () => {
     const result = await ipcRenderer.invoke(appExit.name);
     return appExit.response.parse(result);
+  },
+  testModule: async (
+    node: Flow["nodes"][number],
+    inputs: Array<{ port: string; payload: unknown }> = []
+  ) => {
+    const result = await ipcRenderer.invoke(moduleTest.name, { node, inputs });
+    return moduleTest.response.parse(result);
   },
 };
 

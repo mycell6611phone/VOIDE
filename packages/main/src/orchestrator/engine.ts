@@ -1604,6 +1604,176 @@ export function getNodeCatalog() {
   }));
 }
 
+type ModuleTestInput = {
+  port: string;
+  payload: PayloadT;
+};
+
+export type ModuleTestProgress = {
+  tokens?: number;
+  latencyMs?: number;
+  status?: "ok" | "error";
+  message?: string;
+  at: number;
+};
+
+export type ModuleTestLogEntry = {
+  tag: string | null;
+  payload: unknown;
+};
+
+export type ModuleTestResult =
+  | {
+      ok: true;
+      outputs: NodeExecutionResult;
+      progress: ModuleTestProgress[];
+      logs: ModuleTestLogEntry[];
+    }
+  | {
+      ok: false;
+      error: string;
+      progress: ModuleTestProgress[];
+      logs: ModuleTestLogEntry[];
+    };
+
+const cloneNodeDef = (node: NodeDef): NodeDef => {
+  try {
+    return typeof structuredClone === "function"
+      ? structuredClone(node)
+      : (JSON.parse(JSON.stringify(node)) as NodeDef);
+  } catch {
+    return JSON.parse(JSON.stringify(node)) as NodeDef;
+  }
+};
+
+const buildTesterInputMap = (entries: ModuleTestInput[]): Map<string, PayloadT[]> => {
+  const map = new Map<string, PayloadT[]>();
+  for (const entry of entries) {
+    if (!entry || typeof entry.port !== "string") {
+      continue;
+    }
+    const port = entry.port;
+    const payload = clonePayload(entry.payload);
+    const existing = map.get(port);
+    if (existing) {
+      existing.push(payload);
+    } else {
+      map.set(port, [payload]);
+    }
+  }
+  return map;
+};
+
+export async function testNode(
+  node: NodeDef,
+  inputs: ModuleTestInput[] = []
+): Promise<ModuleTestResult> {
+  const impl = getNode(node.type ?? "");
+  if (!impl) {
+    const available = listNodes()
+      .map((entry) => entry.type)
+      .sort();
+    return {
+      ok: false,
+      error: `Unknown node type "${node.type}". Available types: ${available.join(", ")}`,
+      progress: [],
+      logs: []
+    };
+  }
+
+  const runId = `module-test:${node.id ?? node.type}:${Date.now().toString(36)}`;
+  const abortController = new AbortController();
+  const payloadMap = buildTesterInputMap(inputs);
+  const nodeState = new Map<string, unknown>();
+  const progress: ModuleTestProgress[] = [];
+  const logs: ModuleTestLogEntry[] = [];
+
+  const nodeClone = cloneNodeDef(node);
+
+  const ctx: ExecCtx = {
+    runId,
+    node: nodeClone,
+    runtimeInput: undefined,
+    abortSignal: abortController.signal,
+    now: () => Date.now(),
+    getInputs: () => cloneInputsMap(payloadMap),
+    getInput: (port: string) => clonePayloadArray(payloadMap.get(port) ?? []),
+    getText: (port?: string) => {
+      const sources = port
+        ? payloadMap.get(port) ?? []
+        : Array.from(payloadMap.values()).flat();
+      const texts: string[] = [];
+      for (const payload of sources) {
+        if (payload.kind === "text" && typeof payload.text === "string") {
+          texts.push(payload.text);
+        }
+      }
+      return texts;
+    },
+    getNodeState: <T,>(factory: () => T): T => {
+      const existing = nodeState.get(nodeClone.id) as T | undefined;
+      if (existing !== undefined) {
+        return existing;
+      }
+      const created = factory();
+      nodeState.set(nodeClone.id, created);
+      return created;
+    },
+    updateNodeState: <T,>(updater: (state: T | undefined) => T | undefined) => {
+      const previous = nodeState.get(nodeClone.id) as T | undefined;
+      const next = updater(previous);
+      if (next === undefined) {
+        nodeState.delete(nodeClone.id);
+      } else {
+        nodeState.set(nodeClone.id, next);
+      }
+    },
+    isCancelled: () => abortController.signal.aborted,
+    throwIfCancelled: () => throwIfAborted(abortController.signal),
+    recordProgress: async ({ tokens, latencyMs, status, message }) => {
+      progress.push({
+        tokens,
+        latencyMs,
+        status,
+        message,
+        at: Date.now()
+      });
+    },
+    logEntry: async ({ tag, payload }) => {
+      logs.push({ tag: tag ?? null, payload });
+    },
+    readMemory,
+    writeMemory,
+    appendMemory,
+    invokeTool: (name, args) =>
+      invokeTool(name, args, { runId, nodeId: nodeClone.id }, abortController.signal)
+  };
+
+  try {
+    const outputs = await impl.execute(ctx, nodeClone);
+    const normalized = Array.isArray(outputs)
+      ? outputs.map((entry) => ({
+          port: entry.port,
+          payload: clonePayload(entry.payload)
+        }))
+      : [];
+    return {
+      ok: true,
+      outputs: normalized,
+      progress,
+      logs
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      error: message,
+      progress,
+      logs
+    };
+  }
+}
+
 async function loop(runId: string) {
   const st = runs.get(runId)!;
   while (!st.halted && st.frontier.hasReady()) {

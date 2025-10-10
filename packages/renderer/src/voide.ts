@@ -1,4 +1,4 @@
-import { FlowDef, PayloadT } from "@voide/shared";
+import { FlowDef, NodeDef, PayloadT } from "@voide/shared";
 import {
   formatFlowValidationErrors,
   validateFlowDefinition,
@@ -9,6 +9,7 @@ import type {
   FlowOpenRes,
   NodeCatalogEntry as IpcNodeCatalogEntry,
   TelemetryPayload,
+  ModuleTestRes,
 } from "@voide/ipc";
 import { ipcClient } from "./lib/ipcClient";
 
@@ -30,6 +31,10 @@ export interface VoideApi {
   getLastRunPayloads: (runId: string) => Promise<Array<{ nodeId: string; port: string; payload: PayloadT }>>;
   onTelemetry?: (cb: (event: TelemetryPayload) => void) => (() => void) | void;
   onRunPayloads?: (cb: (event: RunPayloadEvent) => void) => (() => void) | void;
+  testModule: (
+    node: NodeDef,
+    inputs?: Array<{ port: string; payload: PayloadT }>
+  ) => Promise<ModuleTestRes>;
 }
 
 const mockCatalog: NodeCatalogEntry[] = [
@@ -204,6 +209,15 @@ function createFallbackVoide(): VoideApi {
       console.warn(`[voide-mock] getLastRunPayloads(${runId}) requested but mock runs are disabled.`);
       return [];
     },
+    async testModule(_node) {
+      console.warn("[voide-mock] Module tester is unavailable outside the Electron runtime.");
+      return {
+        ok: false,
+        error: "Module testing is only available when running the Electron app.",
+        progress: [],
+        logs: []
+      } satisfies ModuleTestRes;
+    },
     onTelemetry(cb) {
       telemetryListeners.add(cb);
       return () => {
@@ -261,6 +275,11 @@ function createElectronVoide(): VoideApi {
         payload: entry.payload as PayloadT,
       }));
     },
+    testModule: (node, inputs = []) =>
+      ipcClient.testModule(
+        node as unknown as IpcFlow["nodes"][number],
+        inputs as Array<{ port: string; payload: unknown }>,
+      ),
     onTelemetry: (cb) => ipcClient.onTelemetry(cb),
     onRunPayloads: (cb) =>
       ipcClient.onRunPayloads?.((event) =>
@@ -284,6 +303,7 @@ type ElectronBridge = {
   runFlow: (...args: any[]) => Promise<unknown>;
   stopFlow: (...args: any[]) => Promise<unknown>;
   getLastRunPayloads: (...args: any[]) => Promise<unknown>;
+  testModule: (...args: any[]) => Promise<unknown>;
   onRunPayloads?: (cb: (event: unknown) => void) => (() => void) | void;
   getNodeCatalog: (...args: any[]) => Promise<unknown>;
   onTelemetry: (cb: (event: unknown) => void) => (() => void) | void;
@@ -307,6 +327,7 @@ const hasBridge = Boolean(
     typeof globalWindow.voide.runFlow === "function" &&
     typeof globalWindow.voide.stopFlow === "function" &&
     typeof globalWindow.voide.getLastRunPayloads === "function" &&
+    typeof globalWindow.voide.testModule === "function" &&
     typeof globalWindow.voide.getNodeCatalog === "function",
 );
 

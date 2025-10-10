@@ -20,6 +20,8 @@ import {
   FlowLastRunPayloadsRes,
   NodeCatalogEntry,
   TelemetryPayload,
+  moduleTest,
+  ModuleTestRes,
 } from "@voide/ipc";
 import { z } from "zod";
 
@@ -163,6 +165,17 @@ export const ipcClient = {
         }
       : undefined;
   },
+  testModule: (
+    node: Flow["nodes"][number],
+    inputs: Array<{ port: string; payload: unknown }> = [],
+  ) =>
+    invoke<{ node: Flow["nodes"][number]; inputs: typeof inputs }, ModuleTestRes>(
+      window.voide.testModule,
+      moduleTest.request,
+      moduleTest.response,
+      { node, inputs },
+      (req) => [req.node, req.inputs ?? []],
+    ),
 };
 
 export type IPCClient = typeof ipcClient;

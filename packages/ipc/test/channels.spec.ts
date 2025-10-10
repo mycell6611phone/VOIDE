@@ -3,6 +3,7 @@ import {
   Flow,
   flowValidate,
   flowRun,
+  flowBuild,
   modelEnsure,
   telemetryEvent,
   telemetryPayload,
@@ -34,12 +35,29 @@ describe("flow schemas", () => {
     expect(() => flowValidate.request.parse({})).toThrow();
   });
 
+  it("build request + response parse", () => {
+    const payload = flowBuild.request.parse(sampleFlow);
+    expect(payload).toEqual(sampleFlow);
+
+    const success = {
+      ok: true as const,
+      hash: "hash-123",
+      version: "1.0.0",
+      cached: false,
+      flow: sampleFlow,
+    };
+    expect(flowBuild.response.parse(success)).toEqual(success);
+
+    const failure = { ok: false as const, error: "boom", errors: [] as unknown[] };
+    expect(flowBuild.response.parse(failure)).toEqual(failure);
+  });
+
   it("run request + response parse", () => {
-    const payload = flowRun.request.parse({ flow: sampleFlow, inputs: { ui: "hi" } });
-    expect(payload.flow).toEqual(sampleFlow);
+    const payload = flowRun.request.parse({ compiledHash: "hash-123", inputs: { ui: "hi" } });
+    expect(payload.compiledHash).toBe("hash-123");
     expect(payload.inputs).toEqual({ ui: "hi" });
 
-    const withDefaultInputs = flowRun.request.parse({ flow: sampleFlow });
+    const withDefaultInputs = flowRun.request.parse({ compiledHash: "hash-321" });
     expect(withDefaultInputs.inputs).toEqual({});
 
     const response = { runId: "123" };

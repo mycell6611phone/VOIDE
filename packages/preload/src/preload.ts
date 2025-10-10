@@ -6,6 +6,7 @@ import {
   flowLastOpened,
   flowOpen,
   flowRun,
+  flowBuild,
   flowSave,
   flowStop,
   flowValidate,
@@ -22,11 +23,15 @@ import {
 
 const api = {
   validateFlow: (flow: Flow) => ipcRenderer.invoke(flowValidate.name, flow),
+  buildFlow: async (flow: Flow) => {
+    const result = await ipcRenderer.invoke(flowBuild.name, flow);
+    return flowBuild.response.parse(result);
+  },
   openFlow: () => ipcRenderer.invoke(flowOpen.name),
   saveFlow: (flow: Flow, filePath?: string | null) =>
     ipcRenderer.invoke(flowSave.name, { flow, filePath: filePath ?? null }),
-  runFlow: (flow: Flow, inputs: Record<string, unknown> = {}) =>
-    ipcRenderer.invoke(flowRun.name, { flow, inputs }),
+  runFlow: (compiledHash: string, inputs: Record<string, unknown> = {}) =>
+    ipcRenderer.invoke(flowRun.name, { compiledHash, inputs }),
   stopFlow: (runId: string) => ipcRenderer.invoke(flowStop.name, { runId }),
   getLastRunPayloads: (runId: string) => ipcRenderer.invoke(flowLastRunPayloads.name, { runId }),
   getLastOpenedFlow: () => ipcRenderer.invoke(flowLastOpened.name),

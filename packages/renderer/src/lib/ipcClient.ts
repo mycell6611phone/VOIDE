@@ -3,6 +3,7 @@ import {
   flowLastRunPayloads,
   flowOpen,
   flowRun,
+  flowBuild,
   flowSave,
   flowLastOpened,
   flowStop,
@@ -62,6 +63,8 @@ export const ipcClient = {
   validateFlow: (flow: Flow) =>
     invoke<Flow, z.infer<typeof flowValidate.response>>(window.voide.validateFlow, flowValidate.request, flowValidate.response,
  flow),
+  buildFlow: (flow: Flow) =>
+    invoke<Flow, z.infer<typeof flowBuild.response>>(window.voide.buildFlow, flowBuild.request, flowBuild.response, flow),
   openFlow: () =>
     invoke<void, FlowOpenRes>(
       window.voide.openFlow,
@@ -78,13 +81,13 @@ export const ipcClient = {
       { flow, filePath: filePath ?? null },
       (req) => [req.flow, req.filePath ?? null],
     ),
-  runFlow: (flow: Flow, inputs: Record<string, unknown> = {}) =>
-    invoke<{ flow: Flow; inputs?: Record<string, unknown> }, z.infer<typeof flowRun.response>>(
+  runFlow: (compiledHash: string, inputs: Record<string, unknown> = {}) =>
+    invoke<{ compiledHash: string; inputs?: Record<string, unknown> }, z.infer<typeof flowRun.response>>(
       window.voide.runFlow,
       flowRun.request,
       flowRun.response,
-      { flow, inputs },
-      (req) => [req.flow, req.inputs ?? {}],
+      { compiledHash, inputs },
+      (req) => [req.compiledHash, req.inputs ?? {}],
     ),
   stopFlow: (runId: string) =>
     invoke<{ runId: string }, FlowStopRes>(

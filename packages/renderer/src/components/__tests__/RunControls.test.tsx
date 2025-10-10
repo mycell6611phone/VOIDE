@@ -37,7 +37,7 @@ let stopActiveRunMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   const initialFlow = createInitialFlow();
-  buildFlowMock = vi.fn().mockResolvedValue({ ok: true });
+  buildFlowMock = vi.fn().mockResolvedValue({ ok: true, hash: "hash:test" });
   runBuiltFlowMock = vi.fn().mockResolvedValue({ ok: true });
   stopActiveRunMock = vi.fn().mockResolvedValue({ ok: true });
   useFlowStore.setState({
@@ -362,7 +362,12 @@ describe("RunControls actions", () => {
     expect(playButton).toBeDisabled();
 
     useFlowStore.setState({
-      compiledFlow: createInitialFlow(),
+      compiledFlow: {
+        hash: "hash:test",
+        version: "1.0.0",
+        cached: false,
+        flow: createInitialFlow(),
+      },
       buildStatus: "success",
       runStatus: "idle",
     });
@@ -374,7 +379,12 @@ describe("RunControls actions", () => {
   it("runs the compiled flow when Play is clicked", async () => {
     const view = renderControls();
     useFlowStore.setState({
-      compiledFlow: createInitialFlow(),
+      compiledFlow: {
+        hash: "hash:test",
+        version: "1.0.0",
+        cached: false,
+        flow: createInitialFlow(),
+      },
       buildStatus: "success",
       runStatus: "idle",
     });

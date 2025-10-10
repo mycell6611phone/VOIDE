@@ -33,6 +33,13 @@ type RunStatus = "idle" | "running" | "success" | "error";
 
 type RunPayloadRecord = { nodeId: string; port: string; payload: PayloadT };
 
+type CompiledFlowHandle = {
+  hash: string;
+  version: string;
+  cached: boolean;
+  flow: FlowDef;
+};
+
 const RUN_PAYLOAD_FALLBACK_MS = 1500;
 
 const pendingRunPayloads = new Map<string, RunPayloadRecord[]>();
@@ -376,7 +383,7 @@ export const deriveLLMDisplayName = (
 
 interface S {
   flow: FlowDef;
-  compiledFlow: FlowDef | null;
+  compiledFlow: CompiledFlowHandle | null;
   buildStatus: BuildStatus;
   buildError: string | null;
   lastBuildAt: number | null;
@@ -407,7 +414,7 @@ interface S {
   pasteClipboard: (
     preferredKind?: ClipboardItem["kind"]
   ) => NodeDef | EdgeDef | null;
-  buildFlow: () => Promise<{ ok: boolean; error?: string }>;
+  buildFlow: () => Promise<{ ok: boolean; hash?: string; error?: string }>;
   runBuiltFlow: () => Promise<{ ok: boolean; runId?: string; error?: string }>;
   stopActiveRun: () => Promise<{ ok: boolean; error?: string }>;
 }
@@ -621,22 +628,30 @@ export const useFlowStore = create<S>((set, get) => ({
         return { ok: false, error: message };
       }
 
-      const validation = await voide.validateFlow(snapshot);
-      if (!validation.ok) {
+      const result = await voide.buildFlow(snapshot);
+      if (!result.ok) {
         const message =
-          formatFlowValidationErrors((validation.errors ?? []) as FlowValidationError[]).join("\n") ||
+          formatFlowValidationErrors((result.errors ?? []) as FlowValidationError[]).join("\n") ||
+          result.error ||
           "Flow validation failed.";
         set({ buildStatus: "error", buildError: message });
         return { ok: false, error: message };
       }
-      await voide.saveFlow(snapshot);
+
+      const compiledHandle: CompiledFlowHandle = {
+        hash: result.hash,
+        version: result.version,
+        cached: Boolean(result.cached),
+        flow: result.flow as FlowDef,
+      };
+
       set({
-        compiledFlow: snapshot,
+        compiledFlow: compiledHandle,
         buildStatus: "success",
         buildError: null,
         lastBuildAt: Date.now(),
       });
-      return { ok: true };
+      return { ok: true, hash: result.hash };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       set({ buildStatus: "error", buildError: message });
@@ -644,14 +659,14 @@ export const useFlowStore = create<S>((set, get) => ({
     }
   },
   runBuiltFlow: async () => {
-    const compiled = get().compiledFlow;
-    if (!compiled) {
+    const compiledHandle = get().compiledFlow;
+    if (!compiledHandle) {
       const message = "Build the flow before running it.";
       set({ runStatus: "error", runError: message });
       return { ok: false, error: message };
     }
 
-    const snapshot = cloneValue(compiled);
+    const snapshot = cloneValue(compiledHandle.flow);
     const interfaceNodes = snapshot.nodes.filter((node) => {
       const moduleKey = (node.params as { moduleKey?: unknown } | undefined)?.moduleKey;
       if (typeof moduleKey === "string" && (moduleKey === "interface" || moduleKey === "chat.input")) {
@@ -679,7 +694,7 @@ export const useFlowStore = create<S>((set, get) => ({
     set({ runStatus: "running", runError: null });
 
     try {
-      const { runId } = await voide.runFlow(snapshot, runtimeInputs);
+      const { runId } = await voide.runFlow(compiledHandle.hash, runtimeInputs);
       set({ activeRunId: runId, lastRunId: runId });
       const outputs = await waitForRunPayloads(runId);
       const copiedOutputs = cloneValue(outputs);

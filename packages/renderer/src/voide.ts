@@ -20,9 +20,26 @@ type RunPayloadEvent = {
   payloads: Array<{ nodeId: string; port: string; payload: PayloadT }>;
 };
 
+type BuildFlowSuccess = {
+  ok: true;
+  hash: string;
+  version: string;
+  cached: boolean;
+  flow: FlowDef;
+};
+
+type BuildFlowFailure = {
+  ok: false;
+  error: string;
+  errors?: FlowValidationResult["errors"];
+};
+
+export type BuildFlowResult = BuildFlowSuccess | BuildFlowFailure;
+
 export interface VoideApi {
   getNodeCatalog: () => Promise<NodeCatalogEntry[]>;
-  runFlow: (flow: FlowDef, inputs?: Record<string, unknown>) => Promise<{ runId: string }>;
+  buildFlow: (flow: FlowDef) => Promise<BuildFlowResult>;
+  runFlow: (compiledHash: string, inputs?: Record<string, unknown>) => Promise<{ runId: string }>;
   stopFlow: (runId: string) => Promise<{ ok: boolean }>;
   openFlow: () => Promise<{ flow: FlowDef; path?: string } | null>;
   saveFlow: (flow: FlowDef) => Promise<void>;
@@ -165,6 +182,8 @@ const sampleFlow: FlowDef = {
   ],
 };
 
+const mockCompiledFlows = new Map<string, FlowDef>();
+
 function createFallbackVoide(): VoideApi {
   let storedFlow: FlowDef = sampleFlow;
   const telemetryListeners = new Set<(event: TelemetryPayload) => void>();
@@ -174,7 +193,33 @@ function createFallbackVoide(): VoideApi {
       console.info("[voide-mock] Using mock node catalog (renderer running outside Electron)");
       return mockCatalog;
     },
-    async runFlow(_flow, _inputs = {}) {
+    async buildFlow(flow) {
+      const validation = validateFlowDefinition(flow);
+      if (!validation.ok) {
+        const message =
+          formatFlowValidationErrors(validation.errors).join("; ") ||
+          "Flow validation failed.";
+        return { ok: false, error: message, errors: validation.errors } satisfies BuildFlowFailure;
+      }
+      const serialized = JSON.stringify(flow);
+      const hash = `mock:${flow.id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2)}`;
+      const copy = JSON.parse(serialized) as FlowDef;
+      mockCompiledFlows.set(hash, copy);
+      storedFlow = copy;
+      console.info(`[voide-mock] Compiled flow '${flow.id}' as ${hash}`);
+      return {
+        ok: true,
+        hash,
+        version: copy.version ?? "1.0.0",
+        cached: false,
+        flow: copy,
+      } satisfies BuildFlowSuccess;
+    },
+    async runFlow(compiledHash, _inputs = {}) {
+      const compiled = mockCompiledFlows.get(compiledHash);
+      if (!compiled) {
+        throw new Error(`No compiled flow found for hash '${compiledHash}'. Build the flow before running it.`);
+      }
       console.warn("[voide-mock] Flow execution is disabled outside the Electron runtime.");
       throw new Error(
         "Mock runs have been removed. Start the Electron app with a configured llama.cpp or gpt4all backend to execute flows.",
@@ -247,7 +292,24 @@ function mapOpenFlowResult(result: FlowOpenRes): { flow: FlowDef; path?: string 
 function createElectronVoide(): VoideApi {
   return {
     getNodeCatalog: () => ipcClient.getNodeCatalog(),
-    runFlow: (flow, inputs = {}) => ipcClient.runFlow(flow as unknown as IpcFlow, inputs),
+    buildFlow: async (flow) => {
+      const result = await ipcClient.buildFlow(flow as unknown as IpcFlow);
+      if (result.ok) {
+        return {
+          ok: true,
+          hash: result.hash,
+          version: result.version,
+          cached: Boolean(result.cached),
+          flow: result.flow as unknown as FlowDef,
+        } satisfies BuildFlowSuccess;
+      }
+      return {
+        ok: false,
+        error: result.error,
+        errors: result.errors as BuildFlowFailure["errors"],
+      } satisfies BuildFlowFailure;
+    },
+    runFlow: (compiledHash, inputs = {}) => ipcClient.runFlow(compiledHash, inputs),
     stopFlow: (runId) => ipcClient.stopFlow(runId),
     openFlow: async () => {
       const result = await ipcClient.openFlow();
@@ -297,6 +359,7 @@ function createElectronVoide(): VoideApi {
 
 type ElectronBridge = {
   validateFlow: (...args: any[]) => Promise<unknown>;
+  buildFlow: (...args: any[]) => Promise<unknown>;
   openFlow: (...args: any[]) => Promise<unknown>;
   saveFlow: (...args: any[]) => Promise<unknown>;
   getLastOpenedFlow: (...args: any[]) => Promise<unknown>;
@@ -321,6 +384,7 @@ const globalWindow = typeof window !== "undefined" ? (window as Window & { voide
 const hasBridge = Boolean(
   globalWindow?.voide &&
     typeof globalWindow.voide.validateFlow === "function" &&
+    typeof globalWindow.voide.buildFlow === "function" &&
     typeof globalWindow.voide.openFlow === "function" &&
     typeof globalWindow.voide.saveFlow === "function" &&
     typeof globalWindow.voide.getLastOpenedFlow === "function" &&

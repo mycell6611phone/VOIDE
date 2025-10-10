@@ -40,6 +40,20 @@ export const Flow = z
 
 export type Flow = z.infer<typeof Flow>;
 
+const FlowBuildSuccess = z.object({
+  ok: z.literal(true),
+  hash: z.string(),
+  version: z.string(),
+  cached: z.boolean().default(false),
+  flow: Flow
+});
+
+const FlowBuildFailure = z.object({
+  ok: z.literal(false),
+  error: z.string(),
+  errors: z.array(z.unknown()).default([])
+});
+
 const Role = z.enum(["system", "user", "assistant"]);
 
 const TextPayload = z
@@ -139,6 +153,15 @@ export const flowValidate = {
 export type FlowValidateReq = z.infer<typeof flowValidate.request>;
 export type FlowValidateRes = z.infer<typeof flowValidate.response>;
 
+export const flowBuild = {
+  name: "flow:build",
+  request: Flow,
+  response: z.union([FlowBuildSuccess, FlowBuildFailure])
+};
+
+export type FlowBuildReq = z.infer<typeof flowBuild.request>;
+export type FlowBuildRes = z.infer<typeof flowBuild.response>;
+
 export const flowOpen = {
   name: "flow:open",
   request: z.undefined(),
@@ -200,7 +223,7 @@ export type FlowLastOpenedRes = z.infer<typeof flowLastOpened.response>;
 export const flowRun = {
   name: "flow:run",
   request: z.object({
-    flow: Flow,
+    compiledHash: z.string(),
     inputs: z.record(z.any()).default({})
   }),
   response: z.object({ runId: z.string() })

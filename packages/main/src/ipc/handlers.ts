@@ -1,6 +1,7 @@
 import { ipcMain, app } from "electron";
 import {
   flowValidate,
+  flowBuild,
   flowRun,
   modelEnsure,
   appGetVersion,
@@ -9,6 +10,8 @@ import {
   moduleTest,
 } from "@voide/ipc";
 import { validateFlow } from "../services/validate.js";
+import { formatFlowValidationErrors } from "@voide/shared/flowValidation";
+import { compileAndCache, getCompiledFlow } from "../orchestrator/compilerCache.js";
 import { runFlow, getLastRunPayloads, testNode } from "../orchestrator/engine.js";
 import { getModelRegistry } from "../services/models.js";
 import { emitRunPayloads } from "./telemetry.js";
@@ -24,6 +27,7 @@ type HandlerDeps = {
 
 const legacyChannelNames: Record<string, readonly string[]> = {
   [flowValidate.name]: ["voide:validateFlow"],
+  [flowBuild.name]: ["voide:buildFlow"],
   [flowRun.name]: ["voide:runFlow"],
 };
 
@@ -57,11 +61,43 @@ export function registerHandlers(deps: HandlerDeps) {
   }, legacyChannelNames[flowValidate.name] ?? []);
 
 
+  bindHandler(flowBuild, async (_e, payload) => {
+    const parsed = flowBuild.request.safeParse(payload);
+    if (!parsed.success) {
+      const message = parsed.error.errors?.map((issue) => issue.message).join("; ") ?? "Invalid flow build request.";
+      return flowBuild.response.parse({ ok: false, error: message, errors: parsed.error.errors ?? [] });
+    }
+    try {
+      const validation = validateFlow(parsed.data as any);
+      if (!validation.ok) {
+        const message =
+          formatFlowValidationErrors(validation.errors).join("\n") ||
+          "Flow validation failed.";
+        return flowBuild.response.parse({ ok: false, error: message, errors: validation.errors ?? [] });
+      }
+      const { entry, cached } = compileAndCache(parsed.data as any);
+      return flowBuild.response.parse({
+        ok: true,
+        hash: entry.hash,
+        version: entry.version,
+        cached,
+        flow: entry.flow as any,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return flowBuild.response.parse({ ok: false, error: message, errors: [] });
+    }
+  }, legacyChannelNames[flowBuild.name] ?? []);
+
   bindHandler(flowRun, async (_e, payload) => {
     const parsed = flowRun.request.safeParse(payload);
     if (!parsed.success) return formatError(parsed.error.flatten());
     try {
-      const out = await runFlow(parsed.data.flow as any, parsed.data.inputs ?? {});
+      const compiled = getCompiledFlow(parsed.data.compiledHash);
+      if (!compiled) {
+        return formatError(new Error(`Compiled flow not found for hash '${parsed.data.compiledHash}'.`));
+      }
+      const out = await runFlow(compiled.flow as any, parsed.data.inputs ?? {});
       try {
         const payloads = await getLastRunPayloads(out.runId);
         emitRunPayloads(out.runId, payloads);

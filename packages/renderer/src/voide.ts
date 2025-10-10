@@ -112,9 +112,14 @@ const sampleFlow: FlowDef = {
   nodes: [
     {
       id: "chat-input",
-      name: "ChatInput",
+      name: "Interface",
       type: "chat.input",
-      params: { message: "Tell me something interesting about space." },
+      params: {
+        __position: { x: 120, y: 360 },
+        role: "entrypoint",
+        moduleKey: "chat.input",
+        message: "How can I help you today?",
+      },
       in: [{ port: "response", types: ["text", "json"] }],
       out: [{ port: "text", types: ["text"] }],
     },
@@ -122,7 +127,12 @@ const sampleFlow: FlowDef = {
       id: "prompt",
       name: "Prompt",
       type: "prompt",
-      params: { template: "You are a helpful assistant.\nUser: {{input}}\nAssistant:" },
+      params: {
+        __position: { x: 420, y: 360 },
+        moduleKey: "prompt",
+        preset: "analysis",
+        template: "You are a helpful assistant.\nUser: {{input}}\nAssistant:",
+      },
       in: [{ port: "vars", types: ["json", "text"] }],
       out: [{ port: "text", types: ["text"] }],
     },
@@ -131,6 +141,8 @@ const sampleFlow: FlowDef = {
       name: "LLAMA3.1 8B",
       type: "llm",
       params: {
+        __position: { x: 720, y: 360 },
+        moduleKey: "llm",
         modelId: "model:llama3.1-8b.Q4_K_M",
         adapter: "llama.cpp",
         runtime: "CPU",
@@ -140,28 +152,11 @@ const sampleFlow: FlowDef = {
       in: [{ port: "prompt", types: ["text"] }],
       out: [{ port: "text", types: ["text"] }],
     },
-    {
-      id: "logger",
-      name: "Log",
-      type: "log",
-      params: { tag: "sample" },
-      in: [{ port: "any", types: ["text", "json", "vector"] }],
-      out: [{ port: "any", types: ["text", "json", "vector"] }],
-    },
-    {
-      id: "output",
-      name: "Output",
-      type: "output",
-      params: {},
-      in: [{ port: "text", types: ["text"] }],
-      out: [],
-    },
   ],
   edges: [
-    { id: "e1", from: ["chat-input", "text"], to: ["prompt", "vars"] },
-    { id: "e2", from: ["prompt", "text"], to: ["llm", "prompt"] },
-    { id: "e3", from: ["llm", "text"], to: ["logger", "any"] },
-    { id: "e4", from: ["logger", "any"], to: ["output", "text"] },
+    { id: "edge-chat-to-prompt", from: ["chat-input", "text"], to: ["prompt", "vars"] },
+    { id: "edge-prompt-to-llm", from: ["prompt", "text"], to: ["llm", "prompt"] },
+    { id: "edge-llm-to-chat", from: ["llm", "text"], to: ["chat-input", "response"] },
   ],
 };
 

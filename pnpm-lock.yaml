@@ -106,6 +106,9 @@ importers:
 
   packages/main:
     dependencies:
+      '@voide/adapters':
+        specifier: workspace:*
+        version: link:../adapters
       '@voide/ipc':
         specifier: workspace:*
         version: link:../ipc

@@ -11,6 +11,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
+    "@voide/adapters": "workspace:*",
     "@voide/shared": "workspace:*",
     "@voide/schemas": "workspace:*",
     "@voide/ipc": "workspace:*",

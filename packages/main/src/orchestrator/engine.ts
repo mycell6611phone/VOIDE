@@ -7,6 +7,9 @@ import { v4 as uuidv4 } from "uuid";
 import type { FlowDef, NodeDef, LLMParams, PayloadT, TextPayload, RuntimeProfile } from "@voide/shared";
 import { TelemetryEventType } from "@voide/shared";
 import { formatFlowValidationErrors } from "@voide/shared/flowValidation";
+import { runLlamaCpp } from "../../../adapters/src/llamaCpp.js";
+import { runGpt4All } from "../../../adapters/src/gpt4all.js";
+import { runMock } from "../../../adapters/src/mock.js";
 import { topoOrder, Frontier, downstream } from "./scheduler.js";
 import {
   clearAndRegister,
@@ -200,12 +203,53 @@ async function runLLMInline(job: LLMWorkerJob, signal: AbortSignal): Promise<LLM
   const adapter = job.params.adapter ?? DEFAULT_ADAPTER;
   if (!llmFallbackLogged && adapter !== "mock") {
     console.warn(
-      `[orchestrator] Adapter "${adapter}" requested without worker bundle; falling back to mock responses.`
+      `[orchestrator] Adapter "${adapter}" requested without worker bundle; executing inline. Build @voide/workers for threaded runs.`
     );
     llmFallbackLogged = true;
   }
-  throwIfAborted(signal);
-  const text = runMockFallback(job.prompt ?? "");
+
+  const prompt = job.prompt ?? "";
+  let text: string;
+
+  try {
+    switch (adapter) {
+      case "mock": {
+        text = await runMock(prompt);
+        break;
+      }
+      case "gpt4all": {
+        throwIfAborted(signal);
+        text = await runGpt4All({
+          modelFile: job.modelFile,
+          prompt,
+          maxTokens: job.params.maxTokens,
+          temperature: job.params.temperature,
+        });
+        break;
+      }
+      case "llama.cpp": {
+        throwIfAborted(signal);
+        text = await runLlamaCpp({
+          modelFile: job.modelFile,
+          prompt,
+          maxTokens: job.params.maxTokens,
+          temperature: job.params.temperature,
+          runtime: job.params.runtime ?? DEFAULT_RUNTIME,
+          signal,
+        });
+        break;
+      }
+      default: {
+        throw new Error(`Unknown adapter "${adapter}" requested.`);
+      }
+    }
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    throw toAdapterError(adapter, error);
+  }
+
   throwIfAborted(signal);
   return {
     text,
@@ -214,11 +258,38 @@ async function runLLMInline(job: LLMWorkerJob, signal: AbortSignal): Promise<LLM
   };
 }
 
-function runMockFallback(prompt: string): string {
-  const lines = prompt.split(/\n/).slice(-4).join(" ").slice(0, 400);
-  const verdict = /DONE/i.test(prompt) ? "DONE" : "CONTINUE";
-  const summary = lines.replace(/\s+/g, " ").trim();
-  return `Thought: ${summary}\nDecision: ${verdict}`;
+function isModuleResolutionError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const code = (error as { code?: unknown }).code;
+  return code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND";
+}
+
+function isMissingBinaryError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const code = (error as { code?: unknown }).code;
+  return code === "ENOENT";
+}
+
+function toAdapterError(adapter: string, error: unknown): Error {
+  const cause = error instanceof Error ? error : undefined;
+  if (adapter === "llama.cpp" && isMissingBinaryError(error)) {
+    return new Error(
+      "Failed to launch the llama.cpp backend. Ensure the `llama-cli` binary is installed and reachable via PATH or configure the LLAMA_BIN environment variable.",
+      cause ? { cause } : undefined
+    );
+  }
+  if (adapter === "gpt4all" && isModuleResolutionError(error)) {
+    return new Error(
+      "The gpt4all adapter is not available. Install the optional `gpt4all` dependency in the workspace or switch the node to use the llama.cpp adapter.",
+      cause ? { cause } : undefined
+    );
+  }
+  const message = cause ? cause.message : String(error);
+  return new Error(`LLM adapter "${adapter}" failed to execute: ${message}`, cause ? { cause } : undefined);
 }
 
 type ManifestModel = {

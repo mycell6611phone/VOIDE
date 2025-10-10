@@ -10,6 +10,7 @@ export interface LlamaRunArgs {
   threads?: number;
   gpuLayers?: number;
   llamaBin?: string;
+  signal?: AbortSignal;
 }
 
 export async function runLlamaCpp(args: LlamaRunArgs): Promise<string> {
@@ -25,6 +26,9 @@ export async function runLlamaCpp(args: LlamaRunArgs): Promise<string> {
     "-ngl", String(gpuLayers),
     "--no-display-prompt"
   ];
-  const { stdout } = await execa(llamaBin, cmdArgs, { env: { LLAMA_ARG_MAX: "65536" } });
+  const { stdout } = await execa(llamaBin, cmdArgs, {
+    env: { LLAMA_ARG_MAX: "65536" },
+    signal: args.signal,
+  });
   return stdout.trim();
 }

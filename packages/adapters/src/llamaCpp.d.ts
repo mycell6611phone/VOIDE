@@ -7,6 +7,7 @@ export interface LlamaRunArgs {
     threads?: number;
     gpuLayers?: number;
     llamaBin?: string;
+    signal?: AbortSignal;
 }
 export declare function runLlamaCpp(args: LlamaRunArgs): Promise<string>;
 //# sourceMappingURL=llamaCpp.d.ts.map

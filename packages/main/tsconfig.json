@@ -41,6 +41,7 @@
   "references": [
     { "path": "../shared" },
     { "path": "../ipc" },
+    { "path": "../adapters" },
     { "path": "../../core" }
   ]
 }

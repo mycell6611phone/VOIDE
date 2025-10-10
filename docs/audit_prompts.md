@@ -1,0 +1,7 @@
+# VOIDE Repository Audit Prompts
+
+- Prompt: "You are the VOIDE backend engineer. Replace the current Build flow so `packages/renderer/src/state/flowStore.ts` requests a compiled protobuf plan instead of simply saving the raw `FlowDef`. Introduce an IPC build handler (e.g., `flowBuild`) that calls the `@voide/core` compiler, persists the resulting binary, and returns metadata the renderer can cache for Play runs. Make sure the Build button now fulfills the main goal of compiling the canvas into an executable artifact." 
+- Prompt: "You are the VOIDE orchestrator maintainer. Refactor `packages/main/src/orchestrator/engine.ts` so `runFlow` executes compiled protobuf payloads produced during Build rather than re-validating raw JSON at runtime. Align the Electron main process by updating the new build IPC handler and run IPC wiring to pass the compiled artifact through, keeping parity with `core/src/run/index.ts`." 
+- Prompt: "You are the VOIDE platform engineer. Unify flow validation so the renderer, build IPC, and run IPC all rely on the same schema helpers from `@voide/shared/flowValidation` instead of mixing Ajv (`packages/main/src/ipc.ts`) with the Zod-based validator (`packages/main/src/ipc/handlers.ts`). This prevents flows that save successfully from failing at run time." 
+- Prompt: "You are the Electron shell owner. Clean up `packages/main/src/main.ts` by collapsing the triple `if (!process.env.NODE_ENV)` block into a single assignment and document the intended precedence. This removes dead copy-paste logic before app startup." 
+

@@ -23,7 +23,7 @@ export const inputPorts = [
 ] satisfies readonly NodePortDefinition[];
 
 export const outputPorts = [
-  { port: "completion", types: ["string"] },
+  { port: "text", types: ["string"] },
 ] satisfies readonly NodePortDefinition[];
 
 export const nodeDefinition: ModuleNodeDefinition = {

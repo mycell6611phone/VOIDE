@@ -21,7 +21,7 @@
     },
     {
       "id": "planner",
-      "type": "llm.generic",
+      "type": "llm",
       "name": "Planner",
       "params": {
         "adapter": "mock",
@@ -31,7 +31,7 @@
         "runtime": "CPU"
       },
       "in": [{ "port": "prompt", "types": ["text"] }],
-      "out": [{ "port": "completion", "types": ["text"] }]
+      "out": [{ "port": "text", "types": ["text"] }]
     },
     {
       "id": "critic",
@@ -67,7 +67,7 @@
   "edges": [
     { "id": "e1", "from": ["system", "out"], "to": ["planner", "prompt"], "label": "sys" },
     { "id": "e2", "from": ["userq", "out"], "to": ["planner", "prompt"], "label": "q" },
-    { "id": "e3", "from": ["planner", "completion"], "to": ["critic", "text"], "label": "review" },
+    { "id": "e3", "from": ["planner", "text"], "to": ["critic", "text"], "label": "review" },
     { "id": "e4", "from": ["critic", "notes"], "to": ["loop", "in"], "label": "iterate" },
     { "id": "e5", "from": ["loop", "body"], "to": ["planner", "prompt"], "label": "feedback" },
     { "id": "e6", "from": ["loop", "out"], "to": ["output", "in"], "label": "final" }

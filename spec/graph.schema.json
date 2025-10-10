@@ -187,11 +187,8 @@
         "OutputNode",
         "orchestrator",
         "critic",
-        "llm.generic",
+        "llm",
         "system.prompt",
-        "embedding",
-        "retriever",
-        "vector.store",
         "loop",
         "output",
         "memory",
@@ -286,42 +283,18 @@
             { "id": "notes", "kinds": ["text"] }
           ]
         },
-        "llm.generic": {
+        "llm": {
           "inputs": [
             { "id": "prompt", "kinds": ["text"] }
           ],
           "outputs": [
-            { "id": "completion", "kinds": ["text"] }
+            { "id": "text", "kinds": ["text"] }
           ]
         },
         "system.prompt": {
           "inputs": [],
           "outputs": [
             { "id": "out", "kinds": ["text"] }
-          ]
-        },
-        "embedding": {
-          "inputs": [
-            { "id": "text", "kinds": ["text"] }
-          ],
-          "outputs": [
-            { "id": "vec", "kinds": ["vector"] }
-          ]
-        },
-        "retriever": {
-          "inputs": [
-            { "id": "vec", "kinds": ["vector"] }
-          ],
-          "outputs": [
-            { "id": "docs", "kinds": ["json"] }
-          ]
-        },
-        "vector.store": {
-          "inputs": [
-            { "id": "upsert", "kinds": ["json", "vector"] }
-          ],
-          "outputs": [
-            { "id": "ok", "kinds": ["json"] }
           ]
         },
         "loop": {

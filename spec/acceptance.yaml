@@ -83,6 +83,6 @@ tests:
       - No duplicate or missing `edge:tx` events appear in the telemetry stream.
 
 todos:
-  - TODO: Add acceptance coverage for `llm.generic` error propagation and retry behavior.
+  - TODO: Add acceptance coverage for `llm` error propagation and retry behavior.
   - TODO: Verify orchestrator resume semantics after a paused run is resumed.
   - TODO: Cover streaming token delivery across multi-hop edges with backpressure scenarios.

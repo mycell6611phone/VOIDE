@@ -3,7 +3,7 @@ export const inputPorts = [
     { port: "prompt", types: ["PromptMsg"] },
 ];
 export const outputPorts = [
-    { port: "completion", types: ["string"] },
+    { port: "text", types: ["string"] },
 ];
 export const nodeDefinition = {
     type: "LLM",

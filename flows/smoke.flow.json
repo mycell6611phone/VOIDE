@@ -9,7 +9,7 @@
     },
     {
       "id": "llm_1",
-      "type": "llm.generic",
+      "type": "llm",
       "label": "LLM",
       "position": { "x": 360, "y": 240 }
     },
@@ -28,7 +28,7 @@
     },
     {
       "id": "edge_llm_out_to_div",
-      "from": { "node": "llm_1", "port": "completion" },
+      "from": { "node": "llm_1", "port": "text" },
       "to": { "node": "div_1", "port": "in" }
     },
     {

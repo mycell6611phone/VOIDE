@@ -13,20 +13,18 @@ import React, {
 import ReactFlow, {
   Background,
   Connection,
-  Edge,
   EdgeChange,
   Node,
   NodeChange,
   ReactFlowInstance,
   Viewport,
-  addEdge,
   useEdgesState,
   useNodesState,
 } from "react-flow-renderer";
 
-import type { EdgeDef, NodeDef } from "@voide/shared";
+import type { EdgeDef, FlowDef, NodeDef } from "@voide/shared";
 import type { TelemetryPayload } from "@voide/ipc";
-import { useFlowStore } from "../state/flowStore";
+import { useFlowStore, type CanvasBridge } from "../state/flowStore";
 import ModuleNode from "./nodes/BasicNode";
 import LLMNode from "./nodes/LLMNode";
 import { CanvasBoundaryProvider } from "./CanvasBoundaryContext";
@@ -57,6 +55,26 @@ const POSITION_KEY = "__position";
 const CONTEXT_WINDOW_DEFAULT_SIZE: WindowSize = { width: 320, height: 260 };
 const CONTEXT_WINDOW_POINTER_OFFSET = 12;
 const EDIT_MENU_SELECTOR = `[${EDIT_MENU_DATA_ATTRIBUTE}]`;
+
+const cloneValue = <T,>(value: T): T => {
+  if (typeof structuredClone === "function") {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+};
+
+const cloneNodeDef = (node: NodeDef): NodeDef => ({
+  ...node,
+  params: node.params ? { ...node.params } : undefined,
+  in: Array.isArray(node.in) ? node.in.map((port) => ({ ...port })) : [],
+  out: Array.isArray(node.out) ? node.out.map((port) => ({ ...port })) : [],
+});
+
+const cloneEdgeDef = (edge: EdgeDef): EdgeDef => ({
+  ...edge,
+  from: [edge.from[0], edge.from[1]],
+  to: [edge.to[0], edge.to[1]],
+});
 
 interface GraphContextWindowState {
   node: NodeDef;
@@ -99,22 +117,26 @@ const toReactFlowEdge = (edge: EdgeDef): Edge => ({
 export default function GraphCanvas() {
   const {
     flow,
-    setFlow,
     activeTool,
     copyEdge,
     cutEdge,
     deleteEdge,
     pasteClipboard,
-    clipboard: clipboardItem
+    clipboard: clipboardItem,
+    registerCanvasBridge,
+    unregisterCanvasBridge,
+    syncFlowFromCanvas,
   } = useFlowStore((state) => ({
     flow: state.flow,
-    setFlow: state.setFlow,
     activeTool: state.activeTool,
     copyEdge: state.copyEdge,
     cutEdge: state.cutEdge,
     deleteEdge: state.deleteEdge,
     pasteClipboard: state.pasteClipboard,
-    clipboard: state.clipboard
+    clipboard: state.clipboard,
+    registerCanvasBridge: state.registerCanvasBridge,
+    unregisterCanvasBridge: state.unregisterCanvasBridge,
+    syncFlowFromCanvas: state.syncFlowFromCanvas,
   }));
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -125,11 +147,8 @@ export default function GraphCanvas() {
     GraphContextWindowState | null
   >(null);
   const [edgeMenu, setEdgeMenu] = useState<EdgeContextMenuState | null>(null);
+  const flowRef = useRef<FlowDef>(flow);
   const edgesRef = useRef<EdgeDef[]>(flow.edges);
-
-  useEffect(() => {
-    edgesRef.current = flow.edges;
-  }, [flow.edges]);
 
   const refreshBounds = useCallback(() => {
     if (!containerRef.current) {
@@ -184,13 +203,255 @@ export default function GraphCanvas() {
     []
   );
 
-  useEffect(() => {
-    setNodes(flow.nodes.map(toReactFlowNode));
-  }, [flow.nodes, setNodes]);
+  const applyFlowUpdate = useCallback(
+    (
+      recipe: (current: FlowDef) => { flow: FlowDef; changed: boolean },
+      invalidate: boolean
+    ) => {
+      const { flow: next, changed } = recipe(flowRef.current);
+      if (!changed) {
+        return { flow: flowRef.current, changed: false } as const;
+      }
+      flowRef.current = next;
+      edgesRef.current = next.edges;
+      if (invalidate) {
+        syncFlowFromCanvas(next, { invalidate: true });
+      } else {
+        syncFlowFromCanvas(next);
+      }
+      return { flow: next, changed: true } as const;
+    },
+    [syncFlowFromCanvas]
+  );
+
+  const replaceFlowSilently = useCallback(
+    (nextFlow: FlowDef) => {
+      const normalized = cloneValue(nextFlow);
+      flowRef.current = normalized;
+      edgesRef.current = normalized.edges;
+      setNodes(normalized.nodes.map(toReactFlowNode));
+      setEdges(normalized.edges.map(toReactFlowEdge));
+    },
+    [setEdges, setNodes]
+  );
+
+  const addNodeToCanvas = useCallback(
+    (node: NodeDef) => {
+      const nodeClone = cloneNodeDef(node);
+      const result = applyFlowUpdate(
+        (current) => ({
+          flow: { ...current, nodes: [...current.nodes, nodeClone] },
+          changed: true,
+        }),
+        true
+      );
+      if (result.changed) {
+        setNodes((prev) => [...prev, toReactFlowNode(nodeClone)]);
+      }
+      return nodeClone;
+    },
+    [applyFlowUpdate, setNodes]
+  );
+
+  const setNodeOnCanvas = useCallback(
+    (node: NodeDef) => {
+      const nodeClone = cloneNodeDef(node);
+      const result = applyFlowUpdate(
+        (current) => {
+          let changed = false;
+          const nodes = current.nodes.map((existing) => {
+            if (existing.id !== nodeClone.id) {
+              return existing;
+            }
+            changed = true;
+            return nodeClone;
+          });
+          if (!changed) {
+            return { flow: current, changed: false } as const;
+          }
+          return { flow: { ...current, nodes }, changed: true } as const;
+        },
+        true
+      );
+      if (result.changed) {
+        setNodes((prev) =>
+          prev.map((reactNode) =>
+            reactNode.id === nodeClone.id
+              ? {
+                  ...reactNode,
+                  data: nodeClone,
+                  position: getPosition(nodeClone),
+                }
+              : reactNode
+          )
+        );
+        return nodeClone;
+      }
+      return null;
+    },
+    [applyFlowUpdate, setNodes]
+  );
+
+  const deleteNodeFromCanvas = useCallback(
+    (nodeId: string) => {
+      const result = applyFlowUpdate(
+        (current) => {
+          if (!current.nodes.some((node) => node.id === nodeId)) {
+            return { flow: current, changed: false } as const;
+          }
+          const nodes = current.nodes.filter((node) => node.id !== nodeId);
+          const edges = current.edges.filter(
+            (edge) => edge.from[0] !== nodeId && edge.to[0] !== nodeId
+          );
+          return { flow: { ...current, nodes, edges }, changed: true } as const;
+        },
+        true
+      );
+      if (result.changed) {
+        setNodes((prev) => prev.filter((node) => node.id !== nodeId));
+        setEdges((prev) =>
+          prev.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
+        );
+        return true;
+      }
+      return false;
+    },
+    [applyFlowUpdate, setEdges, setNodes]
+  );
+
+  const addEdgeOnCanvas = useCallback(
+    (edge: EdgeDef) => {
+      const edgeClone = cloneEdgeDef(edge);
+      const result = applyFlowUpdate(
+        (current) => {
+          if (current.edges.some((existing) => existing.id === edgeClone.id)) {
+            return { flow: current, changed: false } as const;
+          }
+          return {
+            flow: { ...current, edges: [...current.edges, edgeClone] },
+            changed: true,
+          } as const;
+        },
+        true
+      );
+      if (result.changed) {
+        setEdges((prev) => [...prev, toReactFlowEdge(edgeClone)]);
+      }
+      return edgeClone;
+    },
+    [applyFlowUpdate, setEdges]
+  );
+
+  const deleteEdgeFromCanvas = useCallback(
+    (edgeId: string) => {
+      const result = applyFlowUpdate(
+        (current) => {
+          if (!current.edges.some((edge) => edge.id === edgeId)) {
+            return { flow: current, changed: false } as const;
+          }
+          return {
+            flow: {
+              ...current,
+              edges: current.edges.filter((edge) => edge.id !== edgeId),
+            },
+            changed: true,
+          } as const;
+        },
+        true
+      );
+      if (result.changed) {
+        setEdges((prev) => prev.filter((edge) => edge.id !== edgeId));
+        return true;
+      }
+      return false;
+    },
+    [applyFlowUpdate, setEdges]
+  );
+
+  const serializeFlowFromReactFlow = useCallback((): FlowDef => {
+    const instance = reactFlowInstanceRef.current;
+    const base = flowRef.current;
+    if (!instance) {
+      return cloneValue(base);
+    }
+    const { nodes: rfNodes, edges: rfEdges } = instance.toObject();
+    const baseNodes = new Map(base.nodes.map((node) => [node.id, node]));
+    const nodes: NodeDef[] = rfNodes.map((rfNode) => {
+      const dataCandidate =
+        rfNode.data && typeof rfNode.data === "object"
+          ? (rfNode.data as NodeDef)
+          : undefined;
+      const baseNode = baseNodes.get(rfNode.id);
+      const resolved = dataCandidate ?? baseNode;
+      const params = { ...(resolved?.params ?? {}) };
+      params[POSITION_KEY] = { x: rfNode.position.x, y: rfNode.position.y };
+      if (resolved) {
+        const cloned = cloneNodeDef(resolved);
+        cloned.params = params;
+        return cloned;
+      }
+      return {
+        id: rfNode.id,
+        type: (rfNode.type as string | undefined) ?? "module",
+        name:
+          dataCandidate?.name ?? baseNode?.name ?? rfNode.id ?? "Node",
+        params,
+        in: baseNode?.in ? baseNode.in.map((port) => ({ ...port })) : [],
+        out: baseNode?.out ? baseNode.out.map((port) => ({ ...port })) : [],
+      };
+    });
+    const baseEdges = new Map(base.edges.map((edge) => [edge.id, edge]));
+    const edges: EdgeDef[] = rfEdges.map((rfEdge) => {
+      const baseEdge = baseEdges.get(rfEdge.id);
+      const fromPort =
+        rfEdge.sourceHandle?.split(":")[1] ?? baseEdge?.from?.[1] ?? "out";
+      const toPort =
+        rfEdge.targetHandle?.split(":")[1] ?? baseEdge?.to?.[1] ?? "in";
+      const edgeDef: EdgeDef = {
+        id: rfEdge.id,
+        from: [rfEdge.source, fromPort],
+        to: [rfEdge.target, toPort],
+      };
+      if (baseEdge?.label) {
+        edgeDef.label = baseEdge.label;
+      }
+      return edgeDef;
+    });
+    return cloneValue({ ...base, nodes, edges });
+  }, []);
+
+  const canvasBridge = useMemo<CanvasBridge>(
+    () => ({
+      getFlow: () => serializeFlowFromReactFlow(),
+      replaceFlow: (nextFlow) => replaceFlowSilently(nextFlow),
+      addNode: (node) => addNodeToCanvas(node),
+      setNode: (node) => setNodeOnCanvas(node),
+      deleteNode: (nodeId) => deleteNodeFromCanvas(nodeId),
+      addEdge: (edge) => addEdgeOnCanvas(edge),
+      deleteEdge: (edgeId) => deleteEdgeFromCanvas(edgeId),
+    }),
+    [
+      addEdgeOnCanvas,
+      addNodeToCanvas,
+      deleteEdgeFromCanvas,
+      deleteNodeFromCanvas,
+      replaceFlowSilently,
+      serializeFlowFromReactFlow,
+      setNodeOnCanvas,
+    ]
+  );
 
   useEffect(() => {
-    setEdges(flow.edges.map(toReactFlowEdge));
-  }, [flow.edges, setEdges]);
+    registerCanvasBridge(canvasBridge);
+    return () => unregisterCanvasBridge(canvasBridge);
+  }, [canvasBridge, registerCanvasBridge, unregisterCanvasBridge]);
+
+  useEffect(() => {
+    if (flow === flowRef.current) {
+      return;
+    }
+    replaceFlowSilently(flow);
+  }, [flow, replaceFlowSilently]);
 
   useEffect(() => {
     if (typeof voide.onTelemetry !== "function") {
@@ -308,19 +569,49 @@ export default function GraphCanvas() {
         return;
       }
 
-      const updatedNodes = flow.nodes.map((node) => {
-        const match = positionChanges.find((change) => change.id === node.id);
-        if (!match || !match.position) {
-          return node;
-        }
-        const params = { ...(node.params ?? {}) } as Record<string, unknown>;
-        params[POSITION_KEY] = match.position;
-        return { ...node, params };
-      });
+      const result = applyFlowUpdate(
+        (current) => {
+          let changed = false;
+          const nodes = current.nodes.map((node) => {
+            const match = positionChanges.find((change) => change.id === node.id);
+            if (!match || !match.position) {
+              return node;
+            }
+            const params = { ...(node.params ?? {}) } as Record<string, unknown>;
+            const previous = params[POSITION_KEY] as { x?: number; y?: number } | undefined;
+            const nextPosition = match.position!;
+            if (
+              previous &&
+              typeof previous.x === "number" &&
+              typeof previous.y === "number" &&
+              previous.x === nextPosition.x &&
+              previous.y === nextPosition.y
+            ) {
+              return node;
+            }
+            params[POSITION_KEY] = nextPosition;
+            changed = true;
+            return { ...node, params };
+          });
+          if (!changed) {
+            return { flow: current, changed: false } as const;
+          }
+          return { flow: { ...current, nodes }, changed: true } as const;
+        },
+        false
+      );
 
-      setFlow({ ...flow, nodes: updatedNodes });
+      if (result.changed) {
+        const lookup = new Map(result.flow.nodes.map((node) => [node.id, node]));
+        setNodes((prev) =>
+          prev.map((reactNode) => {
+            const updated = lookup.get(reactNode.id);
+            return updated ? { ...reactNode, data: updated } : reactNode;
+          })
+        );
+      }
     },
-    [flow, onNodesChangeBase, setFlow]
+    [applyFlowUpdate, onNodesChangeBase, setNodes]
   );
 
   const handleEdgesChange = useCallback(
@@ -335,12 +626,18 @@ export default function GraphCanvas() {
         return;
       }
 
-      setFlow({
-        ...flow,
-        edges: flow.edges.filter((edge) => !removed.includes(edge.id))
-      });
+      applyFlowUpdate(
+        (current) => {
+          const remaining = current.edges.filter((edge) => !removed.includes(edge.id));
+          if (remaining.length === current.edges.length) {
+            return { flow: current, changed: false } as const;
+          }
+          return { flow: { ...current, edges: remaining }, changed: true } as const;
+        },
+        true
+      );
     },
-    [flow, onEdgesChangeBase, setFlow]
+    [applyFlowUpdate, onEdgesChangeBase]
   );
 
   const onConnect = useCallback(
@@ -353,26 +650,15 @@ export default function GraphCanvas() {
       const toPort = connection.targetHandle?.split(":")[1] ?? "in";
       const id = `e:${connection.source}-${fromPort}:${connection.target}-${toPort}`;
 
-      const newEdge: Edge = {
-        id,
-        source: connection.source,
-        target: connection.target,
-        sourceHandle: connection.sourceHandle,
-        targetHandle: connection.targetHandle,
-        type: "telemetry"
-      };
-
-      setEdges((existing) => addEdge(newEdge, existing));
-
       const edgeDef: EdgeDef = {
         id,
         from: [connection.source, fromPort],
-        to: [connection.target, toPort]
+        to: [connection.target, toPort],
       };
 
-      setFlow({ ...flow, edges: [...flow.edges, edgeDef] });
+      addEdgeOnCanvas(edgeDef);
     },
-    [flow, setEdges, setFlow]
+    [addEdgeOnCanvas]
   );
 
 const handleNodeContextMenu = useCallback(

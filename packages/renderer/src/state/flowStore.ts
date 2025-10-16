@@ -28,6 +28,20 @@ const cloneValue = <T,>(value: T): T => {
   return JSON.parse(JSON.stringify(value)) as T;
 };
 
+export type CanvasBridge = {
+  getFlow: () => FlowDef;
+  replaceFlow: (flow: FlowDef) => void;
+  addNode: (node: NodeDef) => NodeDef;
+  setNode: (node: NodeDef) => NodeDef | null;
+  deleteNode: (nodeId: string) => boolean;
+  addEdge: (edge: EdgeDef) => EdgeDef;
+  deleteEdge: (edgeId: string) => boolean;
+};
+
+type FlowSyncOptions = {
+  invalidate?: boolean;
+};
+
 type BuildStatus = "idle" | "building" | "success" | "error";
 type RunStatus = "idle" | "running" | "success" | "error";
 
@@ -393,12 +407,16 @@ interface S {
   lastRunId: string | null;
   lastRunCompletedAt: number | null;
   lastRunOutputs: RunPayloadRecord[];
+  canvasBridge: CanvasBridge | null;
   setFlow: (f: FlowDef) => void;
   addNode: (node: NodeDef) => void;
   updateNodeParams: (
     nodeId: string,
     updater: (prev: Record<string, unknown>) => Record<string, unknown>
   ) => void;
+  registerCanvasBridge: (bridge: CanvasBridge) => void;
+  unregisterCanvasBridge: (bridge: CanvasBridge) => void;
+  syncFlowFromCanvas: (flow: FlowDef, options?: FlowSyncOptions) => void;
   catalog: any[];
   setCatalog: (c: any[]) => void;
   activeTool: "select" | "wire";
@@ -430,66 +448,100 @@ export const useFlowStore = create<S>((set, get) => ({
   lastRunId: null,
   lastRunCompletedAt: null,
   lastRunOutputs: [],
-  setFlow: (f: FlowDef) =>
+  canvasBridge: null,
+  setFlow: (f: FlowDef) => {
+    const normalized = cloneValue(f);
     set({
-      flow: f,
+      flow: normalized,
       compiledFlow: null,
       buildStatus: "idle",
       buildError: null,
       runStatus: "idle",
       runError: null,
       activeRunId: null,
-    }),
-  addNode: (node: NodeDef) =>
+    });
+    const bridge = get().canvasBridge;
+    bridge?.replaceFlow(normalized);
+  },
+  registerCanvasBridge: (bridge: CanvasBridge) => set({ canvasBridge: bridge }),
+  unregisterCanvasBridge: (bridge: CanvasBridge) =>
+    set((state) => (state.canvasBridge === bridge ? { canvasBridge: null } : state)),
+  syncFlowFromCanvas: (flow: FlowDef, options?: FlowSyncOptions) => {
+    const invalidate = Boolean(options?.invalidate);
+    set({
+      flow,
+      ...(invalidate
+        ? {
+            compiledFlow: null,
+            buildStatus: "idle",
+            buildError: null,
+          }
+        : {}),
+    });
+  },
+  addNode: (node: NodeDef) => {
+    const bridge = get().canvasBridge;
+    if (bridge) {
+      bridge.addNode(cloneValue(node));
+      return;
+    }
     set((state) => ({
       flow: {
         ...state.flow,
-        nodes: [...state.flow.nodes, node]
+        nodes: [...state.flow.nodes, cloneValue(node)]
       },
       compiledFlow: null,
       buildStatus: "idle",
       buildError: null,
-    })),
-  updateNodeParams: (nodeId, updater) =>
-    set((state) => ({
+    }));
+  },
+  updateNodeParams: (nodeId, updater) => {
+    const state = get();
+    const target = state.flow.nodes.find((node) => node.id === nodeId);
+    if (!target) {
+      return;
+    }
+
+    const previous = { ...(target.params ?? {}) };
+    const nextRaw = updater(previous);
+    const nextParams =
+      nextRaw && typeof nextRaw === "object"
+        ? (nextRaw as Record<string, unknown>)
+        : previous;
+
+    let updatedNode: NodeDef = {
+      ...target,
+      params: nextParams,
+    };
+
+    if ((target.type ?? "module") === "llm") {
+      const displayName = deriveLLMDisplayName(nextParams, state.catalog);
+      if (displayName && displayName !== target.name) {
+        updatedNode = {
+          ...updatedNode,
+          name: displayName,
+        };
+      }
+    }
+
+    const bridge = state.canvasBridge;
+    if (bridge) {
+      bridge.setNode(cloneValue(updatedNode));
+      return;
+    }
+
+    set((prevState) => ({
       flow: {
-        ...state.flow,
-        nodes: state.flow.nodes.map((node) => {
-          if (node.id !== nodeId) {
-            return node;
-          }
-
-          const previous = { ...(node.params ?? {}) };
-          const nextRaw = updater(previous);
-          const nextParams =
-            nextRaw && typeof nextRaw === "object"
-              ? (nextRaw as Record<string, unknown>)
-              : previous;
-
-          if ((node.type ?? "module") === "llm") {
-            const displayName = deriveLLMDisplayName(
-              nextParams,
-              state.catalog
-            );
-            if (displayName && displayName !== node.name) {
-              return {
-                ...node,
-                name: displayName,
-                params: nextParams
-              };
-            }
-          }
-
-          return {
-            ...node,
-            params: nextParams
-          };
-        })
+        ...prevState.flow,
+        nodes: prevState.flow.nodes.map((node) =>
+          node.id === nodeId ? cloneValue(updatedNode) : node
+        )
       },
       compiledFlow: null,
       buildStatus: "idle",
       buildError: null,
-    })),
+    }));
+  },
   catalog: [],
   setCatalog: (c: any[]) => set({ catalog: c }),
   activeTool: "select",
@@ -510,7 +562,11 @@ export const useFlowStore = create<S>((set, get) => ({
     copyNode(nodeId);
     deleteNode(nodeId);
   },
-  deleteNode: (nodeId: string) =>
+  deleteNode: (nodeId: string) => {
+    const bridge = get().canvasBridge;
+    if (bridge && bridge.deleteNode(nodeId)) {
+      return;
+    }
     set((state) => {
       if (!state.flow.nodes.some((node) => node.id === nodeId)) {
         return {};
@@ -529,7 +585,8 @@ export const useFlowStore = create<S>((set, get) => ({
         buildStatus: "idle",
         buildError: null,
       };
-    }),
+    });
+  },
   copyEdge: (edgeId: string) => {
     const edge = get().flow.edges.find((entry) => entry.id === edgeId);
     if (!edge) {
@@ -542,7 +599,11 @@ export const useFlowStore = create<S>((set, get) => ({
     copyEdge(edgeId);
     deleteEdge(edgeId);
   },
-  deleteEdge: (edgeId: string) =>
+  deleteEdge: (edgeId: string) => {
+    const bridge = get().canvasBridge;
+    if (bridge && bridge.deleteEdge(edgeId)) {
+      return;
+    }
     set((state) => {
       if (!state.flow.edges.some((edge) => edge.id === edgeId)) {
         return {};
@@ -556,7 +617,8 @@ export const useFlowStore = create<S>((set, get) => ({
         buildStatus: "idle",
         buildError: null,
       };
-    }),
+    });
+  },
   pasteClipboard: (preferredKind) => {
     const clipboard = get().clipboard;
     if (!clipboard) {
@@ -565,6 +627,7 @@ export const useFlowStore = create<S>((set, get) => ({
     if (preferredKind && clipboard.kind !== preferredKind) {
       return null;
     }
+    const bridge = get().canvasBridge;
     if (clipboard.kind === "node") {
       const reference = clipboard.node;
       const nextPosition = {
@@ -579,6 +642,10 @@ export const useFlowStore = create<S>((set, get) => ({
         id: nextId,
         params
       };
+      if (bridge) {
+        bridge.addNode(cloneValue(nextNode));
+        return nextNode;
+      }
       set((state) => ({
         flow: {
           ...state.flow,
@@ -602,6 +669,10 @@ export const useFlowStore = create<S>((set, get) => ({
         ...cloneValue(edge),
         id: uniqueEdgeId(edge)
       };
+      if (bridge) {
+        bridge.addEdge(cloneValue(nextEdge));
+        return nextEdge;
+      }
       set((state) => ({
         flow: {
           ...state.flow,
@@ -616,7 +687,10 @@ export const useFlowStore = create<S>((set, get) => ({
     return null;
   },
   buildFlow: async () => {
-    const snapshot = cloneValue(get().flow);
+    const bridge = get().canvasBridge;
+    const snapshot = bridge
+      ? cloneValue(bridge.getFlow())
+      : cloneValue(get().flow);
     set({ buildStatus: "building", buildError: null });
     try {
       const localValidation = validateFlowDefinition(snapshot);

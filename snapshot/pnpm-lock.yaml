@@ -109,9 +109,6 @@ importers:
       '@voide/adapters':
         specifier: workspace:*
         version: link:../adapters
-      '@voide/core':
-        specifier: workspace:*
-        version: link:../../core
       '@voide/ipc':
         specifier: workspace:*
         version: link:../ipc

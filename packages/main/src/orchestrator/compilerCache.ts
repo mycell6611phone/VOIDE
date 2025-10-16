@@ -1,9 +1,85 @@
 import { createHash } from "node:crypto";
-
-import { compile } from "@voide/core/dist/build/compiler.js";
-import * as pb from "@voide/core/dist/proto/voide/v1/flow.js";
+import { createRequire } from "node:module";
+import { access } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 import type { Flow as FlowGraph } from "@voide/ipc";
 import type { FlowDef, NodeDef, EdgeDef } from "@voide/shared";
+import type * as pbTypes from "@voide/core/dist/proto/voide/v1/flow.js";
+
+type CompilerModule = typeof import("@voide/core/dist/build/compiler.js");
+type FlowProtoModule = typeof import("@voide/core/dist/proto/voide/v1/flow.js");
+
+const require = createRequire(import.meta.url);
+
+type ModuleNotFoundError = NodeJS.ErrnoException & { code?: "ERR_MODULE_NOT_FOUND" | "MODULE_NOT_FOUND" };
+
+function isModuleNotFoundError(error: unknown): error is ModuleNotFoundError {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return false;
+  }
+
+  const code = (error as { code?: unknown }).code;
+  return code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND";
+}
+
+type ResolvedModule = {
+  href: string;
+  usedFallback: boolean;
+};
+
+async function resolveCoreModule(specifier: string, fallbackRelative: string): Promise<ResolvedModule> {
+  try {
+    const resolvedPath = require.resolve(specifier);
+    return { href: pathToFileURL(resolvedPath).href, usedFallback: false };
+  } catch (error) {
+    if (!isModuleNotFoundError(error)) {
+      throw error;
+    }
+  }
+
+  const fallbackUrl = new URL(fallbackRelative, import.meta.url);
+
+  try {
+    await access(fallbackUrl);
+    return { href: fallbackUrl.href, usedFallback: true };
+  } catch (fallbackError) {
+    const details =
+      fallbackError instanceof Error && fallbackError.message ? `: ${fallbackError.message}` : "";
+    throw new Error(
+      `Unable to resolve \"${specifier}\" or fallback \"${fallbackUrl.href}\"${details}.` +
+        " Ensure @voide/core has been built (pnpm --filter @voide/core build).",
+      { cause: fallbackError instanceof Error ? fallbackError : undefined },
+    );
+  }
+}
+
+let warnedAboutFallback = false;
+
+async function importFromCore<TModule>(specifier: string, fallbackRelative: string): Promise<TModule> {
+  const resolved = await resolveCoreModule(specifier, fallbackRelative);
+  const module = (await import(resolved.href)) as TModule;
+
+  if (resolved.usedFallback && !warnedAboutFallback) {
+    console.warn(`[orchestrator] Using local fallback for ${specifier} at ${resolved.href}`);
+    warnedAboutFallback = true;
+  }
+
+  return module;
+}
+
+const [compilerModule, flowProtoModule] = await Promise.all([
+  importFromCore<CompilerModule>(
+    "@voide/core/dist/build/compiler.js",
+    "../../../../core/dist/build/compiler.js",
+  ),
+  importFromCore<FlowProtoModule>(
+    "@voide/core/dist/proto/voide/v1/flow.js",
+    "../../../../core/dist/proto/voide/v1/flow.js",
+  ),
+]);
+
+const { compile } = compilerModule;
+const pb = flowProtoModule;
 
 export type CompiledFlowEntry = {
   hash: string;
@@ -32,7 +108,7 @@ function parseParams(json: string): Record<string, unknown> {
   }
 }
 
-function convertNode(node: pb.Node): NodeDef {
+function convertNode(node: pbTypes.Node): NodeDef {
   return {
     id: node.id,
     type: node.type,
@@ -43,7 +119,7 @@ function convertNode(node: pb.Node): NodeDef {
   };
 }
 
-function convertEdge(edge: pb.Edge): EdgeDef {
+function convertEdge(edge: pbTypes.Edge): EdgeDef {
   return {
     id: edge.id,
     from: [edge.from?.node ?? "", edge.from?.port ?? ""],
@@ -52,7 +128,7 @@ function convertEdge(edge: pb.Edge): EdgeDef {
   };
 }
 
-function fromProto(flow: pb.Flow, runtimeInputs: Record<string, unknown>): FlowDef {
+function fromProto(flow: pbTypes.Flow, runtimeInputs: Record<string, unknown>): FlowDef {
   return {
     id: flow.id,
     version: flow.version,

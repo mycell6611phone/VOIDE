@@ -1510,6 +1510,27 @@ function nodeById(flow: FlowDef, id: string): NodeDef {
 }
 function portKey(nid: string, port: string) { return `${nid}:${port}`; }
 
+function isInterfaceNode(node: NodeDef): boolean {
+  const type = typeof node.type === "string" ? node.type.toLowerCase() : "";
+  if (type === "chat.input" || type === "interface" || type === "ui.interface") {
+    return true;
+  }
+  if (type === "module") {
+    const moduleKeyRaw = (node.params as { moduleKey?: unknown } | undefined)?.moduleKey;
+    if (typeof moduleKeyRaw === "string") {
+      const normalized = moduleKeyRaw.toLowerCase();
+      if (normalized === "interface" || normalized === "chat.input") {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function collectInterfaceNodes(flow: FlowDef): string[] {
+  return flow.nodes.filter(isInterfaceNode).map((node) => node.id);
+}
+
 export async function runFlow(flow: FlowDef, inputs: Record<string, unknown> = {}) {
   const validation = validateFlow(flow);
   if (!validation.ok) {
@@ -1519,11 +1540,22 @@ export async function runFlow(flow: FlowDef, inputs: Record<string, unknown> = {
     throw new Error(message);
   }
   const upgraded = upgradeFlow(flow);
+  const interfaceNodes = collectInterfaceNodes(upgraded);
   const runId = uuidv4();
   const order = topoOrder(upgraded);
   const roots = order.filter((id) => upgraded.edges.every((edge) => edge.to[0] !== id));
   const f0 = new Frontier(roots);
-  const runtimeInputs = { ...(upgraded.runtimeInputs ?? {}), ...inputs };
+  const normalizedInputs: Record<string, unknown> = { ...(inputs ?? {}) };
+  const userInputValue = normalizedInputs["userInput"];
+  if (Object.prototype.hasOwnProperty.call(normalizedInputs, "userInput")) {
+    delete normalizedInputs["userInput"];
+  }
+  const runtimeInputs = { ...(upgraded.runtimeInputs ?? {}), ...normalizedInputs };
+  if (typeof userInputValue === "string" && userInputValue.trim().length > 0 && interfaceNodes.length > 0) {
+    for (const nodeId of interfaceNodes) {
+      runtimeInputs[nodeId] = userInputValue;
+    }
+  }
   const st: RunState = {
     runId,
     flow: upgraded,

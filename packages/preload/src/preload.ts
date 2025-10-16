@@ -37,6 +37,7 @@ const api = {
   getLastOpenedFlow: () => ipcRenderer.invoke(flowLastOpened.name),
   getNodeCatalog: () => ipcRenderer.invoke(catalogList.name),
   ensureModel: (modelId: string) => ipcRenderer.invoke(modelEnsure.name, { modelId }),
+  sendChat: (message: string) => ipcRenderer.invoke("voide:sendChat", { message }),
   getVersion: () => ipcRenderer.invoke(appGetVersion.name),
   onTelemetry: (cb: (ev: TelemetryPayload) => void) => {
     const listener = (_e: Electron.IpcRendererEvent, ev: TelemetryPayload) => cb(ev);

@@ -10,6 +10,7 @@ import { formatFlowValidationErrors } from "@voide/shared/flowValidation";
 import { runLlamaCpp } from "../../../adapters/src/llamaCpp.js";
 import { runGpt4All } from "../../../adapters/src/gpt4all.js";
 import { runMock } from "../../../adapters/src/mock.js";
+import runLLM from "../../../workers/dist/llm.js";
 import { topoOrder, Frontier, downstream } from "./scheduler.js";
 import {
   clearAndRegister,
@@ -48,6 +49,7 @@ type RunState = {
   values: Map<string, PayloadT[]>;
   pktSeq: number;
   runtimeInputs: Record<string, unknown>;
+  input: string;
   nodeState: Map<string, unknown>;
   nodeStatus: Map<string, NodeLifecycleStatus>;
   abortController: AbortController;
@@ -1316,8 +1318,6 @@ function upgradeFlow(flow: FlowDef): FlowDef {
         params.template = params.text;
       }
       delete params.text;
-    } else if (nextType === "llm.generic") {
-      nextType = "llm";
     } else if (nextType === "critic") {
       nextType = "debate.loop";
       if (params.iterations === undefined) {
@@ -1551,9 +1551,10 @@ export async function runFlow(flow: FlowDef, inputs: Record<string, unknown> = {
     delete normalizedInputs["userInput"];
   }
   const runtimeInputs = { ...(upgraded.runtimeInputs ?? {}), ...normalizedInputs };
-  if (typeof userInputValue === "string" && userInputValue.trim().length > 0 && interfaceNodes.length > 0) {
+  const userInputText = typeof userInputValue === "string" ? userInputValue : "";
+  if (userInputText.trim().length > 0 && interfaceNodes.length > 0) {
     for (const nodeId of interfaceNodes) {
-      runtimeInputs[nodeId] = userInputValue;
+      runtimeInputs[nodeId] = userInputText;
     }
   }
   const st: RunState = {
@@ -1565,6 +1566,7 @@ export async function runFlow(flow: FlowDef, inputs: Record<string, unknown> = {
     values: new Map(),
     pktSeq: 0,
     runtimeInputs,
+    input: userInputText,
     nodeState: new Map(),
     nodeStatus: new Map(),
     abortController: new AbortController(),
@@ -1927,6 +1929,30 @@ export async function shutdownOrchestrator() {
   return shutdownPromise;
 }
 async function executeNode(st: RunState, node: NodeDef): Promise<NodeExecutionResult> {
+  const nodeType = typeof node.type === "string" ? node.type.toLowerCase() : "";
+  if (nodeType === "ui.interface") {
+    const text = typeof st.input === "string" ? st.input : "";
+    return [{ port: "out", payload: { kind: "text", text } }];
+  }
+  if (nodeType === "llm.generic") {
+    const incoming = collectIncomingPayloads(st, node.id);
+    const parts: string[] = [];
+    for (const payloads of incoming.values()) {
+      for (const payload of payloads) {
+        if (payload.kind === "text" && typeof payload.text === "string") {
+          parts.push(payload.text);
+        }
+      }
+    }
+    if (parts.length === 0 && typeof st.input === "string" && st.input.trim().length > 0) {
+      parts.push(st.input);
+    }
+    const prompt = parts.join("\n");
+    throwIfAborted(st.abortController.signal);
+    const response = await runModel(prompt);
+    throwIfAborted(st.abortController.signal);
+    return [{ port: "out", payload: { kind: "text", text: response } }];
+  }
   const impl = getNode(node.type);
   if (!impl) {
     const allowed = listNodes()
@@ -1987,3 +2013,29 @@ function emitWireTransfers(st: RunState, node: NodeDef, port: string, payloads: 
   }
 }
 
+async function runModel(prompt: string): Promise<string> {
+  const registry = await getModelRegistry();
+  const models = Array.isArray((registry as any)?.models)
+    ? (registry.models as RegistryModelWithStatus[])
+    : [];
+  const selected =
+    models.find((model) => model.status === "installed") ??
+    models.find((model) => model.status === "available-local") ??
+    models[0];
+  if (!selected) {
+    throw new Error("No models are available to execute llm.generic nodes.");
+  }
+
+  const rawParams: Record<string, unknown> = {
+    modelId: selected.id,
+    adapter: selected.adapter ?? selected.backend ?? DEFAULT_ADAPTER,
+    runtime: selected.runtime ?? DEFAULT_RUNTIME,
+    temperature: selected.temperature ?? DEFAULT_TEMPERATURE,
+    maxTokens: selected.maxTokens ?? DEFAULT_MAX_TOKENS,
+  };
+
+  const { params, modelFile } = await resolveLLMJobConfig(rawParams);
+  const result = await runLLM({ params, prompt, modelFile });
+  return typeof result?.text === "string" ? result.text : "";
+}
+ 

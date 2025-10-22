@@ -16,6 +16,7 @@ import ReactFlow, {
   EdgeChange,
   Node,
   NodeChange,
+  type NodeTypes,
   ReactFlowInstance,
   Viewport,
   useEdgesState,
@@ -183,7 +184,7 @@ export default function GraphCanvas() {
     };
   }, [refreshBounds]);
 
-  const nodeTypes = useMemo(
+  const nodeTypes = useMemo<NodeTypes>(
     () => ({
       module: ModuleNode,
       llm: LLMNode,
@@ -888,8 +889,6 @@ const handleNodeContextMenu = useCallback(
           onNodeDrag={handleNodeDrag}
           onNodeDragStop={handleNodeDragStop}
           proOptions={{ hideAttribution: true }}
-          autoPanOnNodeDrag={false}
-          autoPanOnConnect={false}
           panOnDrag={true}
           panOnScroll={false}
           zoomOnScroll

@@ -2,7 +2,7 @@
   "name": "@voide/preload",
   "version": "0.1.0",
   "license": "MIT",
-  "type": "module",
+  "type": "commonjs",
   "main": "dist/preload.js",
   "engines": { "node": ">=20.11" },
   "scripts": {

@@ -189,6 +189,13 @@ export default function GraphCanvas() {
       llm: LLMNode,
       prompt: PromptNode,
       "chat.input": ModuleNode,
+      cache: ModuleNode,
+      log: ModuleNode,
+      memory: ModuleNode,
+      diverter: ModuleNode,
+      "tool.call": ModuleNode,
+      "debate.loop": ModuleNode,
+      output: ModuleNode,
       default: ModuleNode
     }),
     []

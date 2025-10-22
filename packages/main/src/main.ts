@@ -154,7 +154,7 @@ async function createWindow() {
       preload: PRELOAD_BUNDLE_PATH,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
     },
   });
 
@@ -203,7 +203,7 @@ async function createChatWindow() {
       preload: PRELOAD_BUNDLE_PATH,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
     },
   });
 

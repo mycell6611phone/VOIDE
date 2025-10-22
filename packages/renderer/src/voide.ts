@@ -358,6 +358,7 @@ function createElectronVoide(): VoideApi {
 }
 
 type ElectronBridge = {
+  isElectron?: boolean;
   validateFlow: (...args: any[]) => Promise<unknown>;
   buildFlow: (...args: any[]) => Promise<unknown>;
   openFlow: (...args: any[]) => Promise<unknown>;
@@ -382,7 +383,7 @@ declare global {
 const globalWindow = typeof window !== "undefined" ? (window as Window & { voide?: ElectronBridge }) : undefined;
 
 const hasBridge = Boolean(
-  globalWindow?.voide &&
+  globalWindow?.voide?.isElectron === true &&
     typeof globalWindow.voide.validateFlow === "function" &&
     typeof globalWindow.voide.buildFlow === "function" &&
     typeof globalWindow.voide.openFlow === "function" &&
@@ -398,3 +399,4 @@ const hasBridge = Boolean(
 const voideInstance: VoideApi = hasBridge ? createElectronVoide() : createFallbackVoide();
 
 export const voide = voideInstance;
+export const isElectronRuntime = hasBridge;

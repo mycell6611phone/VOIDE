@@ -15,6 +15,7 @@ import { compileAndCache, getCompiledFlow } from "../orchestrator/compilerCache.
 import { runFlow, getLastRunPayloads, testNode } from "../orchestrator/engine.js";
 import { getModelRegistry } from "../services/models.js";
 import { emitRunPayloads } from "./telemetry.js";
+import { buildCanvasFlow, isCanvasBuildInput, isCanvasRunPayload, runCanvasFlow as runCanvasPlan } from "../build/canvasPipeline.js";
 
 function formatError(err: unknown) {
   return { error: String(err) };
@@ -170,6 +171,32 @@ export function registerHandlers(deps: HandlerDeps) {
       return appExit.response.parse({ ok: true });
     } catch (err) {
       return formatError(err);
+    }
+  });
+
+  ipcMain.removeHandler("build-flow");
+  ipcMain.handle("build-flow", async (_event, payload) => {
+    if (!isCanvasBuildInput(payload)) {
+      return { ok: false, errors: ["Invalid canvas payload."] };
+    }
+    try {
+      return await buildCanvasFlow(payload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ok: false, errors: [message] };
+    }
+  });
+
+  ipcMain.removeHandler("run-flow");
+  ipcMain.handle("run-flow", async (_event, payload) => {
+    if (!isCanvasRunPayload(payload)) {
+      return { ok: false, error: "Invalid run payload." };
+    }
+    try {
+      return await runCanvasPlan(payload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ok: false, error: message };
     }
   });
 }

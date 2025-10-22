@@ -21,17 +21,57 @@ import {
   moduleTest,
 } from "@voide/ipc";
 
+type CanvasGraphLike = { nodes?: unknown; edges?: unknown };
+type CanvasRunRequest = { plan: { hash: string; order?: unknown }; input?: Record<string, unknown> };
+
+function looksLikeCanvasBuildPayload(value: unknown): value is CanvasGraphLike {
+  if (!value || typeof value !== "object") return false;
+  const graph = value as { nodes?: unknown; edges?: unknown };
+  if (!Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) return false;
+  const nodes = graph.nodes as unknown[];
+  const edges = graph.edges as unknown[];
+  const structuredEdge = edges.find((edge) => edge && typeof edge === "object");
+  if (!structuredEdge) {
+    const representative = nodes.find((node) => node && typeof node === "object");
+    return representative ? typeof (representative as { name?: unknown }).name !== "string" : true;
+  }
+  const candidate = structuredEdge as { from?: unknown; to?: unknown };
+  if (Array.isArray(candidate.from) || Array.isArray(candidate.to)) {
+    return false;
+  }
+  return Boolean(candidate.from && typeof candidate.from === "object");
+}
+
+function looksLikeCanvasRunPayload(value: unknown): value is CanvasRunRequest {
+  if (!value || typeof value !== "object") return false;
+  const record = value as { plan?: unknown };
+  if (!record.plan || typeof record.plan !== "object") return false;
+  const plan = record.plan as { hash?: unknown; order?: unknown };
+  return typeof plan.hash === "string" && plan.hash.length > 0;
+}
+
 const api = {
+  isElectron: true as const,
   validateFlow: (flow: Flow) => ipcRenderer.invoke(flowValidate.name, flow),
-  buildFlow: async (flow: Flow) => {
+  buildFlow: async (flow: Flow | CanvasGraphLike) => {
+    if (looksLikeCanvasBuildPayload(flow)) {
+      return ipcRenderer.invoke("build-flow", flow);
+    }
     const result = await ipcRenderer.invoke(flowBuild.name, flow);
     return flowBuild.response.parse(result);
   },
   openFlow: () => ipcRenderer.invoke(flowOpen.name),
   saveFlow: (flow: Flow, filePath?: string | null) =>
     ipcRenderer.invoke(flowSave.name, { flow, filePath: filePath ?? null }),
-  runFlow: (compiledHash: string, inputs: Record<string, unknown> = {}) =>
-    ipcRenderer.invoke(flowRun.name, { compiledHash, inputs }),
+  runFlow: (
+    ...args: [string, Record<string, unknown>?] | [CanvasRunRequest]
+  ) => {
+    if (args.length === 1 && looksLikeCanvasRunPayload(args[0])) {
+      return ipcRenderer.invoke("run-flow", args[0]);
+    }
+    const [compiledHash, inputs] = args as [string, Record<string, unknown>?];
+    return ipcRenderer.invoke(flowRun.name, { compiledHash, inputs: inputs ?? {} });
+  },
   stopFlow: (runId: string) => ipcRenderer.invoke(flowStop.name, { runId }),
   getLastRunPayloads: (runId: string) => ipcRenderer.invoke(flowLastRunPayloads.name, { runId }),
   getLastOpenedFlow: () => ipcRenderer.invoke(flowLastOpened.name),

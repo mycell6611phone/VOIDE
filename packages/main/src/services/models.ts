@@ -17,6 +17,7 @@ export interface RegistryModel {
   sizeBytes: number;
   license?: string;
   url?: string; // may be file:// or http(s)
+  file?: string | null;
 }
 
 export interface RegistryResponse {
@@ -38,6 +39,130 @@ function homeDir() {
 function registryPath() {
   const base = path.join(homeDir(), ".voide", "models");
   return path.join(base, "models.json");
+}
+
+function normalizeIdCandidate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed;
+}
+
+function slugifyId(value: string): string {
+  const withoutExt = value.replace(/\.[^.]+$/g, "");
+  return withoutExt
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function ensureUniqueId(candidate: string, seen: Set<string>): string {
+  let id = candidate;
+  let counter = 1;
+  while (seen.has(id)) {
+    counter += 1;
+    id = `${candidate}-${counter}`;
+  }
+  seen.add(id);
+  return id;
+}
+
+function deriveRegistryId(
+  entry: Record<string, unknown>,
+  index: number,
+  seen: Set<string>
+): string {
+  const existing = normalizeIdCandidate(entry.id);
+  if (existing) {
+    return ensureUniqueId(existing, seen);
+  }
+
+  const candidateFields: Array<unknown> = [
+    entry.modelId,
+    entry.model_id,
+    entry.filename,
+    entry.file,
+    entry.name,
+    entry.order,
+    entry.md5sum,
+    entry.sha256,
+    entry.sha256sum,
+  ];
+
+  for (const candidate of candidateFields) {
+    if (typeof candidate !== "string") {
+      continue;
+    }
+    const normalized = slugifyId(candidate.trim());
+    if (!normalized) {
+      continue;
+    }
+    const prefixed = normalized.startsWith("model:") ? normalized : `model:${normalized}`;
+    return ensureUniqueId(prefixed, seen);
+  }
+
+  return ensureUniqueId(`model:auto-${index + 1}`, seen);
+}
+
+function normalizeRegistryEntry(
+  entry: any,
+  index: number,
+  regDir: string,
+  seen: Set<string>
+): RegistryModel {
+  const clone: Record<string, unknown> = { ...entry };
+  const id = deriveRegistryId(clone, index, seen);
+  let filename = typeof clone.filename === "string" ? clone.filename.trim() : "";
+  if (!filename && typeof clone.file === "string" && clone.file.trim()) {
+    filename = path.basename(clone.file.trim());
+  }
+  const backend = typeof clone.backend === "string" && clone.backend.trim()
+    ? clone.backend.trim()
+    : "llamacpp";
+
+  let filePath: string | null = null;
+  if (typeof clone.file === "string" && clone.file.trim()) {
+    const raw = clone.file.trim();
+    filePath = path.isAbsolute(raw) ? raw : path.resolve(regDir, raw);
+  }
+
+  const name = typeof clone.name === "string" ? clone.name : id;
+  let sha256: string | null = null;
+  const rawSha256 = clone["sha256"];
+  const rawSha256Sum = clone["sha256sum"];
+  const rawMd5Sum = clone["md5sum"];
+  if (typeof rawSha256 === "string" && rawSha256.trim()) {
+    sha256 = rawSha256.trim();
+  } else if (typeof rawSha256Sum === "string" && rawSha256Sum.trim()) {
+    sha256 = rawSha256Sum.trim();
+  } else if (typeof rawMd5Sum === "string" && rawMd5Sum.trim()) {
+    sha256 = rawMd5Sum.trim();
+  }
+  if (!sha256) {
+    sha256 = "";
+  }
+  const sizeRaw = (clone as { sizeBytes?: unknown }).sizeBytes;
+  const sizeBytes =
+    typeof sizeRaw === "number" && Number.isFinite(sizeRaw)
+      ? sizeRaw
+      : typeof sizeRaw === "string"
+      ? Number(sizeRaw)
+      : 0;
+
+  const normalized: RegistryModel = {
+    id,
+    name,
+    backend,
+    filename,
+    sha256,
+    sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : 0,
+    license: typeof clone.license === "string" ? clone.license : undefined,
+    url: typeof clone.url === "string" ? clone.url : undefined,
+    file: filePath,
+  };
+
+  return normalized;
 }
 
 function getLocalSource(m: RegistryModel, regDir: string): string | null {
@@ -87,17 +212,23 @@ export async function getModelRegistry(): Promise<RegistryResponse> {
   } catch {
     return { models: [] };
   }
-  const arr: RegistryModel[] = Array.isArray(data.models) ? data.models : data;
+  const arrRaw: any[] = Array.isArray(data.models) ? data.models : data;
   const base = path.join(homeDir(), ".voide", "models");
+  const seenIds = new Set<string>();
+  const normalizedEntries = arrRaw.map((entry, index) =>
+    normalizeRegistryEntry(entry, index, regDir, seenIds)
+  );
   const out: (RegistryModel & { status: ModelStatus })[] = [];
-  for (const m of arr) {
+  for (const m of normalizedEntries) {
     let status: ModelStatus = "unavailable-offline";
+    let resolvedFile: string | null = typeof m.file === "string" ? m.file : null;
     const allowed = !m.license || LICENSE_ALLOWLIST.has(m.license.toLowerCase());
     if (!allowed) {
       status = "blocked-license";
     } else {
-      const dest = path.join(base, m.id, m.filename);
-      if (await fileExists(dest)) {
+      const filename = typeof m.filename === "string" && m.filename.trim() ? m.filename : "";
+      const dest = filename ? path.join(base, m.id, filename) : null;
+      if (dest && (await fileExists(dest))) {
         try {
           const hash = await sha256File(dest);
           if (hash === m.sha256) {
@@ -108,16 +239,21 @@ export async function getModelRegistry(): Promise<RegistryResponse> {
         } catch {
           status = "available-local";
         }
+        resolvedFile = dest;
       } else {
         const src = getLocalSource(m, regDir);
         if (src && await fileExists(src)) {
           status = "available-local";
+          resolvedFile = path.resolve(src);
         } else if (m.url && /^https?:/i.test(m.url)) {
           status = "unavailable-offline";
         }
       }
     }
-    out.push({ ...m, status });
+    if (resolvedFile && !(await fileExists(resolvedFile))) {
+      resolvedFile = null;
+    }
+    out.push({ ...m, status, file: resolvedFile });
   }
   return { models: out };
 }

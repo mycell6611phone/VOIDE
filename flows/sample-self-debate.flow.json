@@ -25,7 +25,7 @@
       "name": "Planner",
       "params": {
         "adapter": "mock",
-        "modelId": "model:llama3-8b.Q4_K_M",
+        "modelId": "model:meta-llama-3-8b-instruct.q4_0",
         "temperature": 0.2,
         "maxTokens": 256,
         "runtime": "CPU"
@@ -39,7 +39,7 @@
       "name": "Critic",
       "params": {
         "adapter": "mock",
-        "modelId": "model:llama3-8b.Q4_K_M",
+        "modelId": "model:meta-llama-3-8b-instruct.q4_0",
         "temperature": 0.2,
         "maxTokens": 256,
         "runtime": "CPU"

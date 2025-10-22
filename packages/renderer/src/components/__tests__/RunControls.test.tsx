@@ -31,6 +31,7 @@ const createFileList = (file: File): FileList =>
 
 const exitAppMock = vi.fn().mockResolvedValue({ ok: true });
 const secretSetMock = vi.fn().mockResolvedValue({ ok: true });
+const selectLlamaBinaryMock = vi.fn().mockResolvedValue({ path: "/tmp/llama-cli" });
 let buildFlowMock: ReturnType<typeof vi.fn>;
 let runBuiltFlowMock: ReturnType<typeof vi.fn>;
 let stopActiveRunMock: ReturnType<typeof vi.fn>;
@@ -61,9 +62,17 @@ beforeEach(() => {
   });
   exitAppMock.mockReset();
   secretSetMock.mockReset();
-  (window as unknown as { voide?: { exitApp: typeof exitAppMock; secretSet: typeof secretSetMock } }).voide = {
+  selectLlamaBinaryMock.mockReset();
+  (window as unknown as {
+    voide?: {
+      exitApp: typeof exitAppMock;
+      secretSet: typeof secretSetMock;
+      selectLlamaBinary: typeof selectLlamaBinaryMock;
+    };
+  }).voide = {
     exitApp: exitAppMock,
-    secretSet: secretSetMock
+    secretSet: secretSetMock,
+    selectLlamaBinary: selectLlamaBinaryMock,
   };
 });
 
@@ -88,8 +97,23 @@ describe("RunControls file menu", () => {
     expect(screen.getByRole("menuitem", { name: /Export/ })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: /Project/ })).toBeNull();
     expect(screen.getByRole("menuitem", { name: /Working Directory/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /Select llama\.cpp Binary/ })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /Compute/ })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /^Exit/ })).toBeTruthy();
+  });
+
+  it("invokes the llama binary selector from the file menu", async () => {
+    renderControls();
+
+    const trigger = screen.getByRole("button", { name: "File" });
+    fireEvent.click(trigger);
+
+    const selector = screen.getByRole("menuitem", { name: /Select llama\.cpp Binary/ });
+    fireEvent.click(selector);
+
+    await waitFor(() => {
+      expect(selectLlamaBinaryMock).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("opens a project file and updates the flow store", async () => {

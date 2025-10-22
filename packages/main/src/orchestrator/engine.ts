@@ -732,6 +732,9 @@ async function resolveModelFilePath(
     console.warn("Failed to read models directory secret, falling back to default:", error);
   }
   const candidates: string[] = [];
+  if (registryModel?.file && typeof registryModel.file === "string" && registryModel.file.trim()) {
+    candidates.push(path.resolve(registryModel.file));
+  }
   if (registryModel?.id && registryModel.filename) {
     candidates.push(path.join(baseDir, registryModel.id, registryModel.filename));
     const stripped = stripModelPrefix(registryModel.id);

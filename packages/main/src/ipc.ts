@@ -80,6 +80,20 @@ export function setupIPC() {
       console.warn("[ipc] Failed to hydrate last opened flow", error);
     });
 
+  void getSecretsService()
+    .get("paths", "llamaBin")
+    .then(({ value }) => {
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (trimmed) {
+          process.env.LLAMA_BIN = trimmed;
+        }
+      }
+    })
+    .catch((error) => {
+      console.warn("[ipc] Failed to hydrate stored llama binary path", error);
+    });
+
   const registerChannel = (
     name: string,
     handler: Parameters<typeof ipcMain.handle>[1],
@@ -177,6 +191,26 @@ export function setupIPC() {
   ipcMain.handle("voide:listModels", async () => getModelRegistry());
   ipcMain.handle("voide:installModel", async (e, { modelId }: { modelId: string }) => {
     return installModel(modelId, p => e.sender.send("voide:modelInstallProgress", p));
+  });
+  ipcMain.handle("voide:selectLlamaBin", async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: "Select llama.cpp Binary",
+      properties: ["openFile"],
+    });
+    if (canceled || !filePaths[0]) {
+      return { canceled: true as const };
+    }
+
+    const selectedPath = filePaths[0];
+    process.env.LLAMA_BIN = selectedPath;
+
+    try {
+      await getSecretsService().set("paths", "llamaBin", selectedPath);
+    } catch (error) {
+      console.warn("[ipc] Failed to persist llama binary path", error);
+    }
+
+    return { path: selectedPath };
   });
   ipcMain.handle("voide:stepFlow", async (_e, { runId }: { runId: string }) => stepFlow(runId));
 

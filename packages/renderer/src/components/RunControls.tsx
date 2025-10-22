@@ -604,6 +604,27 @@ export default function RunControls() {
     directoryInputRef.current?.click();
   }, []);
 
+  const handleSelectLlamaBinary = useCallback(async () => {
+    try {
+      const api = (window as unknown as {
+        voide?: { selectLlamaBinary?: () => Promise<{ canceled?: boolean; path?: string }> };
+      }).voide;
+      const result = await api?.selectLlamaBinary?.();
+      if (result && typeof result === "object" && !(result as { canceled?: boolean }).canceled) {
+        const path = (result as { path?: unknown }).path;
+        if (typeof path === "string" && path.trim()) {
+          console.info(`Selected llama.cpp binary: ${path}`);
+        }
+      } else {
+        console.info("Llama.cpp binary selection canceled.");
+      }
+    } catch (error) {
+      console.error("Failed to select llama.cpp binary:", error);
+    } finally {
+      closeMenus();
+    }
+  }, [closeMenus]);
+
   const handleExitApp = useCallback(async () => {
     try {
       await window.voide?.exitApp?.();
@@ -870,6 +891,20 @@ export default function RunControls() {
                   </div>
                 ) : null}
               </div>
+              <button
+                type="button"
+                role="menuitem"
+                style={{
+                  ...menuItemStyle,
+                  background: hoveredItem === "llama-binary" ? "#1e293b" : "transparent"
+                }}
+                onMouseEnter={() => setHoveredItem("llama-binary")}
+                onMouseLeave={() => setHoveredItem(null)}
+                onClick={handleSelectLlamaBinary}
+              >
+                <span>Select llama.cpp Binary…</span>
+                <span aria-hidden>…</span>
+              </button>
               <div style={{ position: "relative" }}>
                 <button
                   type="button"

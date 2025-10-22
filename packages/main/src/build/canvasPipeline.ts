@@ -104,8 +104,9 @@ type PortIndex = {
 
 const PLAN_VERSION = "1";
 
-function toArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
+function toArray<T>(value: readonly T[] | T[] | null | undefined): T[] {
+  return Array.isArray(value) ? [...value] : [];
+
 }
 
 function normalizePortId(port: CanvasPort | undefined): string | null {

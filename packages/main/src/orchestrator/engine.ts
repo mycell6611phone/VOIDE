@@ -363,6 +363,7 @@ type RegistryModelWithStatus = {
   name: string;
   backend?: string;
   filename: string;
+  file?: string | null;
   sha256?: string;
   sizeBytes?: number;
   license?: string;

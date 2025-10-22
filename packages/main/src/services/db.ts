@@ -7,6 +7,8 @@ import { emitTelemetry } from "../ipc/telemetry.js";
 import type { TelemetryPayload } from "@voide/ipc";
 
 let db: Database | null = null;
+let initPromise: Promise<Database> | null = null;
+let initError: unknown = null;
 
 const FLOW_MEMORY_NAMESPACE = "flows";
 const LAST_OPENED_KEY = "lastOpenedId";
@@ -19,11 +21,20 @@ export interface StoredFlowRecord {
   flow: FlowDef;
 }
 
-export async function initDB() {
-  const dir = path.join(process.env.HOME || process.cwd(), ".voide");
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  db = new BetterSqlite3(path.join(dir, "voide.db"));
-  db.exec(`
+export async function initDB(): Promise<Database> {
+  if (db) {
+    return db;
+  }
+
+  if (initPromise) {
+    return initPromise;
+  }
+
+  const initialize = async () => {
+    const dir = path.join(process.env.HOME || process.cwd(), ".voide");
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const instance = new BetterSqlite3(path.join(dir, "voide.db"));
+    instance.exec(`
   create table if not exists flows(
     id text primary key,
     name text,
@@ -64,13 +75,37 @@ export async function initDB() {
     primary key(namespace, key)
   );
   `);
+    db = instance;
+    initError = null;
+    return instance;
+  };
+
+  initPromise = initialize();
+
+  try {
+    return await initPromise;
+  } catch (error) {
+    initError = error;
+    db = null;
+    throw error;
+  } finally {
+    initPromise = null;
+  }
 }
 
 export function getDB(): Database {
-  if (!db) {
-    throw new Error("Database has not been initialized.");
+  if (db) {
+    return db;
   }
-  return db;
+
+  if (initError) {
+    if (initError instanceof Error) {
+      throw initError;
+    }
+    throw new Error("Database initialization failed.");
+  }
+
+  throw new Error("Database has not been initialized. Call initDB() before accessing the database.");
 }
 
 export function closeDB() {
@@ -83,6 +118,8 @@ export function closeDB() {
     console.error("Failed to close database:", error);
   } finally {
     db = null;
+    initPromise = null;
+    initError = null;
   }
 }
 

@@ -58,6 +58,15 @@ const createSwitchableNode = (): NodeDef => ({
   out: [{ port: "output" }]
 });
 
+const createMultiPortNode = (): NodeDef => ({
+  id: "multi-port-node",
+  type: "module",
+  name: "Multi Port Module",
+  params: { moduleKey: "prompt" },
+  in: [{ port: "one" }, { port: "two" }, { port: "three" }],
+  out: [{ port: "alpha" }, { port: "beta" }, { port: "gamma" }]
+});
+
 const TestNode = ({ nodeId }: { nodeId: string }) => {
   const node = useFlowStore((state) =>
     state.flow.nodes.find((entry) => entry.id === nodeId)
@@ -444,6 +453,63 @@ describe("BasicNode edit menu", () => {
     expect(
       (storedNode.params as Record<string, unknown>)?.__ioOrientation
     ).toBeUndefined();
+  });
+
+  it("mirrors handle positions when reversing orientation", async () => {
+    const node = createMultiPortNode();
+
+    useFlowStore.setState((state) => ({
+      ...state,
+      flow: {
+        id: "flow:test-handle-order",
+        version: "1.0.0",
+        nodes: [node],
+        edges: []
+      }
+    }));
+
+    const { container } = renderNode(node);
+
+    const getNodeContainer = () =>
+      screen
+        .getByText("Multi Port Module")
+        .closest("[data-voide-io-orientation]") as HTMLElement;
+
+    const getInputHandleTops = () =>
+      Array.from(
+        container.querySelectorAll(
+          '[data-voide-port-role="input"][data-voide-port-id]'
+        )
+      ).map((element) => (element as HTMLElement).style.top);
+
+    const getOutputHandleTops = () =>
+      Array.from(
+        container.querySelectorAll(
+          '[data-voide-port-role="output"][data-voide-port-id]'
+        )
+      ).map((element) => (element as HTMLElement).style.top);
+
+    expect(getInputHandleTops()).toEqual(["25%", "50%", "75%"]); // default order
+    expect(getOutputHandleTops()).toEqual(["25%", "50%", "75%"]); // default order
+
+    fireEvent.contextMenu(screen.getByText("Multi Port Module"), {
+      clientX: 240,
+      clientY: 200
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reverse Inputs" }));
+
+    await waitFor(() => {
+      expect(getNodeContainer().dataset.voideIoOrientation).toBe("reversed");
+    });
+
+    await waitFor(() => {
+      expect(getInputHandleTops()).toEqual(["75%", "50%", "25%"]); // mirrored order
+    });
+
+    await waitFor(() => {
+      expect(getOutputHandleTops()).toEqual(["75%", "50%", "25%"]); // mirrored order
+    });
   });
 });
 

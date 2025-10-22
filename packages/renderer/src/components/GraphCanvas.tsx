@@ -26,6 +26,7 @@ import type { EdgeDef, FlowDef, NodeDef } from "@voide/shared";
 import type { TelemetryPayload } from "@voide/ipc";
 import { useFlowStore, type CanvasBridge } from "../state/flowStore";
 import ModuleNode from "./nodes/BasicNode";
+import PromptNode from "./nodes/PromptNode";
 import LLMNode from "./nodes/LLMNode";
 import { CanvasBoundaryProvider } from "./CanvasBoundaryContext";
 import ContextWindow from "./ContextWindow";
@@ -186,6 +187,8 @@ export default function GraphCanvas() {
     () => ({
       module: ModuleNode,
       llm: LLMNode,
+      prompt: PromptNode,
+      "chat.input": ModuleNode,
       default: ModuleNode
     }),
     []

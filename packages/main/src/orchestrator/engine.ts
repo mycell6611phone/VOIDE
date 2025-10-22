@@ -10,7 +10,6 @@ import { formatFlowValidationErrors } from "@voide/shared/flowValidation";
 import { runLlamaCpp } from "../../../adapters/src/llamaCpp.js";
 import { runGpt4All } from "../../../adapters/src/gpt4all.js";
 import { runMock } from "../../../adapters/src/mock.js";
-import runLLM from "../../../workers/dist/llm.js";
 import { topoOrder, Frontier, downstream } from "./scheduler.js";
 import {
   clearAndRegister,
@@ -58,6 +57,10 @@ type RunState = {
 
 const runs = new Map<string, RunState>();
 const loopTasks = new Map<string, Promise<void>>();
+
+type ImportMetaWithResolve = ImportMeta & {
+  resolve?: (specifier: string, parent?: string) => string;
+};
 
 function createAbortError(message: string, reason?: unknown): Error {
   if (reason instanceof Error) {
@@ -133,22 +136,71 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PiscinaCtor = Piscina as any;
 
 type PiscinaInstance = InstanceType<typeof PiscinaCtor>;
-const LLM_WORKER_CANDIDATES = [
+const LLM_WORKER_SPECIFIER_CANDIDATES = [
+  "@voide/workers/dist/llm.js",
+  "@voide/workers/llm.js",
+  "@voide/workers/src/llm.js",
+];
+const LLM_WORKER_RELATIVE_CANDIDATES = [
   "../../../workers/dist/llm.js",
   "../../../workers/dist/src/llm.js",
+  "../../../workers/src/llm.js",
 ];
 let poolLLM: PiscinaInstance | null = null;
 let llmWorkerMissingLogged = false;
 let llmFallbackLogged = false;
 
 function resolveLLMWorkerEntry(): string | null {
-  for (const relative of LLM_WORKER_CANDIDATES) {
+  for (const specifier of LLM_WORKER_SPECIFIER_CANDIDATES) {
+    const resolved = resolveLLMWorkerFromSpecifier(specifier);
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  for (const relative of LLM_WORKER_RELATIVE_CANDIDATES) {
     const candidate = path.resolve(__dirname, relative);
     if (fs.existsSync(candidate)) {
       return candidate;
     }
   }
   return null;
+}
+
+function resolveLLMWorkerFromSpecifier(specifier: string): string | null {
+  const meta = import.meta as ImportMetaWithResolve;
+  const resolver = meta.resolve;
+  if (typeof resolver !== "function") {
+    return null;
+  }
+
+  let resolved: string;
+  try {
+    resolved = resolver(specifier, import.meta.url);
+  } catch (error) {
+    if (!isModuleResolutionError(error)) {
+      console.warn(
+        `[orchestrator] Unexpected error while resolving LLM worker specifier "${specifier}":`,
+        error
+      );
+    }
+    return null;
+  }
+
+  if (!resolved) {
+    return null;
+  }
+
+  if (resolved.startsWith("node:")) {
+    return null;
+  }
+
+  const candidate = resolved.startsWith("file:") ? fileURLToPath(resolved) : resolved;
+  if (!fs.existsSync(candidate)) {
+    return null;
+  }
+
+  return candidate;
 }
 
 function ensureLLMPool(): PiscinaInstance | null {
@@ -1949,7 +2001,7 @@ async function executeNode(st: RunState, node: NodeDef): Promise<NodeExecutionRe
     }
     const prompt = parts.join("\n");
     throwIfAborted(st.abortController.signal);
-    const response = await runModel(prompt);
+    const response = await runModel(prompt, st.abortController.signal);
     throwIfAborted(st.abortController.signal);
     return [{ port: "out", payload: { kind: "text", text: response } }];
   }
@@ -2013,7 +2065,8 @@ function emitWireTransfers(st: RunState, node: NodeDef, port: string, payloads: 
   }
 }
 
-async function runModel(prompt: string): Promise<string> {
+async function runModel(prompt: string, signal: AbortSignal): Promise<string> {
+  throwIfAborted(signal);
   const registry = await getModelRegistry();
   const models = Array.isArray((registry as any)?.models)
     ? (registry.models as RegistryModelWithStatus[])
@@ -2026,6 +2079,7 @@ async function runModel(prompt: string): Promise<string> {
     throw new Error("No models are available to execute llm.generic nodes.");
   }
 
+  throwIfAborted(signal);
   const rawParams: Record<string, unknown> = {
     modelId: selected.id,
     adapter: selected.adapter ?? selected.backend ?? DEFAULT_ADAPTER,
@@ -2035,7 +2089,9 @@ async function runModel(prompt: string): Promise<string> {
   };
 
   const { params, modelFile } = await resolveLLMJobConfig(rawParams);
-  const result = await runLLM({ params, prompt, modelFile });
+  throwIfAborted(signal);
+  const result = await runLLMWithFallback({ params, prompt, modelFile }, signal);
+  throwIfAborted(signal);
   return typeof result?.text === "string" ? result.text : "";
 }
  

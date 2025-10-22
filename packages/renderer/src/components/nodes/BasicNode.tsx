@@ -38,7 +38,8 @@ import {
 import {
   NODE_ORIENTATION_PARAM_KEY,
   readNodeOrientation,
-  toggleNodeOrientationParams
+  toggleNodeOrientationParams,
+  type NodeOrientation
 } from "./orientation";
 import { ensurePortTelemetryStyles } from "./portVisuals";
 
@@ -200,6 +201,19 @@ const outputLabelHighlight: React.CSSProperties = {
 
 const computeOffset = (index: number, total: number) =>
   `${((index + 1) / (total + 1)) * 100}%`;
+
+const computeHandleOffset = (
+  index: number,
+  total: number,
+  orientation: NodeOrientation
+) => {
+  if (total <= 0) {
+    return "50%";
+  }
+  const orientedIndex =
+    orientation === "reversed" ? total - index - 1 : index;
+  return computeOffset(orientedIndex, total);
+};
 
 const resolveHandleHighlight = (
   status: PortActivityStatus
@@ -1055,7 +1069,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
         onContextMenu={shouldRenderMenu ? handleContextMenu : undefined}
       >
         {inputs.map((port, index) => {
-          const top = computeOffset(index, inputs.length);
+          const top = computeHandleOffset(index, inputs.length, effectiveOrientation);
           const status: PortActivityStatus = inputStatuses[index] ?? "idle";
           const handleHighlight = resolveHandleHighlight(status);
           const labelHighlight = resolveLabelHighlight(status);
@@ -1155,7 +1169,7 @@ export default function BasicNode({ data }: NodeProps<NodeDef>) {
           </React.Fragment>
         ) : null}
         {effectiveOutputs.map((port, index) => {
-          const top = computeOffset(index, effectiveOutputs.length);
+          const top = computeHandleOffset(index, effectiveOutputs.length, effectiveOrientation);
           const status: PortActivityStatus = outputStatuses[index] ?? "idle";
           const handleHighlight = resolveHandleHighlight(status);
           const labelHighlight = resolveLabelHighlight(status);

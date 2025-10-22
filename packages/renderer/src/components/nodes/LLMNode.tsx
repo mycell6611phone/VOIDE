@@ -36,7 +36,8 @@ import {
 import models from "./models.json";
 import {
   readNodeOrientation,
-  toggleNodeOrientationParams
+  toggleNodeOrientationParams,
+  type NodeOrientation
 } from "./orientation";
 import { ensurePortTelemetryStyles } from "./portVisuals";
 
@@ -291,6 +292,19 @@ const MIN_RESPONSE_TOKENS = 16;
 
 const computeOffset = (index: number, total: number) =>
   `${((index + 1) / (total + 1)) * 100}%`;
+
+const computeHandleOffset = (
+  index: number,
+  total: number,
+  orientation: NodeOrientation
+) => {
+  if (total <= 0) {
+    return "50%";
+  }
+  const orientedIndex =
+    orientation === "reversed" ? total - index - 1 : index;
+  return computeOffset(orientedIndex, total);
+};
 
 const resolveHandleHighlight = (
   status: PortActivityStatus
@@ -1427,7 +1441,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
               style={{
                 ...handleStyle,
                 ...(highlight ?? {}),
-                top: computeOffset(index, inputs.length)
+                top: computeHandleOffset(index, inputs.length, orientation)
               }}
             />
           );
@@ -1484,7 +1498,7 @@ export default function LLMNode({ data }: NodeProps<NodeDef>) {
               style={{
                 ...handleStyle,
                 ...(highlight ?? {}),
-                top: computeOffset(index, outputs.length)
+                top: computeHandleOffset(index, outputs.length, orientation)
               }}
             />
           );

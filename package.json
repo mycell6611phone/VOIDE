@@ -8,10 +8,13 @@
   "homepage": "https://voide.example.com",
   "scripts": {
     "build": "turbo run build",
+    "predev": "pnpm run native:prepare",
+    "prestart": "pnpm run native:prepare",
+    "native:prepare": "node ./scripts/prepare-better-sqlite3.mjs",
     "dev": "turbo run build && concurrently \"turbo run dev --parallel\" \"wait-on packages/main/dist/main.js packages/preload/dist/preload.js && electron --no-sandbox .\"",
     "lint": "turbo run lint",
     "start": "electron --no-sandbox packages/main/dist/main.js",
-    "pack:linux": "electron-builder --linux deb AppImage",
+    "pack:linux": "pnpm run native:prepare && electron-builder --linux deb AppImage",
     "proto_path proto --plugin=protoc-gen-ts=./node_modules/.pnpm/node_modules/.bin/protoc-gen-ts_proto --ts_out packages/shared/src/gen --ts_opt generate_dependencies,impoproto:gen": "protoc --rtSuffix=.js,outputServices=generic-definitions,esModuleInterop=true proto/flow.proto",
     "license:check": "pnpm -r --filter '!voide' exec license-checker-rseidelsohn --production --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC'"
   },

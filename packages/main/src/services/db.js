@@ -1,7 +1,45 @@
-import BetterSqlite3 from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { createRequire } from "node:module";
 import { emitTelemetry } from "../ipc/telemetry.js";
+import { ensureElectronBetterSqliteBinding } from "./betterSqliteBinding.js";
+
+const require = createRequire(import.meta.url);
+let sqliteModule = null;
+let loggedModuleVersionError = false;
+
+function isModuleVersionMismatch(error) {
+    if (!error || typeof error !== "object") {
+        return false;
+    }
+    const message = "message" in error ? String(error.message ?? "") : "";
+    if (message.includes("NODE_MODULE_VERSION")) {
+        return true;
+    }
+    const code = "code" in error ? error.code : undefined;
+    return code === "ERR_DLOPEN_FAILED";
+}
+
+function loadBetterSqlite3() {
+    if (sqliteModule) {
+        return sqliteModule;
+    }
+    if (process.versions?.electron) {
+        ensureElectronBetterSqliteBinding();
+    }
+    try {
+        const loaded = require("better-sqlite3");
+        sqliteModule = loaded;
+        return loaded;
+    }
+    catch (error) {
+        if (process.versions?.electron && isModuleVersionMismatch(error) && !loggedModuleVersionError) {
+            loggedModuleVersionError = true;
+            console.error("[voide] Failed to load better-sqlite3 for the Electron runtime. Run 'pnpm run native:prepare' to rebuild the native bindings.");
+        }
+        throw error;
+    }
+}
 let db = null;
 let initPromise = null;
 let initError = null;
@@ -18,7 +56,8 @@ export async function initDB() {
         const dir = path.join(process.env.HOME || process.cwd(), ".voide");
         if (!fs.existsSync(dir))
             fs.mkdirSync(dir, { recursive: true });
-        const instance = new BetterSqlite3(path.join(dir, "voide.db"));
+        const DatabaseCtor = loadBetterSqlite3();
+        const instance = new DatabaseCtor(path.join(dir, "voide.db"));
         instance.exec(`
   create table if not exists flows(
     id text primary key,

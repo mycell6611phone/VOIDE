@@ -1,3 +1,5 @@
+import "./services/setupBetterSqlite.js";
+
 // ESM main process entry for Electron + Vite renderer
 import { app, BrowserWindow, session, shell } from 'electron';
 import * as path from 'node:path';

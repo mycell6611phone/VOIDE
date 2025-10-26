@@ -1,10 +1,54 @@
-import BetterSqlite3 from "better-sqlite3";
 import type { Database } from "better-sqlite3";
+type BetterSqlite3Ctor = typeof import("better-sqlite3");
 import path from "path";
 import fs from "fs";
+import { createRequire } from "node:module";
 import type { FlowDef, PayloadT } from "@voide/shared";
 import { emitTelemetry } from "../ipc/telemetry.js";
 import type { TelemetryPayload } from "@voide/ipc";
+import { ensureElectronBetterSqliteBinding } from "./betterSqliteBinding.js";
+
+const require = createRequire(import.meta.url);
+
+let sqliteModule: BetterSqlite3Ctor | null = null;
+let loggedModuleVersionError = false;
+
+function isModuleVersionMismatch(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  if (message.includes("NODE_MODULE_VERSION")) {
+    return true;
+  }
+  const code = "code" in error ? (error as { code?: unknown }).code : undefined;
+  return code === "ERR_DLOPEN_FAILED";
+}
+
+function loadBetterSqlite3(): BetterSqlite3Ctor {
+  if (sqliteModule) {
+    return sqliteModule;
+  }
+
+  if (process.versions?.electron) {
+    ensureElectronBetterSqliteBinding();
+  }
+
+  try {
+    const loaded = require("better-sqlite3") as BetterSqlite3Ctor;
+    sqliteModule = loaded;
+    return loaded;
+  } catch (error) {
+    if (process.versions?.electron && isModuleVersionMismatch(error) && !loggedModuleVersionError) {
+      loggedModuleVersionError = true;
+      console.error(
+        "[voide] Failed to load better-sqlite3 for the Electron runtime. " +
+          "Run 'pnpm run native:prepare' to rebuild the native bindings."
+      );
+    }
+    throw error;
+  }
+}
 
 let db: Database | null = null;
 let initPromise: Promise<Database> | null = null;
@@ -33,7 +77,8 @@ export async function initDB(): Promise<Database> {
   const initialize = async () => {
     const dir = path.join(process.env.HOME || process.cwd(), ".voide");
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const instance = new BetterSqlite3(path.join(dir, "voide.db"));
+    const DatabaseCtor = loadBetterSqlite3();
+    const instance = new DatabaseCtor(path.join(dir, "voide.db"));
     instance.exec(`
   create table if not exists flows(
     id text primary key,

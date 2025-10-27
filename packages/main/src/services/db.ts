@@ -13,6 +13,66 @@ const require = createRequire(import.meta.url);
 let sqliteModule: BetterSqlite3Ctor | null = null;
 let loggedModuleVersionError = false;
 
+function extractBindingRequest(argument: unknown): string | null {
+  if (typeof argument === "string") {
+    return argument;
+  }
+  if (argument && typeof argument === "object" && "bindings" in argument) {
+    const value = (argument as { bindings?: unknown }).bindings;
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return null;
+}
+
+function isBetterSqliteRequest(name: string | null): boolean {
+  if (!name) {
+    return false;
+  }
+  const normalized = name.endsWith(".node") ? name.slice(0, -5) : name;
+  return normalized === "better_sqlite3";
+}
+
+function patchBindingsForElectron(electronBinary: string): (() => void) | null {
+  try {
+    const bindingsModuleId = require.resolve("bindings");
+    const originalBindings = require(bindingsModuleId) as (...args: unknown[]) => unknown;
+    const cacheEntry = require.cache?.[bindingsModuleId];
+    if (!cacheEntry) {
+      return null;
+    }
+
+    function patchedBindings(this: unknown, ...args: unknown[]) {
+      const requested = extractBindingRequest(args[0]);
+      if (isBetterSqliteRequest(requested)) {
+        const addon = require(electronBinary);
+        if (addon && typeof addon === "object") {
+          try {
+            (addon as Record<string, unknown>).path = electronBinary;
+          } catch {
+            // Ignore assignment issues; the binding will still load correctly.
+          }
+        }
+        return addon;
+      }
+
+      return originalBindings.apply(this, args as any[]);
+    }
+
+    Object.assign(patchedBindings, originalBindings);
+
+    cacheEntry.exports = patchedBindings as typeof originalBindings;
+    return () => {
+      cacheEntry.exports = originalBindings;
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[voide] Failed to patch better-sqlite3 bindings for Electron: ${message}`);
+    return null;
+  }
+}
+
 function isModuleVersionMismatch(error: unknown): boolean {
   if (!error || typeof error !== "object") {
     return false;
@@ -30,8 +90,12 @@ function loadBetterSqlite3(): BetterSqlite3Ctor {
     return sqliteModule;
   }
 
+  let restoreBindings: (() => void) | null = null;
   if (process.versions?.electron) {
-    ensureElectronBetterSqliteBinding();
+    const electronBinary = ensureElectronBetterSqliteBinding();
+    if (electronBinary) {
+      restoreBindings = patchBindingsForElectron(electronBinary);
+    }
   }
 
   try {
@@ -47,6 +111,15 @@ function loadBetterSqlite3(): BetterSqlite3Ctor {
       );
     }
     throw error;
+  } finally {
+    if (restoreBindings) {
+      try {
+        restoreBindings();
+      } catch (restoreError) {
+        const message = restoreError instanceof Error ? restoreError.message : String(restoreError);
+        console.warn(`[voide] Failed to restore original bindings loader: ${message}`);
+      }
+    }
   }
 }
 

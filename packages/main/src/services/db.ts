@@ -1,12 +1,136 @@
-import BetterSqlite3 from "better-sqlite3";
 import type { Database } from "better-sqlite3";
+type BetterSqlite3Ctor = typeof import("better-sqlite3");
 import path from "path";
 import fs from "fs";
+import { createRequire } from "node:module";
 import type { FlowDef, PayloadT } from "@voide/shared";
 import { emitTelemetry } from "../ipc/telemetry.js";
 import type { TelemetryPayload } from "@voide/ipc";
+import { ensureElectronBetterSqliteBinding } from "./betterSqliteBinding.js";
+
+const require = createRequire(import.meta.url);
+
+let sqliteModule: BetterSqlite3Ctor | null = null;
+let loggedModuleVersionError = false;
+
+function extractBindingRequest(argument: unknown): string | null {
+  if (typeof argument === "string") {
+    return argument;
+  }
+  if (argument && typeof argument === "object" && "bindings" in argument) {
+    const value = (argument as { bindings?: unknown }).bindings;
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return null;
+}
+
+function isBetterSqliteRequest(name: string | null): boolean {
+  if (!name) {
+    return false;
+  }
+  const normalized = name.endsWith(".node") ? name.slice(0, -5) : name;
+  return normalized === "better_sqlite3";
+}
+
+function patchBindingsForElectron(electronBinary: string): (() => void) | null {
+  try {
+    const betterSqlitePackage = require.resolve("better-sqlite3/package.json");
+    const betterSqliteRequire = createRequire(betterSqlitePackage);
+    const bindingsModuleId = betterSqliteRequire.resolve("bindings");
+    const originalBindings = betterSqliteRequire(bindingsModuleId) as (
+      ...args: unknown[]
+    ) => unknown;
+    const cacheEntry =
+      betterSqliteRequire.cache?.[bindingsModuleId] ?? require.cache?.[bindingsModuleId];
+    if (!cacheEntry) {
+      return null;
+    }
+
+    function patchedBindings(this: unknown, ...args: unknown[]) {
+      const requested = extractBindingRequest(args[0]);
+      if (isBetterSqliteRequest(requested)) {
+        const addon = require(electronBinary);
+        if (addon && typeof addon === "object") {
+          try {
+            (addon as Record<string, unknown>).path = electronBinary;
+          } catch {
+            // Ignore assignment issues; the binding will still load correctly.
+          }
+        }
+        return addon;
+      }
+
+      return originalBindings.apply(this, args as any[]);
+    }
+
+    Object.assign(patchedBindings, originalBindings);
+
+    cacheEntry.exports = patchedBindings as typeof originalBindings;
+    return () => {
+      cacheEntry.exports = originalBindings;
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[voide] Failed to patch better-sqlite3 bindings for Electron: ${message}`);
+    return null;
+  }
+}
+
+function isModuleVersionMismatch(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  if (message.includes("NODE_MODULE_VERSION")) {
+    return true;
+  }
+  const code = "code" in error ? (error as { code?: unknown }).code : undefined;
+  return code === "ERR_DLOPEN_FAILED";
+}
+
+function loadBetterSqlite3(): BetterSqlite3Ctor {
+  if (sqliteModule) {
+    return sqliteModule;
+  }
+
+  let restoreBindings: (() => void) | null = null;
+  if (process.versions?.electron) {
+    const electronBinary = ensureElectronBetterSqliteBinding();
+    if (electronBinary) {
+      restoreBindings = patchBindingsForElectron(electronBinary);
+    }
+  }
+
+  try {
+    const loaded = require("better-sqlite3") as BetterSqlite3Ctor;
+    sqliteModule = loaded;
+    return loaded;
+  } catch (error) {
+    if (process.versions?.electron && isModuleVersionMismatch(error) && !loggedModuleVersionError) {
+      loggedModuleVersionError = true;
+      console.error(
+        "[voide] Failed to load better-sqlite3 for the Electron runtime. " +
+          "Run 'pnpm run native:prepare' to rebuild the native bindings."
+      );
+    }
+    throw error;
+  } finally {
+    if (restoreBindings) {
+      try {
+        restoreBindings();
+      } catch (restoreError) {
+        const message = restoreError instanceof Error ? restoreError.message : String(restoreError);
+        console.warn(`[voide] Failed to restore original bindings loader: ${message}`);
+      }
+    }
+  }
+}
 
 let db: Database | null = null;
+let initPromise: Promise<Database> | null = null;
+let initError: unknown = null;
 
 const FLOW_MEMORY_NAMESPACE = "flows";
 const LAST_OPENED_KEY = "lastOpenedId";
@@ -19,11 +143,21 @@ export interface StoredFlowRecord {
   flow: FlowDef;
 }
 
-export async function initDB() {
-  const dir = path.join(process.env.HOME || process.cwd(), ".voide");
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  db = new BetterSqlite3(path.join(dir, "voide.db"));
-  db.exec(`
+export async function initDB(): Promise<Database> {
+  if (db) {
+    return db;
+  }
+
+  if (initPromise) {
+    return initPromise;
+  }
+
+  const initialize = async () => {
+    const dir = path.join(process.env.HOME || process.cwd(), ".voide");
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const DatabaseCtor = loadBetterSqlite3();
+    const instance = new DatabaseCtor(path.join(dir, "voide.db"));
+    instance.exec(`
   create table if not exists flows(
     id text primary key,
     name text,
@@ -64,13 +198,37 @@ export async function initDB() {
     primary key(namespace, key)
   );
   `);
+    db = instance;
+    initError = null;
+    return instance;
+  };
+
+  initPromise = initialize();
+
+  try {
+    return await initPromise;
+  } catch (error) {
+    initError = error;
+    db = null;
+    throw error;
+  } finally {
+    initPromise = null;
+  }
 }
 
 export function getDB(): Database {
-  if (!db) {
-    throw new Error("Database has not been initialized.");
+  if (db) {
+    return db;
   }
-  return db;
+
+  if (initError) {
+    if (initError instanceof Error) {
+      throw initError;
+    }
+    throw new Error("Database initialization failed.");
+  }
+
+  throw new Error("Database has not been initialized. Call initDB() before accessing the database.");
 }
 
 export function closeDB() {
@@ -83,6 +241,8 @@ export function closeDB() {
     console.error("Failed to close database:", error);
   } finally {
     db = null;
+    initPromise = null;
+    initError = null;
   }
 }
 

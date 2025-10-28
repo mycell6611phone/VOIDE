@@ -77,7 +77,12 @@ export function setupIPC() {
       }
     })
     .catch((error) => {
-      console.warn("[ipc] Failed to hydrate last opened flow", error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes("database")) {
+        console.warn("[ipc] Database not ready yet; skipping last opened flow hydration");
+      } else {
+        console.warn("[ipc] Failed to hydrate last opened flow", error);
+      }
     });
 
   void getSecretsService()

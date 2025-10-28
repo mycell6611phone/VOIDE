@@ -4,7 +4,9 @@
   "license": "MIT",
   "type": "module",
   "main": "dist/main.js",
-  "engines": { "node": ">=20.11" },
+  "engines": {
+    "node": ">=20.11"
+  },
   "scripts": {
     "build": "tsc -b --force tsconfig.json",
     "dev": "tsc -b --watch tsconfig.json",
@@ -21,8 +23,8 @@
     "electron-store": "^10.1.0",
     "keytar": "^7.9.0",
     "piscina": "4.6.1",
-    "uuid": "9.0.1"
-
+    "protobufjs": "^7.5.4",
+    "uuid": "9.0.1",
+    "zod": "^3.25.76"
   }
 }
-

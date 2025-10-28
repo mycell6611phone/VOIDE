@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Flow, flowValidate, flowRun, modelEnsure, telemetryEvent, telemetryPayload, appGetVersion, } from "../src/channels.js"; // Testing against the source keeps the suite coupled to the actual TypeScript entry point.
+import { Flow, flowValidate, flowRun, flowBuild, modelEnsure, telemetryEvent, telemetryPayload, appGetVersion, } from "../src/channels.js"; // Testing against the source keeps the suite coupled to the actual TypeScript entry point.
 const sampleFlow = {
     id: "f1",
     version: "1.0.0",
@@ -20,11 +20,25 @@ describe("flow schemas", () => {
         // @ts-expect-error testing invalid shape
         expect(() => flowValidate.request.parse({})).toThrow();
     });
+    it("build request + response parse", () => {
+        const payload = flowBuild.request.parse(sampleFlow);
+        expect(payload).toEqual(sampleFlow);
+        const success = {
+            ok: true,
+            hash: "hash-123",
+            version: "1.0.0",
+            cached: false,
+            flow: sampleFlow,
+        };
+        expect(flowBuild.response.parse(success)).toEqual(success);
+        const failure = { ok: false, error: "boom", errors: [] };
+        expect(flowBuild.response.parse(failure)).toEqual(failure);
+    });
     it("run request + response parse", () => {
-        const payload = flowRun.request.parse({ flow: sampleFlow, inputs: { ui: "hi" } });
-        expect(payload.flow).toEqual(sampleFlow);
+        const payload = flowRun.request.parse({ compiledHash: "hash-123", inputs: { ui: "hi" } });
+        expect(payload.compiledHash).toBe("hash-123");
         expect(payload.inputs).toEqual({ ui: "hi" });
-        const withDefaultInputs = flowRun.request.parse({ flow: sampleFlow });
+        const withDefaultInputs = flowRun.request.parse({ compiledHash: "hash-321" });
         expect(withDefaultInputs.inputs).toEqual({});
         const response = { runId: "123" };
         expect(flowRun.response.parse(response)).toEqual(response);

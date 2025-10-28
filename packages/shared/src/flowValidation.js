@@ -1,108 +1,110 @@
 function isPlainObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function ensureNonEmptyString(value, instancePath, label, errors) {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    errors.push(createError("type", instancePath, `${label} must be a non-empty string`, { expected: "string" }));
-  }
+    if (typeof value !== "string" || value.trim().length === 0) {
+        errors.push(createError("type", instancePath, `${label} must be a non-empty string`, { expected: "string" }));
+    }
 }
 function validatePorts(ports, instancePath, direction, errors) {
-  if (!Array.isArray(ports)) {
-    errors.push(createError("type", instancePath, `Node ${direction} ports must be an array`, { expected: "array" }));
-    return;
-  }
-  ports.forEach((port, index) => {
-    const portPath = `${instancePath}/${index}`;
-    if (!isPlainObject(port)) {
-      errors.push(createError("type", portPath, "Port definition must be an object", { expected: "object" }));
-      return;
+    if (!Array.isArray(ports)) {
+        errors.push(createError("type", instancePath, `Node ${direction} ports must be an array`, { expected: "array" }));
+        return;
     }
-    ensureNonEmptyString(port.port, `${portPath}/port`, "Port name", errors);
-    const types = port.types;
-    if (!Array.isArray(types)) {
-      errors.push(createError("type", `${portPath}/types`, "Port types must be an array of strings", { expected: "string[]" }));
-      return;
-    }
-    types.forEach((typeValue, typeIndex) => {
-      ensureNonEmptyString(typeValue, `${portPath}/types/${typeIndex}`, "Port type", errors);
+    ports.forEach((port, index) => {
+        const portPath = `${instancePath}/${index}`;
+        if (!isPlainObject(port)) {
+            errors.push(createError("type", portPath, "Port definition must be an object", { expected: "object" }));
+            return;
+        }
+        ensureNonEmptyString(port.port, `${portPath}/port`, "Port name", errors);
+        const types = port.types;
+        if (!Array.isArray(types)) {
+            errors.push(createError("type", `${portPath}/types`, "Port types must be an array of strings", { expected: "string[]" }));
+            return;
+        }
+        types.forEach((typeValue, typeIndex) => {
+            ensureNonEmptyString(typeValue, `${portPath}/types/${typeIndex}`, "Port type", errors);
+        });
     });
-  });
 }
 function validateEdgeTuple(tuple, instancePath, label, errors) {
-  if (!Array.isArray(tuple)) {
-    errors.push(createError("type", instancePath, `${label} must be a tuple [nodeId, port]`, { expected: "[string, string]" }));
-    return;
-  }
-  if (tuple.length !== 2) {
-    errors.push(createError("minItems", instancePath, `${label} must include node and port identifiers`, { expected: 2, actual: tuple.length }));
-    return;
-  }
-  ensureNonEmptyString(tuple[0], `${instancePath}/0`, `${label} node id`, errors);
-  ensureNonEmptyString(tuple[1], `${instancePath}/1`, `${label} port`, errors);
+    if (!Array.isArray(tuple)) {
+        errors.push(createError("type", instancePath, `${label} must be a tuple [nodeId, port]`, { expected: "[string, string]" }));
+        return;
+    }
+    if (tuple.length !== 2) {
+        errors.push(createError("minItems", instancePath, `${label} must include node and port identifiers`, { expected: 2, actual: tuple.length }));
+        return;
+    }
+    ensureNonEmptyString(tuple[0], `${instancePath}/0`, `${label} node id`, errors);
+    ensureNonEmptyString(tuple[1], `${instancePath}/1`, `${label} port`, errors);
 }
 function validateFlowStructure(flow) {
-  const errors = [];
-  if (!isPlainObject(flow)) {
-    errors.push(createError("type", "", "Flow must be an object", { expected: "object" }));
+    const errors = [];
+    if (!isPlainObject(flow)) {
+        errors.push(createError("type", "", "Flow must be an object", { expected: "object" }));
+        return errors;
+    }
+    ensureNonEmptyString(flow.id, "/id", "Flow id", errors);
+    ensureNonEmptyString(flow.version, "/version", "Flow version", errors);
+    const nodes = flow.nodes;
+    if (!Array.isArray(nodes)) {
+        errors.push(createError("type", "/nodes", "Flow nodes must be an array", { expected: "array" }));
+    }
+    else {
+        nodes.forEach((node, index) => {
+            const nodePath = `/nodes/${index}`;
+            if (!isPlainObject(node)) {
+                errors.push(createError("type", nodePath, "Node entry must be an object", { expected: "object" }));
+                return;
+            }
+            ensureNonEmptyString(node.id, `${nodePath}/id`, "Node id", errors);
+            ensureNonEmptyString(node.type, `${nodePath}/type`, "Node type", errors);
+            ensureNonEmptyString(node.name, `${nodePath}/name`, "Node name", errors);
+            const params = node.params;
+            if (!isPlainObject(params)) {
+                errors.push(createError("type", `${nodePath}/params`, "Node params must be an object", { expected: "object" }));
+            }
+            validatePorts(node.in, `${nodePath}/in`, "in", errors);
+            validatePorts(node.out, `${nodePath}/out`, "out", errors);
+        });
+    }
+    const edges = flow.edges;
+    if (!Array.isArray(edges)) {
+        errors.push(createError("type", "/edges", "Flow edges must be an array", { expected: "array" }));
+    }
+    else {
+        edges.forEach((edge, index) => {
+            const edgePath = `/edges/${index}`;
+            if (!isPlainObject(edge)) {
+                errors.push(createError("type", edgePath, "Edge entry must be an object", { expected: "object" }));
+                return;
+            }
+            ensureNonEmptyString(edge.id, `${edgePath}/id`, "Edge id", errors);
+            validateEdgeTuple(edge.from, `${edgePath}/from`, "Edge source", errors);
+            validateEdgeTuple(edge.to, `${edgePath}/to`, "Edge target", errors);
+            if ("label" in edge && edge.label !== undefined) {
+                ensureNonEmptyString(edge.label, `${edgePath}/label`, "Edge label", errors);
+            }
+        });
+    }
+    const optionalObjects = [
+        ["prompts", "Prompts"],
+        ["models", "Models"],
+        ["profiles", "Profiles"],
+        ["runtimeInputs", "Runtime inputs"],
+    ];
+    optionalObjects.forEach(([key, label]) => {
+        const value = flow[key];
+        if (value === undefined) {
+            return;
+        }
+        if (!isPlainObject(value)) {
+            errors.push(createError("type", `/${key}`, `${label} must be an object`, { expected: "object" }));
+        }
+    });
     return errors;
-  }
-  ensureNonEmptyString(flow.id, "/id", "Flow id", errors);
-  ensureNonEmptyString(flow.version, "/version", "Flow version", errors);
-  const nodes = flow.nodes;
-  if (!Array.isArray(nodes)) {
-    errors.push(createError("type", "/nodes", "Flow nodes must be an array", { expected: "array" }));
-  }
-  else {
-    nodes.forEach((node, index) => {
-      const nodePath = `/nodes/${index}`;
-      if (!isPlainObject(node)) {
-        errors.push(createError("type", nodePath, "Node entry must be an object", { expected: "object" }));
-        return;
-      }
-      ensureNonEmptyString(node.id, `${nodePath}/id`, "Node id", errors);
-      ensureNonEmptyString(node.type, `${nodePath}/type`, "Node type", errors);
-      ensureNonEmptyString(node.name, `${nodePath}/name`, "Node name", errors);
-      if (!isPlainObject(node.params)) {
-        errors.push(createError("type", `${nodePath}/params`, "Node params must be an object", { expected: "object" }));
-      }
-      validatePorts(node.in, `${nodePath}/in`, "in", errors);
-      validatePorts(node.out, `${nodePath}/out`, "out", errors);
-    });
-  }
-  const edges = flow.edges;
-  if (!Array.isArray(edges)) {
-    errors.push(createError("type", "/edges", "Flow edges must be an array", { expected: "array" }));
-  }
-  else {
-    edges.forEach((edge, index) => {
-      const edgePath = `/edges/${index}`;
-      if (!isPlainObject(edge)) {
-        errors.push(createError("type", edgePath, "Edge entry must be an object", { expected: "object" }));
-        return;
-      }
-      ensureNonEmptyString(edge.id, `${edgePath}/id`, "Edge id", errors);
-      validateEdgeTuple(edge.from, `${edgePath}/from`, "Edge source", errors);
-      validateEdgeTuple(edge.to, `${edgePath}/to`, "Edge target", errors);
-      if ("label" in edge && edge.label !== undefined) {
-        ensureNonEmptyString(edge.label, `${edgePath}/label`, "Edge label", errors);
-      }
-    });
-  }
-  [
-    ["prompts", "Prompts"],
-    ["models", "Models"],
-    ["profiles", "Profiles"],
-    ["runtimeInputs", "Runtime inputs"],
-  ].forEach(([key, label]) => {
-    const value = flow[key];
-    if (value === undefined) {
-      return;
-    }
-    if (!isPlainObject(value)) {
-      errors.push(createError("type", `/${key}`, `${label} must be an object`, { expected: "object" }));
-    }
-  });
-  return errors;
 }
 function createError(keyword, instancePath, message, params) {
     return {
@@ -187,7 +189,7 @@ export function validateFlowDefinition(flow) {
     const schemaErrors = validateFlowStructure(flow);
     const errors = [...schemaErrors];
     if (schemaErrors.length === 0) {
-        errors.push(...collectDuplicateErrors((flow.nodes ?? []), (flow.edges ?? [])));
+        errors.push(...collectDuplicateErrors(flow.nodes ?? [], flow.edges ?? []));
         errors.push(...collectWiringErrors(flow));
     }
     return { ok: errors.length === 0, errors };

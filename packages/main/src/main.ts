@@ -1,3 +1,4 @@
+import "./services/setupBetterSqlite.js";
 
 // ESM main process entry for Electron + Vite renderer
 import { app, BrowserWindow, session, shell } from 'electron';
@@ -231,13 +232,18 @@ app.whenReady().then(async () => {
   } catch (error) {
     console.error("Failed to start chat server:", error);
   }
-  await initDB().catch(() => {}); // keep free-mode resilient
-  setupIPC();
-  registerHandlers({
-    openChatWindow: createChatWindow,
-    exitApplication: requestAppExit,
-  });
-  await createWindow();
+  try {
+    await initDB();
+    setupIPC();
+    registerHandlers({
+      openChatWindow: createChatWindow,
+      exitApplication: requestAppExit,
+    });
+    await createWindow();
+  } catch (error) {
+    console.error("DB initialization failed:", error);
+    return;
+  }
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) await createWindow();

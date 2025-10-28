@@ -36,14 +36,13 @@ function isBetterSqliteRequest(name: string | null): boolean {
 
 function patchBindingsForElectron(electronBinary: string): (() => void) | null {
   try {
-    const betterSqlitePackage = require.resolve("better-sqlite3/package.json");
-    const betterSqliteRequire = createRequire(betterSqlitePackage);
-    const bindingsModuleId = betterSqliteRequire.resolve("bindings");
-    const originalBindings = betterSqliteRequire(bindingsModuleId) as (
-      ...args: unknown[]
-    ) => unknown;
-    const cacheEntry =
-      betterSqliteRequire.cache?.[bindingsModuleId] ?? require.cache?.[bindingsModuleId];
+const betterSqlitePackage = require.resolve("better-sqlite3/package.json");
+const betterSqliteRequire = createRequire(betterSqlitePackage);
+const bindingsModuleId = betterSqliteRequire.resolve("bindings");
+const originalBindings = betterSqliteRequire(bindingsModuleId) as (...args: unknown[]) => unknown;
+const cacheEntry =
+  betterSqliteRequire.cache?.[bindingsModuleId] ?? require.cache?.[bindingsModuleId];
+
     if (!cacheEntry) {
       return null;
     }

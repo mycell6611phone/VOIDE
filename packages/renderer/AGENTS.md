@@ -4,7 +4,7 @@
 > **File Modification Guardrails**
 > - Do not create, modify, or delete anything under any `dist/` directory.
 > - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
-> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+> - Only edit files in `src/`, `scripts/`, `config`, or test paths.
 
 
 **Role**
@@ -25,8 +25,8 @@ standalone `/ui` package but integrates tightly with IPC and Electron APIs.
 - Keep component state minimal; heavy logic should live in shared packages.
 - Mirror UI conventions defined in `/ui` to avoid divergence.
 - The canvas owns mutable editor state (nodes, ports, edges). On **Build** it
-  serializes to the canonical `FlowGraph` protobuf and sends it across IPC for
-  compilation. JSON exports are for debugging only.
+  serializes to the canonical `FlowGraph` JSON payload and sends it across IPC
+  for compilation. Standalone exports are for debugging only.
 - Pressing **Run** must reuse the `CompiledFlow` returned by Build rather than
   re-reading renderer state, ensuring runtime parity with the CLI and main
   process.

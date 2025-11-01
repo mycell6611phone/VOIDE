@@ -4,7 +4,7 @@
 > **File Modification Guardrails**
 > - Do not create, modify, or delete anything under any `dist/` directory.
 > - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
-> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+> - Only edit files in `src/`, `scripts/`, `config`, or test paths.
 
 
 Implements the canonical graph compiler that turns authored flows into runtime
@@ -12,7 +12,7 @@ artifacts.
 
 **Files**
 - `validate.ts` — Zod-based validation.
-- `compiler.ts` — Translates FlowGraph protobuf into CompiledFlow protobuf.
+- `compiler.ts` — Translates FlowGraph JSON into a deterministic CompiledFlow artifact.
 
 Ensure compiler output stays deterministic. Update CLI commands (`voide
 validate`, `voide pack`) when altering behavior.
@@ -20,25 +20,10 @@ validate`, `voide pack`) when altering behavior.
 ## Canonical artifacts
 
 - **FlowGraph** — Authoring schema emitted by the renderer and persisted by the
-  workspace. This is authoritative editor state. JSON exports exist only for
-  debugging; Build always operates on the protobuf form.
+  workspace. This is authoritative editor state. Build operates directly on the
+  structured JSON payload.
 - **CompiledFlow** — Execution IR consumed by the runtime. Generated exclusively
   by the compiler.
-
-```proto
-message FlowGraph {
-  repeated Node nodes;
-  repeated Edge edges;
-}
-
-message CompiledFlow {
-  repeated Operator operators;
-  repeated Channel channels;
-  repeated Step schedule;
-  map<string, Constant> constants;
-  repeated TelemetryHook hooks;
-}
-```
 
 ## Compiler passes (Build)
 

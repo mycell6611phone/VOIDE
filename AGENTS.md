@@ -14,12 +14,12 @@
 Progress toward this goal may be delivered incrementally, but partial features must maintain coherence with the end-to-end flow.
 
 ## Backend Contract
-- Protocol definition: author all flow, run-control, and telemetry messages in `proto/voide.proto`. This proto is the single source of truth for wire contracts.
-- Code generation: use `ts-proto` targeting `grpc-js` (`outputServices=grpc-js`). Commit generated TypeScript types and stubs.
-- Service surface: expose an `Orchestrator` service with `StartRun`, `StopRun`, and server-streaming `StreamTelemetry`. Optionally include a bi-directional `Control` stream for live commands.
-- Transport: rely exclusively on `@grpc/grpc-js` over Protocol Buffers. Use JSON solely for debugging purposes.
-- Telemetry log: persist `TelemetryEvent` data as length-delimited protobuf frames (encodeDelimited/decodeDelimited) for replay.
-- Compatibility: never reuse removed field numbers; mark them reserved when deprecating. Stick to proto3 defaults only.
+- Protocol definition: keep all flow, run-control, and telemetry message shapes in shared TypeScript modules that both the orchestrator and renderer import. Document the payload structure beside the type exports.
+- Code generation: skip binary schema tooling. Rely on hand-authored TypeScript types and Zod schemas to guarantee runtime validation. Commit both the types and validators.
+- Service surface: expose an `Orchestrator` interface with `StartRun`, `StopRun`, and server-streaming `StreamTelemetry`. Optionally include a bi-directional `Control` channel for live commands.
+- Transport: rely on structured JSON over our existing IPC and HTTP bridges. Binary encodings are out of scope unless explicitly approved.
+- Telemetry log: persist `TelemetryEvent` data as newline-delimited JSON so runs can be replayed deterministically.
+- Compatibility: version payloads consciously. When removing fields, document the deprecation and provide defaulting logic for older cached flows.
 
 ## Scope Guard
 These backend directives must not alter existing UI behavior, IPC semantics, or other business logic outside the defined interfaces.

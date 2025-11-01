@@ -4,7 +4,7 @@
 > **File Modification Guardrails**
 > - Do not create, modify, or delete anything under any `dist/` directory.
 > - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
-> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+> - Only edit files in `src/`, `scripts/`, `config`, or test paths.
 
 
 This folder contains the runtime contracts and executors for built-in modules.
@@ -16,8 +16,7 @@ modules under `src/modules` and renderer expectations.
 - `llm.ts`, `prompt.ts`, `memory.ts`, `toolcall.ts` — Module-specific logic.
 
 **Guidelines**
-- Input/output schemas must stay compatible with `packages/schemas` and the
-  protobuf definitions under `core/src/proto`.
+- Input/output schemas must stay compatible with `packages/schemas` and the shared TypeScript types consumed by Build and Run.
 - Implement modules in a way that respects offline mode — no network fetches.
 - Add/update targeted tests in `core/test` whenever behavior changes.
 - The compiler resolves nodes through the handler registry exposed here. Each

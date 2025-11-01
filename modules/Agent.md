@@ -220,7 +220,7 @@ LLM Module Blueprint:
    General Rule: No hard errors or broken connections. Any unsupported input is embedded as text into the prompt, so VOIDE always preserves user intent and workflow integrity.
 
 ===============================================================================
-TITLE: VOIDE Backend Architecture (Modular Nodes + Protobuf)
+TITLE: VOIDE Backend Architecture (Modular Nodes + Typed Payloads)
 ===============================================================================
 
 ## 0) Repo map (authoritative paths)
@@ -254,8 +254,8 @@ DB (runs, payloads, logs)
 - Each node has `in` and `out` arrays of ports with `types: string[]`.
 - The runtime payload union is in `packages/shared/src/types.ts` (`PayloadT`).
 
-Compatibility note for Protobuf transport:
-- Option A: wrap protobuf bytes as a `PayloadT.file` with `mime: "application/x-protobuf"`.
+Compatibility note for binary transport:
+- Option A: wrap binary bytes as a `PayloadT.file` with `mime: "application/octet-stream"`.
 - Option B: extend `PayloadT` with a binary variant (documented here for future use).
 
 Example (documentation only, not a code change):
@@ -310,8 +310,8 @@ export function getNode(type: string) { return registry.get(type); }
 export function listNodes() {
   return Array.from(registry.values()).map(n => ({
     type: n.type,
-    in: n.inputs.map(p => ({ port: p, types: ["protobuf","json","text"] })),
-    out: n.outputs.map(p => ({ port: p, types: ["protobuf","json","text"] })),
+    in: n.inputs.map(p => ({ port: p, types: ["binary","json","text"] })),
+    out: n.outputs.map(p => ({ port: p, types: ["binary","json","text"] })),
   }));
 }
 ```
@@ -361,77 +361,77 @@ async function executeNode(st, node) {
 
 ## 5) Ports and Node Catalog aligned with the UI palette
 
-Declare nodes and ports so the renderer palette and backend agree. Accept `["protobuf","json","text"]` for flexibility:
+Declare nodes and ports so the renderer palette and backend agree. Accept `["binary","json","text"]` for flexibility:
 
 ```ts
 // Example shape of listNodes() output (documentation)
 [
   { type: "ui",
-    in:  [{ port: "response_in", types: ["protobuf","json","text"] }],
-    out: [{ port: "user_message", types: ["protobuf","json","text"] }] },
+    in:  [{ port: "response_in", types: ["binary","json","text"] }],
+    out: [{ port: "user_message", types: ["binary","json","text"] }] },
 
   { type: "llm",
-    in:  [{ port: "model_input", types: ["protobuf","json","text"] }],
-    out: [{ port: "model_output", types: ["protobuf","json","text"] }] },
+    in:  [{ port: "model_input", types: ["binary","json","text"] }],
+    out: [{ port: "model_output", types: ["binary","json","text"] }] },
 
   { type: "prompt",
-    in:  [{ port: "in", types: ["protobuf","json","text"] }],
-    out: [{ port: "out", types: ["protobuf","json","text"] }] },
+    in:  [{ port: "in", types: ["binary","json","text"] }],
+    out: [{ port: "out", types: ["binary","json","text"] }] },
 
   { type: "memory",
     in: [
-      { port: "memory_base", types: ["protobuf","json"] },
-      { port: "save_data",   types: ["protobuf","json","text"] }
+      { port: "memory_base", types: ["binary","json"] },
+      { port: "save_data",   types: ["binary","json","text"] }
     ],
-    out: [{ port: "retrieved_memory", types: ["protobuf","json","text"] }] },
+    out: [{ port: "retrieved_memory", types: ["binary","json","text"] }] },
 
   { type: "debate",
-    in:  [{ port: "configurable_in", types: ["protobuf","json","text"] }],
-    out: [{ port: "configurable_out", types: ["protobuf","json","text"] }] },
+    in:  [{ port: "configurable_in", types: ["binary","json","text"] }],
+    out: [{ port: "configurable_out", types: ["binary","json","text"] }] },
 
   { type: "log",
-    in:  [{ port: "input", types: ["protobuf","json","text"] }],
+    in:  [{ port: "input", types: ["binary","json","text"] }],
     out: [] },
 
   { type: "cache",
     in: [
-      { port: "pass_through", types: ["protobuf","json","text"] },
-      { port: "save_input",   types: ["protobuf","json","text"] }
+      { port: "pass_through", types: ["binary","json","text"] },
+      { port: "save_input",   types: ["binary","json","text"] }
     ],
-    out: [{ port: "cached_output", types: ["protobuf","json","text"] }] },
+    out: [{ port: "cached_output", types: ["binary","json","text"] }] },
 
   { type: "divider",
-    in:  [{ port: "in", types: ["protobuf","json","text"] }],
+    in:  [{ port: "in", types: ["binary","json","text"] }],
     out: [
-      { port: "and_out", types: ["protobuf","json","text"] },
-      { port: "or_out",  types: ["protobuf","json","text"] }
+      { port: "and_out", types: ["binary","json","text"] },
+      { port: "or_out",  types: ["binary","json","text"] }
     ] },
 
   { type: "loop",
-    in:  [{ port: "in", types: ["protobuf","json","text"] }],
+    in:  [{ port: "in", types: ["binary","json","text"] }],
     out: [
-      { port: "body", types: ["protobuf","json","text"] },
-      { port: "out",  types: ["protobuf","json","text"] }
+      { port: "body", types: ["binary","json","text"] },
+      { port: "out",  types: ["binary","json","text"] }
     ] }
 ]
 ```
 
-## 6) Protobuf usage and decoding (module-local)
+## 6) Binary payload usage and decoding (module-local)
 
-Rule: inter-node transport may use protobuf. Each node decodes/encodes locally.
+Rule: inter-node transport may use binary payloads. Each node decodes/encodes locally.
 
 Decoder pattern (documentation):
 
 ```ts
 function decodeInput(x: unknown) {
-  // Option A: protobuf carried as PayloadT.file
-  if (typeof x === 'object' && x && (x as any).kind === 'file' && (x as any).mime === 'application/x-protobuf') {
+  // Option A: binary payload carried as PayloadT.file
+  if (typeof x === 'object' && x && (x as any).kind === 'file' && (x as any).mime === 'application/octet-stream') {
     // read bytes from file path or buffer according to your implementation
-    // return MyProtoMessage.decode(bytes).toJSON();
+      // return MyBinaryCodec.decode(bytes).toJSON();
   }
   // Option B: extended PayloadT.binary
   if (typeof x === 'object' && x && (x as any).kind === 'binary') {
-    // return MyProtoMessage.decode((x as any).bytes).toJSON();
+    // return MyBinaryCodec.decode((x as any).bytes).toJSON();
   }
   if (typeof x === 'string') {
     try { return JSON.parse(x); } catch { return { text: x }; }
@@ -442,8 +442,8 @@ function decodeInput(x: unknown) {
 
 LLM input/output expectations:
 
-- Input: JSON or text; protobuf schema can wrap messages, system prompt, temperature, etc.
-- Output: JSON or text; modules may re-encode to protobuf for downstream.
+- Input: JSON or text; a custom binary schema can wrap messages, system prompt, temperature, etc.
+- Output: JSON or text; modules may re-encode to binary for downstream.
 
 ## 7) Workers (Piscina) and heavy compute
 
@@ -469,7 +469,7 @@ Persisted payloads remain PayloadT-compatible (file path or JSON), regardless of
 1. Create `packages/main/src/nodes/<type>.ts`.
 2. Import and call `registerNode({...})` with type, inputs, outputs, and `run()`.
 3. Ensure auto-loader imports the file at startup.
-4. If using protobuf, include the `.proto` reference and local decoding logic.
+4. If using a custom binary format, include a schema reference and local decoding logic.
 5. No changes to `engine.ts` or IPC required.
 
 ## 10) Example node stubs (documentation)
@@ -495,7 +495,7 @@ registerNode({
   inputs: ["model_input"],
   outputs: ["model_output"],
   async run({ get, put, params }) {
-    // Decode input (protobuf/json/text), call worker, emit result
+    // Decode input (binary/json/text), call worker, emit result
   }
 });
 ```
@@ -522,7 +522,7 @@ Aligning backend to this document means updating `getNodeCatalog()` to return th
 ## 12) Summary
 
 - Engine orchestrates; registry defines nodes; nodes are drop-in files.
-- Inter-node transport supports protobuf; modules decode locally.
+- Inter-node transport supports binary payloads; modules decode locally.
 - Workers handle heavy compute; DB stores outputs/logs.
 - Adding a node requires a single file that registers itself; no engine edits.
 

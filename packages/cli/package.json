@@ -1,6 +1,7 @@
 {
   "name": "@voide/cli",
   "version": "0.1.0",
+  "license": "VOIDE Software License Agreement",
   "type": "module",
   "private": true,
   "scripts": { "build": "tsc -p tsconfig.json" },

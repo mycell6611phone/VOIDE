@@ -4,7 +4,7 @@
 > **File Modification Guardrails**
 > - Do not create, modify, or delete anything under any `dist/` directory.
 > - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
-> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+> - Only edit files in `src/`, `scripts/`, `config`, or test paths.
 
 
 Entry points for executing flows from the CLI.
@@ -19,7 +19,7 @@ features, ensure both codepaths evolve together.
 
 ## Runtime contract
 
-- Accepts only `CompiledFlow` protobufs produced by the Build pipeline. Never
+- Accepts only `CompiledFlow` artifacts produced by the Build pipeline. Never
   read renderer state directly at run-time.
 - Workers instantiate operators declared in `CompiledFlow.operators` and wire
   them through the described channels.

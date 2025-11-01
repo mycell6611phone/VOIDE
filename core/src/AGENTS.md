@@ -4,7 +4,7 @@
 > **File Modification Guardrails**
 > - Do not create, modify, or delete anything under any `dist/` directory.
 > - Never touch: `packages/**/dist/**`, `build/**`, `out/**`.
-> - Only edit files in `src/`, `scripts/`, `proto/`, `config`, or test paths.
+> - Only edit files in `src/`, `scripts/`, `config`, or test paths.
 
 
 **Layout**
@@ -12,7 +12,6 @@
 - `flow/` — Canonical Zod schemas for authoring/validating flows.
 - `modules/` — Runtime implementations & contracts for Prompt/LLM/etc.
 - `nodes/` — Built-in node catalog surfaced to the renderer and CLI.
-- `proto/` — TypeScript facades around protobuf messages.
 - `run/` & `runtime/` — Orchestrator, scheduler, and execution engine glue.
 - `sdk/` — Lightweight helper APIs intended for downstream consumers.
 - `cli.ts` — Entry point consumed by `voide` binary (keeps wiring minimal).
@@ -25,7 +24,7 @@
 **When editing**
 - Update/extend Vitest suites under `core/test`.
 - Re-run `pnpm --filter @voide/core test` before committing.
-- If changing protobuf shapes, regenerate bindings (`proto:gen`) and sync UI.
+- If changing payload shapes, update the shared TypeScript types and sync UI expectations in `packages/ipc`.
 
 ## Backend Transition Notes
 
